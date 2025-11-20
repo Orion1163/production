@@ -1,0 +1,23 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path(
+        'production-procedure/',
+        views.design_procedure,
+        name='design_procedure',
+    ),
+    path(
+        'production-procedure/add/',
+        views.design_procedure_create,
+        name='design_procedure_create',
+    ),
+    path(
+        'add-user/',
+        views.add_user,
+        name='add_user',
+    ),
+]
+
+

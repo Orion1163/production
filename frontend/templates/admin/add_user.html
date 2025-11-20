@@ -1,0 +1,196 @@
+{% extends "admin/layout/sidebar.html" %} {% load static %} 
+{% block title %}Home - Dashboard{% endblock %} {% block heading %}
+<h1>Welcome to Add User Page</h1>
+<br />
+<hr />
+<br />
+{% endblock %} {% block content %}
+
+<form
+  method="POST"
+  enctype="multipart/form-data"
+  class="user-form"
+  onsubmit="return validateForm()"
+>
+  {% csrf_token %}
+  <div class="form-group">
+    <label for="full_name">Name: </label>
+    <input type="text" id="name" name="name" placeholder="Name" required />
+  </div>
+  <div class="form-group">
+    <label for="full_name">Emp ID: </label>
+    <input
+      type="number"
+      id="emp_id"
+      name="emp_id"
+      placeholder="Employee ID"
+      required
+    />
+  </div>
+
+  <div class="form-group">
+    <label for="pin">PIN:</label>
+    <div class="otp-container">
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 0)"
+        onkeydown="handleBackspace(this, 0)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 1)"
+        onkeydown="handleBackspace(this, 1)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 2)"
+        onkeydown="handleBackspace(this, 2)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 3)"
+        onkeydown="handleBackspace(this, 3)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 4)"
+        onkeydown="handleBackspace(this, 4)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 5)"
+        onkeydown="handleBackspace(this, 5)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 6)"
+        onkeydown="handleBackspace(this, 6)"
+        required
+      />
+      <input
+        type="password"
+        maxlength="1"
+        class="otp-input"
+        oninput="moveNext(this, 7)"
+        onkeydown="handleBackspace(this, 7)"
+        required
+      />
+      <button type="button" id="toggle-visibility" onclick="toggleVisibility()">
+        Show
+      </button>
+    </div>
+    <input type="hidden" id="pin" name="pin" required />
+  </div>
+
+  <div class="form-group">
+    <label for="roles">Select Roles:</label>
+    <div class="multi-select">
+      <div class="select-box" onclick="toggleDropdown()">
+        <span id="selected-items">Select Options</span>
+      </div>
+      <div class="options">
+        <label
+          ><input
+            type="checkbox"
+            value="1"
+            data-name="Quality Check"
+            name="roles[]"
+            onclick="updateSelection()"
+          />
+          Quality Check</label
+        >
+        <label
+          ><input
+            type="checkbox"
+            name="roles[]"
+            value="2"
+            data-name="Testing"
+            onclick="updateSelection()"
+          />
+          Testing</label
+        >
+        <label
+          ><input
+            type="checkbox"
+            value="3"
+            data-name="Post Production"
+            name="roles[]"
+            onclick="updateSelection()"
+          />
+          Post Production</label
+        >
+        <label
+          ><input
+            type="checkbox"
+            value="4"
+            data-name="Dispatch"
+            name="roles[]"
+            onclick="updateSelection()"
+          />
+          Dispatch</label
+        >
+        <label
+          ><input
+            type="checkbox"
+            value="5"
+            data-name="Quality"
+            name="roles[]"
+            onclick="updateSelection()"
+          />
+          Quality</label
+        >
+      </div>
+    </div>
+  </div>
+
+  <button type="submit">Submit</button>
+</form>
+
+
+<!-- Handle Django messages -->
+{% if messages %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    {% for message in messages %}
+    {% if message.tags == 'error' %}
+    showError("{{ message|escapejs }}");
+    {% elif message.tags == 'success' %}
+    showSuccess("{{ message|escapejs }}");
+    {% elif message.tags == 'warning' %}
+    showWarning("{{ message|escapejs }}");
+    {% else %}
+    showInfo("{{ message|escapejs }}");
+    {% endif %}
+    {% endfor %}
+  });
+</script>
+{% endif %} {% endblock %}
+
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/styles.css' %}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/add_user.js' %}" defer></script>
+{% endblock %}

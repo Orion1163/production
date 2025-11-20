@@ -1,0 +1,87 @@
+{% extends 'admin/layout/sidebar.html' %}
+{% load static %}
+
+{% block title %}Add Design Process{% endblock %}
+
+{% block heading %}
+<h1>Production Procedure</h1>
+<br />
+<hr />
+<br />
+{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="page-header">
+    <div>
+      <p class="page-eyebrow">
+        Production · Procedure Designer
+      </p>
+      <h2 style="margin: 0">Production Procedures</h2>
+      <p class="helper-text" style="margin-top: 4px">
+        Review all configured procedures before creating a new one.
+      </p>
+    </div>
+    <a class="btn" href="{% url 'design_procedure_create' %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M12 5v14m-7-7h14" />
+      </svg>
+      Add Procedure
+    </a>
+  </div>
+
+  <section class="card" aria-label="Existing procedures table">
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Product Name</th>
+            <th scope="col">Model No</th>
+            <th scope="col">Status</th>
+            <th scope="col">Last Updated</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Solar Panel Assembly</td>
+            <td>SP-450</td>
+            <td><span class="chip">Active</span></td>
+            <td>18 Nov 2025</td>
+            <td>
+              <button class="tiny-btn" type="button">View</button>
+            </td>
+          </tr>
+          <tr>
+            <td>Inverter Calibration</td>
+            <td>INV-320</td>
+            <td><span class="chip accent">Draft</span></td>
+            <td>12 Nov 2025</td>
+            <td>
+              <button class="tiny-btn" type="button">View</button>
+            </td>
+          </tr>
+          <tr>
+            <td>Battery QC</td>
+            <td>BAT-210</td>
+            <td><span class="chip danger">On Hold</span></td>
+            <td>05 Nov 2025</td>
+            <td>
+              <button class="tiny-btn" type="button">View</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/design.js' %}" defer></script>
+{% endblock %}
+
