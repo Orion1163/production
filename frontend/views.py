@@ -20,3 +20,15 @@ def add_user(request):
     """
     return render(request, 'admin/add_user.html')
 
+def profile(request):
+    """
+    Render the profile page.
+    """
+    return render(request, 'admin/profile.html')
+
+def home(request):
+    """
+    Render the home page.
+    """
+    return render(request, 'admin/home.html')
+

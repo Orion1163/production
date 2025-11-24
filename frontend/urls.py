@@ -18,6 +18,16 @@ urlpatterns = [
         views.add_user,
         name='add_user',
     ),
+    path(
+        'profile/',
+        views.profile,
+        name='profile',
+    ),
+    path(
+        'home/',
+        views.home,
+        name='home',
+    ),
 ]
 
 

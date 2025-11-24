@@ -166,10 +166,16 @@ main p {
 
 @media (max-width: 800px) {
   body {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
   }
   main {
-    padding: 2em 1em 60px 1em;
+    order: 1;
+    flex: 1 1 auto;
+    padding: 2em 1em 90px 1em;
+    overflow-y: auto;
   }
   .container {
     border: none;
@@ -180,6 +186,7 @@ main p {
     height: 36px;
   }
   #sidebar {
+    order: 2;
     height: 60px;
     width: 100%;
     border-right: none;
@@ -188,6 +195,9 @@ main p {
     position: fixed;
     top: unset;
     bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
 
     > ul {
       padding: 0;
