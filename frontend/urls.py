@@ -28,6 +28,7 @@ urlpatterns = [
         views.home,
         name='home',
     ),
+    path('create-new-user/', views.create_new_user, name='create_new_user'),
 ]
 
 

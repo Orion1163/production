@@ -1,0 +1,223 @@
+{% extends 'admin/layout/sidebar.html' %}
+{% load static %}
+
+{% block title %}Dashboard | New User{% endblock %}
+
+{% block heading %}
+<div class="page-heading">
+  <h1>Add New User</h1>
+  <hr />
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="page-shell user-form-shell">
+  <div class="page-header">
+    <div>
+      <p class="page-eyebrow">
+        User Management
+      </p>
+      <h2 style="margin: 0">Create New User</h2>
+    </div>
+    <a class="btn" href="{% url 'add_user' %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7" />
+      </svg>
+      Back to User Management
+    </a>
+  </div>
+
+  <section class="card procedure-form user-form-card" aria-label="Add user form">
+    <div class="form-intro">
+      <div>
+        <p class="section-eyebrow">Create profile</p>
+        <h2>Invite a new teammate</h2>
+        <p class="helper-text">Capture the essentials, assign permissions, and hand off a secure PIN in one clean flow.</p>
+      </div>
+      <div class="step-chips" aria-label="Form steps">
+        <span class="step-chip is-active">Profile</span>
+        <span class="step-chip">Roles</span>
+        <span class="step-chip">PIN</span>
+      </div>
+    </div>
+
+    <form method="post" onsubmit="return validateForm()" class="user-form">
+      {% csrf_token %}
+
+      <div class="form-section" data-step="1">
+        <div class="section-heading">
+          <div>
+            <p class="section-eyebrow">Step 1</p>
+            <h3>Basic details</h3>
+            <p class="helper-text">Who are we onboarding? Add their name and internal ID.</p>
+          </div>
+          <span class="chip subtle">Required</span>
+        </div>
+
+        <div class="form-row">
+            <div class="field-block">
+                <label for="employeeId">Employee ID *</label>
+                <input
+                  id="employeeId"
+                  name="employee_id"
+                  type="text"
+                  placeholder="Enter employee ID"
+                  required
+                />
+              </div>
+          <div class="field-block">
+            <label for="name">Name *</label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              placeholder="Enter full name"
+              required
+            />
+          </div>
+         
+        </div>
+      </div>
+
+      <div class="form-section" data-step="2">
+        <div class="section-heading">
+          <div>
+            <p class="section-eyebrow">Step 2</p>
+            <h3>Roles &amp; access</h3>
+            <p class="helper-text">Pick the responsibilities that unlock the right dashboards.</p>
+          </div>
+          <span class="chip subtle accent">Access control</span>
+        </div>
+
+        <div class="form-row">
+          <div class="field-block">
+            <label for="roles">Roles *</label>
+            <div class="multi-select">
+              <button class="select-box" type="button" onclick="toggleDropdown(this)" aria-haspopup="listbox" aria-expanded="false">
+                <div id="selected-items" class="is-empty">Select options</div>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+                </svg>
+              </button>
+              <div class="options" role="listbox" aria-multiselectable="true">
+                <label>
+                  <input type="checkbox" value="1" data-name="Administrator" onchange="updateSelection()" />
+                  <span>Administrator · Full access to all modules.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="2" data-name="Editor" onchange="updateSelection()" />
+                  <span>Editor · Manage content and workflow definitions.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="3" data-name="Viewer" onchange="updateSelection()" />
+                  <span>Viewer · Read-only visibility across dashboards.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="4" data-name="Manager" onchange="updateSelection()" />
+                  <span>Manager · Approve procedures and monitor progress.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="5" data-name="Operator" onchange="updateSelection()" />
+                  <span>Operator · Execute assigned shop-floor tasks.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="6" data-name="QC Inspector" onchange="updateSelection()" />
+                  <span>QC Inspector · Perform inspections and log test data.</span>
+                </label>
+              </div>
+            </div>
+            <input type="hidden" id="roles" name="roles" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section" data-step="3">
+        <div class="section-heading">
+          <div>
+            <p class="section-eyebrow">Step 3</p>
+            <h3>Secure access PIN</h3>
+            <p class="helper-text">Issue a 4-digit code for kiosks, approvals, or quick checks.</p>
+          </div>
+          <span class="chip subtle warning">Security</span>
+        </div>
+
+        <div class="form-row single">
+          <div class="field-block">
+            <label for="pin">Set PIN *</label>
+            <div class="otp-container">
+              <input
+                type="password"
+                class="otp-input"
+                maxlength="1"
+                oninput="moveNext(this, 0)"
+                onkeydown="handleBackspace(event, this, 0)"
+                aria-label="PIN digit 1"
+              />
+              <input
+                type="password"
+                class="otp-input"
+                maxlength="1"
+                oninput="moveNext(this, 1)"
+                onkeydown="handleBackspace(event, this, 1)"
+                aria-label="PIN digit 2"
+              />
+              <input
+                type="password"
+                class="otp-input"
+                maxlength="1"
+                oninput="moveNext(this, 2)"
+                onkeydown="handleBackspace(event, this, 2)"
+                aria-label="PIN digit 3"
+              />
+              <input
+                type="password"
+                class="otp-input"
+                maxlength="1"
+                oninput="moveNext(this, 3)"
+                onkeydown="handleBackspace(event, this, 3)"
+                aria-label="PIN digit 4"
+              />
+              <button
+                type="button"
+                id="toggle-visibility"
+                class="pin-visibility-btn"
+                onclick="toggleVisibility()"
+                aria-pressed="false"
+                aria-label="Toggle PIN visibility"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path class="icon-eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Zm11 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                  <path class="icon-eye-off" d="M2 3l20 18" />
+                </svg>
+              </button>
+            </div>
+            <input type="hidden" id="pin" name="pin" />
+            <p class="helper-text">Only numbers are allowed. Users can update their PIN later from their profile.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <a class="btn ghost" href="{% url 'add_user' %}">
+          Cancel
+        </a>
+        <button type="submit" class="btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg>
+          Create User
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/toast.js' %}" defer></script>
+<script src="{% static 'js/add_user.js' %}" defer></script>
+{% endblock %}

@@ -32,3 +32,8 @@ def home(request):
     """
     return render(request, 'admin/home.html')
 
+def create_new_user(request):
+    """
+    Render the create new user page.
+    """
+    return render(request, 'admin/add_user_form.html')

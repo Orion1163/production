@@ -17,7 +17,7 @@
       <p class="page-eyebrow">
         Production · Procedure Designer
       </p>
-      <h2 style="margin: 0">Add / Edit Production Procedure</h2>
+      <h2 style="margin: 0">Add Production Procedure</h2>
     </div>
     <a class="btn" href="{% url 'design_procedure' %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -175,12 +175,12 @@
             <label class="checkbox-pill workflow-toggle">
               <input
                 type="checkbox"
-                data-panel-target="qc"
+                data-panel-target="smd"
                 onchange="togglePanel(this)"
               />
               SMD
             </label>
-            <div class="detail-panel" data-panel="qc">
+            <div class="detail-panel" data-panel="smd">
               <div class="panel-title">Default SMD Fields</div>
               <div class="token-list">
                 <span class="token">SO Quantity</span>
@@ -199,7 +199,7 @@
               />
               Leaded
             </label>
-            <div class="detail-panel" data-panel="qc">
+            <div class="detail-panel" data-panel="leaded">
               <div class="panel-title">Default Leaded Fields</div>
               <div class="token-list">
                 <span class="token">SO Quantity</span>
@@ -218,7 +218,7 @@
               />
               Production QC
             </label>
-            <div class="detail-panel" data-panel="qc">
+            <div class="detail-panel" data-panel="prod_qc">
               <div class="panel-title">Default Production QC Fields</div>
               <div class="token-list">
                 <span class="token">SO Quantity</span>
