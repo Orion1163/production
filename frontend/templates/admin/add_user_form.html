@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <form method="post" onsubmit="return validateForm()" class="user-form">
+    <form method="post" onsubmit="return validateForm()" class="user-form" data-redirect-url="{% url 'add_user' %}">
       {% csrf_token %}
 
       <div class="form-section" data-step="1">
@@ -106,23 +106,27 @@
                 </label>
                 <label>
                   <input type="checkbox" value="2" data-name="Editor" onchange="updateSelection()" />
-                  <span>Editor · Manage content and workflow definitions.</span>
+                  <span>Quality Control · Manage quality control tasks.</span>
                 </label>
                 <label>
                   <input type="checkbox" value="3" data-name="Viewer" onchange="updateSelection()" />
-                  <span>Viewer · Read-only visibility across dashboards.</span>
+                  <span>Tester · Perform tests and log test data.</span>
                 </label>
                 <label>
                   <input type="checkbox" value="4" data-name="Manager" onchange="updateSelection()" />
-                  <span>Manager · Approve procedures and monitor progress.</span>
+                  <span>Glueing · Manage glueing tasks.</span>
                 </label>
                 <label>
                   <input type="checkbox" value="5" data-name="Operator" onchange="updateSelection()" />
-                  <span>Operator · Execute assigned shop-floor tasks.</span>
+                  <span>Cleaning · Manage cleaning tasks.</span>
                 </label>
                 <label>
                   <input type="checkbox" value="6" data-name="QC Inspector" onchange="updateSelection()" />
-                  <span>QC Inspector · Perform inspections and log test data.</span>
+                  <span>Spraying · Manage spraying tasks.</span>
+                </label>
+                <label>
+                  <input type="checkbox" value="7" data-name="QC Inspector" onchange="updateSelection()" />
+                  <span>Dispatch · Manage dispatch tasks.</span>
                 </label>
               </div>
             </div>
@@ -220,4 +224,5 @@
 {% block extra_scripts %}
 <script src="{% static 'js/toast.js' %}" defer></script>
 <script src="{% static 'js/add_user.js' %}" defer></script>
+<script src="{% static 'js/add_user_form_submit.js' %}" defer></script>
 {% endblock %}
