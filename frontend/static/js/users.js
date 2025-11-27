@@ -5,7 +5,9 @@
   const tableBody = document.querySelector('.procedure-table tbody');
   const profileModal = document.getElementById('userProfileModal');
   const profileModalBody = profileModal ? profileModal.querySelector('[data-profile-body]') : null;
+  const profileModalCard = profileModal ? profileModal.querySelector('.profile-modal__card') : null;
   const editModal = document.getElementById('editUserModal');
+  const editModalCard = editModal ? editModal.querySelector('.edit-modal__card') : null;
   const editForm = document.getElementById('editUserForm');
   const editSubmitButton = editForm ? editForm.querySelector('[data-edit-submit]') : null;
   const editSubmitButtonInitialMarkup = editSubmitButton ? editSubmitButton.innerHTML : '';
@@ -789,7 +791,10 @@
         return;
       }
 
-      if (target === profileModal) {
+      const clickedOutsideCard =
+        profileModalCard && !profileModalCard.contains(target);
+
+      if (target === profileModal || clickedOutsideCard) {
         closeProfileModal();
       }
     });
@@ -805,7 +810,9 @@
         return;
       }
 
-      if (target === editModal) {
+      const clickedOutsideCard = editModalCard && !editModalCard.contains(target);
+
+      if (target === editModal || clickedOutsideCard) {
         closeEditModal();
       }
     });

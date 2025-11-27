@@ -8,3 +8,10 @@ class User(models.Model):
 
     def __str__(self):
         return self.name
+
+class Admin(models.Model):
+    emp_id = models.IntegerField(unique=True)
+    pin = models.IntegerField(max_length=4)
+
+    def __str__(self):
+        return str(self.emp_id)

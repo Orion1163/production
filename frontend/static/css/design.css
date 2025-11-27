@@ -124,7 +124,7 @@ body {
 
 @media (max-width: 768px) {
   .page-shell {
-    padding-inline: clamp(0.75rem, 4vw, 1.5rem);
+    /* padding-inline: clamp(0.75rem, 4vw, 1.5rem); */
     max-width: 640px;
     margin-inline: auto;
   }
@@ -878,8 +878,8 @@ body {
   flex-direction: column;
   gap: 24px;
   padding: 16px;
-  background: radial-gradient(circle at top, rgba(32, 54, 94, 0.35), transparent),
-    #050914;
+  /* background: radial-gradient(circle at top, rgba(32, 54, 94, 0.35), transparent),
+    #050914; */
   animation: fadeIn 600ms ease forwards;
   position: relative;
   z-index: 0;

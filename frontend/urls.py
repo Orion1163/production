@@ -29,6 +29,8 @@ urlpatterns = [
         name='home',
     ),
     path('create-new-user/', views.create_new_user, name='create_new_user'),
+    path('logout/', views.logout, name='logout'),
+    path('', views.login, name='login'),
 ]
 
 

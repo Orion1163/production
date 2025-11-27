@@ -1,0 +1,349 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Login</title>
+    <link rel="stylesheet" href="{% static 'css/login.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/toast.css' %}" />
+  </head>
+  <body>
+    <main>
+      <div class="box">
+        <div class="inner-box">
+          <div class="forms-wrap">
+            <form
+              action=""
+              method="POST"
+              autocomplete="off"
+              class="sign-in-form"
+              novalidate
+            >
+              {% csrf_token %}
+              <div class="logo">
+                <img
+                  src="{% static 'img/Logo.png' %}"
+                  alt="easyclass"
+                  style="width: 150px; height: 150px"
+                  ,
+                />
+              </div>
+
+              <div class="heading">
+                <h2>Login</h2>
+              </div>
+
+              <div class="actual-form">
+                <div class="input-wrap">
+                  <input
+                    type="number"
+                    name="emp_id"
+                    class="input-field"
+                    autocomplete="off"
+                    required
+                  />
+                  <label>Employee ID</label>
+                </div>
+
+                <div class="input-wrap">
+                  <div class="otp-container">
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input"
+                      oninput="moveNext(this, 0)"
+                      onkeydown="handleBackspace(this, 0)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input"
+                      oninput="moveNext(this, 1)"
+                      onkeydown="handleBackspace(this, 1)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input"
+                      oninput="moveNext(this, 2)"
+                      onkeydown="handleBackspace(this, 2)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input"
+                      oninput="moveNext(this, 3)"
+                      onkeydown="handleBackspace(this, 3)"
+                    />
+                    <button
+                      type="button"
+                      id="toggle-visibility"
+                      class="pin-visibility-btn"
+                      onclick="toggleVisibility()"
+                      aria-pressed="false"
+                      aria-label="Show PIN"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="icon-eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Zm11 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                        <path class="icon-eye-off" d="M2 3l20 18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <input type="hidden" id="pin" name="pin" required />
+                </div>
+
+                <input type="submit" value="Sign In" class="sign-btn" />
+
+                <p class="text" style="text-align: center; margin-top: 1rem;">
+                  <a href="#" id="admin-link" class="admin-link">Admin</a>
+                </p>
+                <!-- <p class="text">
+                  Forgotten your password or you login datails?
+                  <a href="#">Get help</a> signing in
+                </p> -->
+              </div>
+            </form>
+
+            <form
+              action=""
+              method="POST"
+              autocomplete="off"
+              class="admin-form"
+              data-success-redirect="{% url 'home' %}"
+              novalidate
+            >
+              {% csrf_token %}
+              <div class="logo">
+                <img
+                  src="{% static 'img/Logo.png' %}"
+                  alt="easyclass"
+                  style="width: 150px; height: 150px"
+                  ,
+                />
+              </div>
+
+              <div class="heading">
+                <h2>Admin Login</h2>
+              </div>
+
+              <div class="actual-form">
+                <div class="input-wrap">
+                  <input
+                    type="number"
+                    name="admin_emp_id"
+                    class="input-field"
+                    autocomplete="off"
+                    required
+                  />
+                  <label>Employee ID</label>
+                </div>
+
+                <div class="input-wrap">
+                  <div class="otp-container">
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input admin-otp-input"
+                      oninput="moveNextAdmin(this, 0)"
+                      onkeydown="handleBackspaceAdmin(this, 0)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input admin-otp-input"
+                      oninput="moveNextAdmin(this, 1)"
+                      onkeydown="handleBackspaceAdmin(this, 1)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input admin-otp-input"
+                      oninput="moveNextAdmin(this, 2)"
+                      onkeydown="handleBackspaceAdmin(this, 2)"
+                    />
+                    <input
+                      type="password"
+                      maxlength="1"
+                      class="otp-input admin-otp-input"
+                      oninput="moveNextAdmin(this, 3)"
+                      onkeydown="handleBackspaceAdmin(this, 3)"
+                    />
+                    <button
+                      type="button"
+                      id="toggle-visibility-admin"
+                      class="pin-visibility-btn"
+                      onclick="toggleVisibilityAdmin()"
+                      aria-pressed="false"
+                      aria-label="Show PIN"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path class="icon-eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Zm11 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                        <path class="icon-eye-off" d="M2 3l20 18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <input type="hidden" id="admin-pin" name="admin_pin" required />
+                </div>
+
+                <input type="submit" value="Sign In" class="sign-btn" />
+
+                <p class="text" style="text-align: center; margin-top: 1rem;">
+                  <a href="#" id="user-link" class="admin-link">User Login</a>
+                </p>
+              </div>
+            </form>
+          </div>
+
+          <div class="carousel">
+            <div class="images-wrapper">
+              <img
+                src="{% static 'img/image1.png' %}"
+                class="image img-1 show"
+                alt=""
+              />
+              <img
+                src="{% static 'img/image2.png' %}"
+                class="image img-2"
+                alt=""
+              />
+              <img
+                src="{% static 'img/image1.png' %}"
+                class="image img-3"
+                alt=""
+              />
+            </div>
+
+            <div class="text-slider">
+              <div class="text-wrap">
+                <div class="text-group">
+                  <h2>Quality Check</h2>
+                  <h2>Testing</h2>
+                  <h2>Dispatch</h2>
+                </div>
+              </div>
+
+              <div class="bullets">
+                <span class="active" data-value="1"></span>
+                <span data-value="2"></span>
+                <span data-value="3"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Javascript file -->
+    <script>
+      function moveNext(input, index) {
+        // Get the form containing this input
+        const form = input.closest('form');
+        let inputs = form.querySelectorAll(".otp-input:not(.admin-otp-input)");
+        let pinHidden = document.getElementById("pin");
+
+        // Allow only numeric input
+        input.value = input.value.replace(/[^0-9]/g, "");
+
+        // Move to next input if filled
+        if (input.value && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+
+        // Collect PIN value
+        let pinValue = "";
+        inputs.forEach((inp) => (pinValue += inp.value));
+        pinHidden.value = pinValue; // Store in hidden input for form submission
+      }
+
+      function handleBackspace(input, index) {
+        // Get the form containing this input
+        const form = input.closest('form');
+        let inputs = form.querySelectorAll(".otp-input:not(.admin-otp-input)");
+
+        // If backspace is pressed and field is empty, move to previous input
+        if (event.key === "Backspace" && !input.value && index > 0) {
+          inputs[index - 1].value = ""; // Clear previous field
+          inputs[index - 1].focus(); // Move focus back
+        }
+      }
+
+      function toggleVisibility() {
+        const signInForm = document.querySelector(".sign-in-form");
+        if (!signInForm) return;
+        
+        let inputs = signInForm.querySelectorAll(".otp-input:not(.admin-otp-input)");
+        let button = document.getElementById("toggle-visibility");
+
+        if (!inputs.length || !button) return;
+
+        const shouldShow = inputs[0].type === "password";
+        inputs.forEach((input) => (input.type = shouldShow ? "text" : "password"));
+        button.classList.toggle("is-active", shouldShow);
+        button.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+        button.setAttribute("aria-label", shouldShow ? "Hide PIN" : "Show PIN");
+      }
+
+      // Admin PIN functions
+      function moveNextAdmin(input, index) {
+        let inputs = document.querySelectorAll(".admin-otp-input");
+        let pinHidden = document.getElementById("admin-pin");
+
+        // Allow only numeric input
+        input.value = input.value.replace(/[^0-9]/g, "");
+
+        // Move to next input if filled
+        if (input.value && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+
+        // Collect PIN value
+        let pinValue = "";
+        inputs.forEach((inp) => (pinValue += inp.value));
+        pinHidden.value = pinValue; // Store in hidden input for form submission
+      }
+
+      function handleBackspaceAdmin(input, index) {
+        let inputs = document.querySelectorAll(".admin-otp-input");
+
+        // If backspace is pressed and field is empty, move to previous input
+        if (event.key === "Backspace" && !input.value && index > 0) {
+          inputs[index - 1].value = ""; // Clear previous field
+          inputs[index - 1].focus(); // Move focus back
+        }
+      }
+
+      function toggleVisibilityAdmin() {
+        let inputs = document.querySelectorAll(".admin-otp-input");
+        let button = document.getElementById("toggle-visibility-admin");
+
+        if (!inputs.length || !button) return;
+
+        const shouldShow = inputs[0].type === "password";
+        inputs.forEach((input) => (input.type = shouldShow ? "text" : "password"));
+        button.classList.toggle("is-active", shouldShow);
+        button.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+        button.setAttribute("aria-label", shouldShow ? "Hide PIN" : "Show PIN");
+      }
+
+      // Admin login toggle functionality
+      const adminLink = document.getElementById("admin-link");
+      const userLink = document.getElementById("user-link");
+      const main = document.querySelector("main");
+
+      adminLink.addEventListener("click", function(e) {
+        e.preventDefault();
+        main.classList.add("admin-mode");
+      });
+
+      userLink.addEventListener("click", function(e) {
+        e.preventDefault();
+        main.classList.remove("admin-mode");
+      });
+    </script>
+    <script src="{% static 'js/app.js' %}"></script>
+    <script src="{% static 'js/toast.js' %}"></script>
+    <script src="{% static 'js/auth.js' %}"></script>
+  </body>
+</html>

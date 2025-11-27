@@ -6,6 +6,8 @@
   --text-clr: #e6e6ef;
   --accent-clr: #5e63ff;
   --secondary-text-clr: #b0b3c1;
+  --sidebar-width: 250px;
+  --sidebar-collapsed-width: 60px;
 }
 * {
   margin: 0;
@@ -29,14 +31,15 @@ body {
   min-height: 100dvh;
   background-color: var(--base-clr);
   color: var(--text-clr);
-  display: grid;
-  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+  transition: padding-left 300ms ease-in-out;
   overflow-x: hidden;
 }
+
+
 #sidebar {
   box-sizing: border-box;
   height: 100vh;
-  width: 250px;
+  width: var(--sidebar-width);
   padding: 5px 1em;
   background-color: var(--base-clr);
   border-right: 1px solid var(--line-clr);
@@ -145,15 +148,22 @@ body {
 }
 
 main {
-  width: 100%;
+  width: calc(100% - var(--sidebar-width));
   box-sizing: border-box;
   padding-inline: clamp(1rem, 4vw, 3rem);
   padding-block: clamp(0.5rem, 2vw, 1.5rem);
+  margin-left: var(--sidebar-width);
+  transition: margin-left 300ms ease-in-out, width 300ms ease-in-out;
+}
+
+body.sidebar-collapsed main {
+  width: calc(100% - var(--sidebar-collapsed-width));
+  margin-left: var(--sidebar-collapsed-width);
 }
 
 .main-content {
   width: 100%;
-  padding-bottom: clamp(2rem, 5vw, 3rem);
+  /* padding-bottom: clamp(2rem, 5vw, 3rem); */
   box-sizing: border-box;
 }
 main p {
@@ -182,8 +192,15 @@ main p {
     flex-direction: column;
     min-height: 100vh;
     overflow-x: hidden;
+    padding-left: 0;
+  }
+
+  body.sidebar-collapsed {
+    padding-left: 0;
   }
   main {
+    width: 100%;
+    margin-left: 0;
     order: 1;
     flex: 1 1 auto;
     width: 100%;
@@ -196,7 +213,7 @@ main p {
   }
 
   .main-content {
-    padding-bottom: calc(170px + clamp(1rem, 4vw, 1.5rem));
+    /* padding-bottom: calc(170px + clamp(1rem, 4vw, 1.5rem)); */
     position: relative;
     z-index: 0;
   }
