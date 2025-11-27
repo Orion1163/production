@@ -100,7 +100,22 @@ function toggleDropdown(trigger) {
   trigger.setAttribute("aria-expanded", (!isOpen).toString());
 }
 
-function updateSelection() {
+function updateSelection(changedCheckbox) {
+  const adminCheckbox = document.querySelector('.options input[value="1"]');
+  const allCheckboxes = document.querySelectorAll('.options input[type="checkbox"]');
+
+  if (adminCheckbox) {
+    if (adminCheckbox.checked) {
+      allCheckboxes.forEach((checkbox) => {
+        checkbox.checked = true;
+      });
+    } else if (changedCheckbox === adminCheckbox) {
+      allCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+    }
+  }
+
   const selectedContainer = document.getElementById("selected-items");
   if (!selectedContainer) return;
 

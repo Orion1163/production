@@ -157,6 +157,7 @@ body {
 
   .multi-select .options {
     position: fixed;
+    top: auto;
     left: clamp(0.75rem, 4vw, 1.5rem);
     right: clamp(0.75rem, 4vw, 1.5rem);
     bottom: 120px;

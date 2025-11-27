@@ -1125,6 +1125,9 @@ body.edit-modal-open {
     max-height: min(50vh, 300px);
     border-radius: 16px;
     box-shadow: 0 30px 70px rgba(2, 6, 23, 0.85);
+    background: #050b16;
+    border: 1px solid rgba(15, 23, 42, 0.95);
+    backdrop-filter: none;
     animation: dropdownSlideUp 250ms ease;
   }
 

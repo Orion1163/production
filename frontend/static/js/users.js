@@ -317,7 +317,26 @@
     }
   };
 
-  const updateEditSelection = () => {
+  const enforceAdminCascadeForEdit = (changedCheckbox) => {
+    const adminCheckbox = editRoleCheckboxes.find((cb) => cb.value === '1');
+    if (!adminCheckbox) {
+      return;
+    }
+
+    if (adminCheckbox.checked) {
+      editRoleCheckboxes.forEach((checkbox) => {
+        checkbox.checked = true;
+      });
+    } else if (changedCheckbox === adminCheckbox) {
+      editRoleCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+    }
+  };
+
+  const updateEditSelection = (changedCheckbox) => {
+    enforceAdminCascadeForEdit(changedCheckbox);
+
     if (!editSelectedItems) return;
     editSelectedItems.innerHTML = '';
     const selected = editRoleCheckboxes.filter((cb) => cb.checked);
@@ -342,7 +361,7 @@
     const checkbox = editRoleCheckboxes.find((cb) => cb.value === value);
     if (checkbox) {
       checkbox.checked = false;
-      updateEditSelection();
+      updateEditSelection(checkbox);
     }
   };
 
@@ -915,7 +934,7 @@
     if (editRoleCheckboxes.length) {
       editRoleCheckboxes.forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
-          updateEditSelection();
+          updateEditSelection(checkbox);
         });
       });
     }
