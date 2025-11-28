@@ -33,13 +33,13 @@
       <div class="form-row">
         <div>
           <label for="modelNo">Model No *</label>
-          <input
+          <select
             id="modelNo"
             name="model_no"
-            type="text"
-            placeholder="Enter model number"
             required
-          />
+          >
+            <option value="">Select Model Number</option>
+          </select>
         </div>
         <div>
           <label for="formImage">Upload Image</label>
@@ -130,14 +130,6 @@
         <label>Part No</label>
         <select name="part_no[]" required onchange="handlePartSelection(this)">
           <option value="">Select Part Number</option>
-          <option>PART-001</option>
-          <option>PART-002</option>
-          <option>PART-003</option>
-          <option>PART-004</option>
-          <option>PART-005</option>
-          <option>PART-100</option>
-          <option>PART-200</option>
-          <option>PART-300</option>
         </select>
       </div>
       <div style="position: relative;">
@@ -509,6 +501,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'js/bom_api.js' %}" defer></script>
 <script src="{% static 'js/design.js' %}" defer></script>
 {% endblock %}
 

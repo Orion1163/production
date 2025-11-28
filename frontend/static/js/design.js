@@ -92,6 +92,15 @@
     
     // Initialize part image handler for the new entry
     const newEntry = partEntries.lastElementChild;
+    
+    // Update part dropdown if model is selected
+    if (typeof window.updatePartDropdown === 'function') {
+      const partSelect = newEntry?.querySelector('select[name="part_no[]"]');
+      if (partSelect) {
+        window.updatePartDropdown(partSelect);
+      }
+    }
+    
     const partImageInput = newEntry?.querySelector('[data-part-image-input]');
     if (partImageInput) {
       const dropzone = partImageInput.closest('[data-dropzone]');
