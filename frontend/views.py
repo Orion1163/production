@@ -42,7 +42,11 @@ def profile(request):
     """
     Render the profile page.
     """
-    return render(request, 'admin/profile.html')
+    emp_id = request.session.get('admin_emp_id', None)
+    context = {
+        'emp_id': emp_id
+    }
+    return render(request, 'admin/profile.html', context)
 
 @admin_login_required
 def home(request):

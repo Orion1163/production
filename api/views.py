@@ -128,3 +128,36 @@ class AdminLogoutView(APIView):
             {'message': 'Logout successful'}, 
             status=status.HTTP_200_OK
         )
+
+
+class AdminProfileView(APIView):
+    """
+    Get current admin's profile details.
+    """
+    
+    def get(self, request):
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        emp_id = request.session.get('admin_emp_id')
+        if not emp_id:
+            return Response(
+                {'error': 'Admin ID not found in session'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            admin = Admin.objects.get(emp_id=emp_id)
+            serializer = AdminSerializer(admin)
+            return Response({
+                'admin': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Admin.DoesNotExist:
+            return Response(
+                {'error': 'Admin not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
