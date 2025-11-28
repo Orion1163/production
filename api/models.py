@@ -15,3 +15,9 @@ class Admin(models.Model):
 
     def __str__(self):
         return str(self.emp_id)
+
+class ProductionProcedure(models.Model):
+    
+
+    def __str__(self):
+        return self.model_no

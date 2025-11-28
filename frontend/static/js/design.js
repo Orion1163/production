@@ -89,6 +89,58 @@
 
     mapPanels(entry, entryId);
     partEntries.appendChild(fragment);
+    
+    // Initialize part image handler for the new entry
+    const newEntry = partEntries.lastElementChild;
+    const partImageInput = newEntry?.querySelector('[data-part-image-input]');
+    if (partImageInput) {
+      const dropzone = partImageInput.closest('[data-dropzone]');
+      if (dropzone) {
+        const label = dropzone.querySelector('[data-dropzone-label]');
+        const defaultLabel = label?.textContent ?? '';
+        
+        const activate = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.add('is-dragover');
+        };
+
+        const deactivate = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.remove('is-dragover');
+        };
+
+        partImageInput.addEventListener('change', () => {
+          handlePartImageChange(partImageInput);
+          dropzone.classList.remove('is-dragover');
+        });
+
+        dropzone.addEventListener('dragenter', activate);
+        dropzone.addEventListener('dragover', (event) => {
+          activate(event);
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'copy';
+          }
+        });
+        dropzone.addEventListener('dragleave', deactivate);
+        dropzone.addEventListener('dragend', deactivate);
+
+        dropzone.addEventListener('drop', (event) => {
+          deactivate(event);
+          const { dataTransfer } = event;
+          if (!dataTransfer || !dataTransfer.files || !dataTransfer.files.length) {
+            return;
+          }
+
+          const dt = new DataTransfer();
+          Array.from(dataTransfer.files).forEach((file) => dt.items.add(file));
+          partImageInput.files = dt.files;
+          partImageInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+    }
+    
     updateDispatchAvailability();
   };
 
@@ -159,6 +211,48 @@
     }
   };
 
+  const handlePartImageChange = (input) => {
+    const entry = input.closest('.part-entry');
+    if (!entry) return;
+    
+    const preview = entry.querySelector('[data-part-image-preview]');
+    const fileName = entry.querySelector('[data-part-image-name]');
+    const label = entry.querySelector('[data-dropzone-label]');
+    
+    if (!preview || !fileName) return;
+    
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      fileName.textContent = file.name;
+      preview.style.display = 'flex';
+      if (label) {
+        label.textContent = 'Choose image';
+      }
+    } else {
+      preview.style.display = 'none';
+      fileName.textContent = '';
+    }
+  };
+
+  const cancelPartImage = (button) => {
+    const entry = button.closest('.part-entry');
+    if (!entry) return;
+    
+    const input = entry.querySelector('[data-part-image-input]');
+    const preview = entry.querySelector('[data-part-image-preview]');
+    const fileName = entry.querySelector('[data-part-image-name]');
+    
+    if (input) {
+      input.value = '';
+      if (preview) {
+        preview.style.display = 'none';
+      }
+      if (fileName) {
+        fileName.textContent = '';
+      }
+    }
+  };
+
   const initDropzones = () => {
     const dropzones = document.querySelectorAll('[data-dropzone]');
     if (!dropzones.length) {
@@ -200,10 +294,18 @@
       };
 
       if (input) {
-        input.addEventListener('change', () => {
-          handleFiles(input.files);
-          zone.classList.remove('is-dragover');
-        });
+        // Handle part image inputs separately
+        if (input.hasAttribute('data-part-image-input')) {
+          input.addEventListener('change', () => {
+            handlePartImageChange(input);
+            zone.classList.remove('is-dragover');
+          });
+        } else {
+          input.addEventListener('change', () => {
+            handleFiles(input.files);
+            zone.classList.remove('is-dragover');
+          });
+        }
       }
 
       zone.addEventListener('dragenter', activate);
@@ -238,6 +340,7 @@
   window.addInputField = addInputField;
   window.addCheckboxField = addCheckboxField;
   window.handlePartSelection = handlePartSelection;
+  window.cancelPartImage = cancelPartImage;
 
   document.addEventListener('DOMContentLoaded', () => {
     initDropzones();
