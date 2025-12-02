@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block title %}Add Design Process{% endblock %}
-k
+
 {% block heading %}
 <div class="page-heading">
   <h1>Production Procedure</h1>
@@ -34,104 +34,10 @@ k
           </tr>
         </thead>
         <tbody>
-          <tr data-state="active">
-            <td data-label="Sr No">
-              <span class="serial-badge">01</span>
-            </td>
-            <td data-label="Image">
-              <figure class="procedure-thumb">
-                <img src="{% static 'img/eics141.png' %}" />
-              </figure>
-            </td>
-            <td data-label="Product Name">
-              <strong>Heat Exchanger Controller</strong>
-              <span class="subcopy">EICS141M</span>
-            </td>
-            <td data-label="Part No">EICS141A, EICS141B</td>
-            <td data-label="Action">
-              <div class="action-cell">
-                <button type="button" class="icon-btn view-btn" aria-label="View Heat Exchanger Controller">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr data-state="review">
-            <td data-label="Sr No">
-              <span class="serial-badge">02</span>
-            </td>
-            <td data-label="Image">
-              <figure class="procedure-thumb">
-                <img src="{% static 'img/eics114.png' %}" />
-              </figure>
-            </td>
-            <td data-label="Product Name">
-              <strong>4 Fan PWM Controller with Display</strong>
-              <span class="subcopy">EICS114</span>
-            </td>
-            <td data-label="Part No">EICS114A, EICS114B, EICS114C</td>
-            <td data-label="Action">
-              <div class="action-cell">
-                <button type="button" class="icon-btn view-btn" aria-label="View 4 Fan PWM Controller with Display">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr data-state="draft">
-            <td data-label="Sr No">
-              <span class="serial-badge">03</span>
-            </td>
-            <td data-label="Image">
-              <figure class="procedure-thumb">
-                <img src="{% static 'img/eics42.png' %}" />
-              </figure>
-            </td>
-            <td data-label="Product Name">
-              <strong>4 Fan PWM Controller with Display</strong>
-              <span class="subcopy">EICS42</span>
-            </td>
-            <td data-label="Part No">EICS42A, EICS42B</td>
-            <td data-label="Action">
-              <div class="action-cell">
-                <button type="button" class="icon-btn view-btn" aria-label="View EICS42">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr data-state="hold">
-            <td data-label="Sr No">
-              <span class="serial-badge">04</span>
-            </td>
-            <td data-label="Image">
-              <figure class="procedure-thumb">
-                <img src="{% static 'img/eics145.png' %}" />
-              </figure>
-            </td>
-            <td data-label="Product Name">
-              <strong>4 Fan Controller with 1 PFC</strong>
-              <span class="subcopy">EICS145</span>
-            </td>
-            <td data-label="Part No">EICS145</td>
-            <td data-label="Action">
-              <div class="action-cell">
-                <button type="button" class="icon-btn view-btn" aria-label="View 4 Fan Controller with 1 PFC">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
+          <!-- Data will be loaded dynamically via JavaScript -->
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 2rem;">
+              <p>Loading procedures...</p>
             </td>
           </tr>
         </tbody>
@@ -143,9 +49,10 @@ k
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/design.css' %}">
+<link rel="stylesheet" href="{% static 'css/procedure_modal.css' %}">
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/design.js' %}" defer></script>
+<script src="{% static 'js/procedure_list.js' %}" defer></script>
 {% endblock %}
 
