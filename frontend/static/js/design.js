@@ -101,6 +101,7 @@
       }
     }
     
+    
     const partImageInput = newEntry?.querySelector('[data-part-image-input]');
     if (partImageInput) {
       const dropzone = partImageInput.closest('[data-dropzone]');

@@ -130,7 +130,33 @@
       // Extract custom checkboxes only (no custom fields in the desired structure)
       const customCheckboxes = [];
 
-      // Get checkbox fields
+      // Automatically add section checkbox as a default field when section is enabled
+      // This creates a checkbox field in the dynamic table with the section name as label
+      if (isEnabled) {
+        // Map section names to display labels
+        const sectionLabelMap = {
+          'smd': 'SMD',
+          'leaded': 'Leaded',
+          'prod_qc': 'Production QC',
+          'qc': 'QC',
+          'testing': 'Testing',
+          'glueing': 'Glueing',
+          'cleaning': 'Cleaning',
+          'spraying': 'Spraying',
+          'dispatch': 'Dispatch'
+        };
+        
+        // Use section name as label (capitalized)
+        const checkboxLabel = sectionLabelMap[section] || section.charAt(0).toUpperCase() + section.slice(1);
+        
+        // Automatically add section checkbox to custom checkboxes (will be created as BooleanField in dynamic table)
+        customCheckboxes.push({
+          name: section.toLowerCase().replace(/\s+/g, '_'),
+          label: checkboxLabel
+        });
+      }
+
+      // Get checkbox fields from the accent panel (custom checkboxes added by user)
       const checkboxList = panel.querySelectorAll('.panel-card.accent .input-list');
       checkboxList.forEach(list => {
         list.querySelectorAll('.dynamic-field input[type="text"]').forEach(input => {
