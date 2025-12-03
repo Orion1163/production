@@ -360,15 +360,16 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
         if 'api' not in django_apps.all_models:
             django_apps.all_models['api'] = {}
         
-        # Use the table name as the model key (for admin URLs)
-        # This ensures URLs match the table name: /admin/api/eics123x_part/
-        model_key = db_table.lower()  # Use table name format (already lowercase)
-        django_apps.all_models['api'][model_key] = model_class
-        
-        # Also add with class name as key (for compatibility)
+        # Use the lowercase class name as the model key (for admin URLs)
+        # Django admin uses the lowercase class name for URLs, not the table name
+        # This ensures URLs match: /admin/api/eics112_part/
         class_key = class_name.lower()
-        if class_key != model_key:
-            django_apps.all_models['api'][class_key] = model_class
+        django_apps.all_models['api'][class_key] = model_class
+        
+        # Also add with table name as key (for compatibility, in case it's different)
+        table_key = db_table.lower()
+        if table_key != class_key:
+            django_apps.all_models['api'][table_key] = model_class
         
         # Also ensure it's in the app config's models
         app_config = django_apps.get_app_config('api')
@@ -391,7 +392,7 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             model_class._meta.verbose_name_plural = f'Data Entries for {part_name}'
         
         import sys
-        print("Added model %s to Django's app registry (key: %s)" % (class_name, model_key), file=sys.stderr)
+        print("Added model %s to Django's app registry (key: %s)" % (class_name, class_key), file=sys.stderr)
         print("  - Verbose name: %s" % model_class._meta.verbose_name, file=sys.stderr)
         print("  - App label: %s" % model_class._meta.app_label, file=sys.stderr)
     except Exception as e:

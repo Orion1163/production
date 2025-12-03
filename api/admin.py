@@ -1,6 +1,10 @@
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.contrib.admin.apps import AdminConfig
+from django.http import Http404
+from django.urls import reverse, NoReverseMatch
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
 from .models import User, Admin, ModelPart, PartProcedureDetail
 from .dynamic_models import DynamicModelRegistry
 
@@ -191,6 +195,32 @@ def register_dynamic_model_in_admin(model_class, part_name):
             """
             return {}
         
+        def response_post_save_add(self, request, obj):
+            """
+            Override to fix URL reversing after adding an object.
+            """
+            response = super().response_post_save_add(request, obj)
+            # Fix the redirect URL to use our catch-all pattern
+            if hasattr(response, 'url') and response.url:
+                model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+                # Replace any reversed URLs with direct paths
+                if 'api_' + model_name in response.url or 'admin/api/' + model_name in response.url:
+                    response.url = '/admin/api/%s/' % model_name
+            return response
+        
+        def response_post_save_change(self, request, obj):
+            """
+            Override to fix URL reversing after changing an object.
+            """
+            response = super().response_post_save_change(request, obj)
+            # Fix the redirect URL to use our catch-all pattern
+            if hasattr(response, 'url') and response.url:
+                model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+                # Replace any reversed URLs with direct paths
+                if 'api_' + model_name in response.url or 'admin/api/' + model_name in response.url:
+                    response.url = '/admin/api/%s/' % model_name
+            return response
+        
         def changelist_view(self, request, extra_context=None):
             """
             Override changelist_view to ensure table is synced and model is registered.
@@ -217,7 +247,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         
         def add_view(self, request, form_url='', extra_context=None):
             """
-            Override add_view to ensure table is synced before adding.
+            Override add_view to ensure table is synced before adding and handle URL reversing.
             """
             # Ensure table has all required columns
             from api.dynamic_model_utils import create_dynamic_table_in_db
@@ -226,6 +256,14 @@ def register_dynamic_model_in_admin(model_class, part_name):
             except Exception as e:
                 import sys
                 print("Warning: Could not sync table for %s: %s" % (part_name, str(e)), file=sys.stderr)
+            
+            # Patch extra_context to fix URL reversing in templates
+            if extra_context is None:
+                extra_context = {}
+            
+            model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+            # Override the changelist URL in the context
+            extra_context['changelist_url'] = '/admin/api/%s/' % model_name
             
             return super().add_view(request, form_url, extra_context)
     
@@ -245,12 +283,12 @@ def register_dynamic_model_in_admin(model_class, part_name):
             model_class._meta.app_label = 'api'
         
         # Set model_name if not set (needed for admin URLs)
-        # Use the table name format (lowercase, sanitized) for the URL
+        # Django admin uses the lowercase class name for URLs, not the table name
+        # So we need to ensure model_name matches the lowercase class name
         if not hasattr(model_class._meta, 'model_name'):
-            # Use the db_table name (which is already lowercase and sanitized)
-            # This ensures URLs match: /admin/api/eics123x_part/
-            table_name = model_class._meta.db_table
-            model_class._meta.model_name = table_name
+            # Use the lowercase class name for model_name (this is what Django admin uses for URLs)
+            class_name_lower = model_class.__name__.lower()
+            model_class._meta.model_name = class_name_lower
         
         # Ensure verbose_name is set (this is what shows in admin index)
         if not hasattr(model_class._meta, 'verbose_name') or not model_class._meta.verbose_name:
@@ -320,12 +358,32 @@ def register_dynamic_model_in_admin(model_class, part_name):
             if hasattr(admin.site, '_registry'):
                 # Force admin to rebuild its app list on next request
                 pass
+            
+            # Ensure model_name is set correctly (Django admin uses this for URLs)
+            if not hasattr(model_class._meta, 'model_name') or not model_class._meta.model_name:
+                model_class._meta.model_name = model_class.__name__.lower()
+            
+            # Verify the model is in Django's app registry with the correct key
+            from django.apps import apps as django_apps
+            model_key = model_class.__name__.lower()
+            if 'api' in django_apps.all_models and model_key in django_apps.all_models['api']:
+                # Model is registered correctly
+                pass
+            else:
+                # Re-register in app registry
+                if 'api' not in django_apps.all_models:
+                    django_apps.all_models['api'] = {}
+                django_apps.all_models['api'][model_key] = model_class
+                import sys
+                print("Re-registered model %s in app registry with key: %s" % (part_name, model_key), file=sys.stderr)
         except Exception as e:
             import sys
             print("Warning: Could not update admin registry cache: %s" % str(e), file=sys.stderr)
         
         import sys
-        admin_url = f"/admin/api/{getattr(model_class._meta, 'model_name', model_class._meta.db_table)}/"
+        # Use model_name (lowercase class name) for admin URL
+        model_name_for_url = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+        admin_url = f"/admin/api/{model_name_for_url}/"
         print("=" * 80, file=sys.stderr)
         print("SUCCESS: Registered %s in admin" % part_name, file=sys.stderr)
         print("  - Admin URL: %s" % admin_url, file=sys.stderr)
@@ -414,6 +472,184 @@ def register_all_dynamic_models_in_admin():
     
     print("Total registered: %d dynamic models" % registered_count, file=sys.stderr)
     print("=" * 80, file=sys.stderr)
+
+
+# Monkey-patch Django's reverse function to handle dynamic model URLs
+_original_reverse = reverse
+
+def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, current_app=None):
+    """
+    Custom reverse function that handles dynamic model URLs.
+    """
+    try:
+        # Try the original reverse first
+        return _original_reverse(viewname, urlconf, args, kwargs, current_app)
+    except NoReverseMatch:
+        # If it fails, check if it's a dynamic model URL
+        if viewname.startswith('admin:') and '_' in viewname:
+            parts = viewname.split(':')
+            if len(parts) == 2:
+                url_name = parts[1]
+                # Check if it matches pattern: api_<model_name>_<action>
+                if url_name.startswith('api_') and url_name.count('_') >= 2:
+                    url_parts = url_name.split('_')
+                    if len(url_parts) >= 3:
+                        # Reconstruct model name (everything between 'api' and last part)
+                        model_name = '_'.join(url_parts[1:-1])
+                        action = url_parts[-1]
+                        
+                        # Get object_id from args or kwargs
+                        object_id = None
+                        if args and len(args) > 0:
+                            object_id = args[0]
+                        elif kwargs and 'object_id' in kwargs:
+                            object_id = kwargs['object_id']
+                        
+                        # Build the URL manually
+                        if action == 'changelist':
+                            return '/admin/api/%s/' % model_name
+                        elif action == 'add':
+                            return '/admin/api/%s/add/' % model_name
+                        elif action == 'change' and object_id:
+                            return '/admin/api/%s/%s/' % (model_name, object_id)
+                        elif action == 'delete' and object_id:
+                            return '/admin/api/%s/%s/delete/' % (model_name, object_id)
+                        elif action == 'history' and object_id:
+                            return '/admin/api/%s/%s/history/' % (model_name, object_id)
+        
+        # If we can't handle it, re-raise the original exception
+        raise
+
+# Replace Django's reverse function
+import django.urls
+django.urls.reverse = reverse_with_dynamic_models
+
+# Override Django admin's catch-all view to handle dynamic models
+# This is necessary because Django admin's URL patterns are built at startup
+# and don't automatically include dynamically registered models
+_original_catch_all = admin.site.catch_all_view
+
+def catch_all_view_with_dynamic_models(request, url):
+    """
+    Custom catch-all view that handles dynamic models registered after startup.
+    """
+    # First, try to find the model in the registry
+    from django.apps import apps as django_apps
+    
+    # Extract app_label and model_name from URL
+    # URL format: admin/api/<model_name>/
+    url_parts = url.strip('/').split('/')
+    if len(url_parts) >= 2:
+        app_label = url_parts[0]
+        model_name = url_parts[1]
+        
+        # Check if this is a dynamic model in the 'api' app
+        if app_label == 'api':
+            model_class = None
+            
+            # First, try to find the model in Django's app registry
+            try:
+                if 'api' in django_apps.all_models and model_name in django_apps.all_models['api']:
+                    model_class = django_apps.all_models['api'][model_name]
+            except:
+                pass
+            
+            # If not found in app registry, try DynamicModelRegistry
+            if model_class is None:
+                try:
+                    # Try to find by part name (model_name might be the table name)
+                    all_models = DynamicModelRegistry.get_all()
+                    for part_name, registered_model in all_models.items():
+                        # Check if the model_name matches the table name or class name
+                        if (registered_model._meta.db_table == model_name or 
+                            registered_model.__name__.lower() == model_name):
+                            model_class = registered_model
+                            break
+                except Exception as e:
+                    import sys
+                    print("Error checking DynamicModelRegistry: %s" % str(e), file=sys.stderr)
+            
+            # If we found a model, try to register it if not already registered
+            if model_class is not None:
+                try:
+                    # Check if model is registered in admin
+                    if model_class in admin.site._registry:
+                        # Model is registered - manually route to the admin view
+                        admin_class = admin.site._registry[model_class]
+                        
+                        # Determine which view to call based on URL
+                        if len(url_parts) == 2:
+                            # Changelist view: /admin/api/eics120_part/
+                            import sys
+                            print("Routing to changelist view for %s" % model_name, file=sys.stderr)
+                            return admin_class.changelist_view(request)
+                        elif len(url_parts) == 3:
+                            if url_parts[2] == 'add':
+                                # Add view: /admin/api/eics120_part/add/
+                                import sys
+                                print("Routing to add view for %s" % model_name, file=sys.stderr)
+                                return admin_class.add_view(request)
+                            elif url_parts[2] == 'change':
+                                # Change view (list): /admin/api/eics120_part/change/
+                                import sys
+                                print("Routing to changelist view for %s" % model_name, file=sys.stderr)
+                                return admin_class.changelist_view(request)
+                            else:
+                                # Object detail view: /admin/api/eics120_part/<id>/
+                                try:
+                                    object_id = url_parts[2]
+                                    import sys
+                                    print("Routing to change view for %s, object_id=%s" % (model_name, object_id), file=sys.stderr)
+                                    return admin_class.change_view(request, object_id)
+                                except Exception as e:
+                                    import sys
+                                    print("Error in change view: %s" % str(e), file=sys.stderr)
+                                    return _original_catch_all(request, url)
+                        else:
+                            # Try original catch-all for other URLs
+                            return _original_catch_all(request, url)
+                    else:
+                        # Model exists but not registered - try to register it
+                        try:
+                            # Get part name from model
+                            part_name = getattr(model_class._meta, 'verbose_name', model_name)
+                            if not part_name or part_name == model_name:
+                                # Try to get from DynamicModelRegistry
+                                all_models = DynamicModelRegistry.get_all()
+                                for pn, m in all_models.items():
+                                    if m == model_class:
+                                        part_name = pn
+                                        break
+                            
+                            result = register_dynamic_model_in_admin(model_class, part_name)
+                            if result:
+                                import sys
+                                print("Successfully registered dynamic model %s via catch-all view" % part_name, file=sys.stderr)
+                                # Now route to the admin view
+                                admin_class = admin.site._registry[model_class]
+                                if len(url_parts) == 2:
+                                    return admin_class.changelist_view(request)
+                                elif len(url_parts) == 3:
+                                    if url_parts[2] == 'add':
+                                        return admin_class.add_view(request)
+                                    else:
+                                        return admin_class.change_view(request, url_parts[2])
+                        except Exception as e:
+                            import sys
+                            import traceback
+                            print("Error registering dynamic model in catch-all: %s" % str(e), file=sys.stderr)
+                            traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+                except Exception as e:
+                    import sys
+                    import traceback
+                    print("Error in catch-all view: %s" % str(e), file=sys.stderr)
+                    traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+    
+    # Fall back to original catch-all view
+    return _original_catch_all(request, url)
+
+# Replace Django admin's catch-all view with our custom one
+admin.site.catch_all_view = catch_all_view_with_dynamic_models
 
 
 # Note: Dynamic models are auto-registered via ApiConfig.ready() method

@@ -170,11 +170,16 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
         # Register the model in Django admin
         # This MUST happen after table creation to ensure everything is ready
         try:
-            from api.admin import register_dynamic_model_in_admin
+            from api.admin import register_dynamic_model_in_admin, register_all_dynamic_models_in_admin
+            from django.contrib import admin
+            
+            # First, register this specific model
             admin_result = register_dynamic_model_in_admin(dynamic_model, part_name)
             if admin_result:
                 import sys
-                admin_url = f"/admin/api/{dynamic_model._meta.db_table}/"
+                # Use model_name (lowercase class name) for admin URL
+                model_name_for_url = getattr(dynamic_model._meta, 'model_name', dynamic_model.__name__.lower())
+                admin_url = f"/admin/api/{model_name_for_url}/"
                 print("=" * 80, file=sys.stderr)
                 print("SUCCESS: Registered %s in admin" % part_name, file=sys.stderr)
                 print("  Admin URL: %s" % admin_url, file=sys.stderr)
@@ -184,6 +189,32 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
             else:
                 import sys
                 print("WARNING: Admin registration returned False for %s" % part_name, file=sys.stderr)
+            
+            # Now run the full registration to ensure all models are properly registered
+            # This is equivalent to running: python manage.py register_dynamic_admin
+            try:
+                import sys
+                print("=" * 80, file=sys.stderr)
+                print("Running full dynamic model registration (equivalent to register_dynamic_admin command)...", file=sys.stderr)
+                print("=" * 80, file=sys.stderr)
+                
+                # Call the registration function directly
+                register_all_dynamic_models_in_admin()
+                
+                # Clear admin's app_dict cache to force rebuild
+                if hasattr(admin.site, '_app_dict'):
+                    delattr(admin.site, '_app_dict')
+                
+                import sys
+                print("=" * 80, file=sys.stderr)
+                print("SUCCESS: Full registration completed for all dynamic models", file=sys.stderr)
+                print("=" * 80, file=sys.stderr)
+            except Exception as e:
+                import sys
+                import traceback
+                print("WARNING: Full registration had errors (this is usually okay): %s" % str(e), file=sys.stderr)
+                traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+                
         except Exception as e:
             import sys
             import traceback
