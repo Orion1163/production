@@ -57,7 +57,7 @@ def create_entry_for_part(part_name, data):
     
     Args:
         part_name (str): The part number/name
-        data (dict): Dictionary containing field values (usid, tag_no, is_qc, etc.)
+        data (dict): Dictionary containing field values (usid, serial_number, is_qc, etc.)
     
     Returns:
         Model instance: The created entry

@@ -125,7 +125,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
     COMMON_FIELDS = {
         'usid': 'USID',
         'serial_number': 'Serial Number',
-        'tag_no': 'Tag Number',
         'in-process_tag_number': 'Serial Number',  # Alias for serial_number
     }
     
@@ -303,8 +302,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             identifier = getattr(self, 'usid')
         elif hasattr(self, 'serial_number') and getattr(self, 'serial_number'):
             identifier = getattr(self, 'serial_number')
-        elif hasattr(self, 'tag_no') and getattr(self, 'tag_no'):
-            identifier = getattr(self, 'tag_no')
         return f"{part_name} Entry: {identifier or 'N/A'}"
     
     fields['__str__'] = __str__

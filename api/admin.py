@@ -70,7 +70,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
     timestamp_fields = ['created_at', 'updated_at']
     
     # Common fields that should NOT be section-prefixed
-    common_fields_list = ['usid', 'serial_number', 'tag_no']
+    common_fields_list = ['usid', 'serial_number']
     common_fields = [f for f in all_fields if f in common_fields_list]
     
     # Dynamic fields (section-specific, excluding common fields)
@@ -125,7 +125,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
     # Build fieldsets organized by section
     fieldsets_list = []
     
-    # Add common fields first (usid, serial_number, tag_no)
+    # Add common fields first (usid, serial_number)
     if common_fields:
         fieldsets_list.append(('Common Fields', {
             'fields': tuple(common_fields),
