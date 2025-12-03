@@ -1,14 +1,20 @@
 from .models import User, Admin, ModelPart, PartProcedureDetail
 from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
-    ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer
+    ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
+    DashboardStatsSerializer, DashboardChartDataSerializer
 )
-from django.db.models import Max
+from django.db.models import Max, Count, Q
+from django.db import connection
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import JsonResponse
+from collections import defaultdict
+import json
 
 
 class UserListCreateView(APIView):
@@ -377,6 +383,195 @@ class ProcedureDetailView(APIView):
                 'model_no': model_no,
                 'parts': serializer.data
             }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DashboardStatsView(APIView):
+    """
+    Get dashboard statistics overview.
+    Returns counts of models, parts, users, procedures, and production entries.
+    """
+    
+    def get(self, request):
+        try:
+            # Basic counts
+            total_models = ModelPart.objects.values('model_no').distinct().count()
+            total_parts = ModelPart.objects.count()
+            total_users = User.objects.count()
+            total_procedures = PartProcedureDetail.objects.count()
+            
+            # Count production entries from dynamic tables
+            total_production_entries = 0
+            try:
+                from .dynamic_models import DynamicModelRegistry
+                from .dynamic_model_utils import get_dynamic_part_model
+                
+                all_dynamic_models = DynamicModelRegistry.get_all()
+                for part_name, model_class in all_dynamic_models.items():
+                    try:
+                        count = model_class.objects.count()
+                        total_production_entries += count
+                    except Exception:
+                        # Table might not exist yet
+                        continue
+                
+                # Also check database directly for any dynamic tables
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' 
+                        AND (name LIKE 'part_%' OR name LIKE '%eics%')
+                        AND name NOT LIKE 'sqlite_%'
+                    """)
+                    tables = [row[0] for row in cursor.fetchall()]
+                    
+                    for table_name in tables:
+                        try:
+                            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                            count = cursor.fetchone()[0]
+                            total_production_entries += count
+                        except Exception:
+                            continue
+            except Exception as e:
+                # If dynamic model counting fails, continue with 0
+                pass
+            
+            # Recent activity (last 7 days)
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            recent_models_count = ModelPart.objects.filter(created_at__gte=seven_days_ago).values('model_no').distinct().count()
+            recent_parts_count = ModelPart.objects.filter(created_at__gte=seven_days_ago).count()
+            
+            stats = {
+                'total_models': total_models,
+                'total_parts': total_parts,
+                'total_users': total_users,
+                'total_procedures': total_procedures,
+                'total_production_entries': total_production_entries,
+                'recent_models_count': recent_models_count,
+                'recent_parts_count': recent_parts_count
+            }
+            
+            serializer = DashboardStatsSerializer(stats)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DashboardChartDataView(APIView):
+    """
+    Get dashboard chart data for visualizations.
+    Returns data for models over time, parts by model, production by section, and recent activity.
+    """
+    
+    def get(self, request):
+        try:
+            # 1. Models over time (last 30 days)
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            models_over_time = []
+            
+            # Group by date (SQLite compatible)
+            model_parts = ModelPart.objects.filter(
+                created_at__gte=thirty_days_ago
+            ).order_by('created_at')
+            
+            # Group by date in Python
+            date_counts = defaultdict(set)  # Use set to count distinct model_nos
+            for part in model_parts:
+                date_str = part.created_at.date().isoformat()
+                date_counts[date_str].add(part.model_no)
+            
+            # Convert to list format
+            for date_str in sorted(date_counts.keys()):
+                models_over_time.append({
+                    'date': date_str,
+                    'count': len(date_counts[date_str])
+                })
+            
+            # 2. Parts by model
+            parts_by_model = []
+            model_counts = ModelPart.objects.values('model_no').annotate(
+                count=Count('id')
+            ).order_by('-count')
+            
+            for item in model_counts:
+                parts_by_model.append({
+                    'model_no': item['model_no'],
+                    'count': item['count']
+                })
+            
+            # 3. Production by section (from procedure details)
+            production_by_section = []
+            section_names = {
+                'smd': 'SMD',
+                'leaded': 'Leaded',
+                'prod_qc': 'Production QC',
+                'qc': 'QC',
+                'testing': 'Testing',
+                'glueing': 'Glueing',
+                'cleaning': 'Cleaning',
+                'spraying': 'Spraying',
+                'dispatch': 'Dispatch'
+            }
+            
+            section_counts = defaultdict(int)
+            procedure_details = PartProcedureDetail.objects.all()
+            
+            for detail in procedure_details:
+                enabled_sections = detail.get_enabled_sections()
+                for section in enabled_sections:
+                    section_counts[section] += 1
+            
+            for section, count in section_counts.items():
+                production_by_section.append({
+                    'section': section_names.get(section, section.title()),
+                    'count': count
+                })
+            
+            # 4. Recent activity
+            recent_activity = []
+            
+            # Recent model parts
+            recent_parts = ModelPart.objects.order_by('-created_at')[:10]
+            for part in recent_parts:
+                recent_activity.append({
+                    'timestamp': part.created_at.isoformat(),
+                    'type': 'part_created',
+                    'description': f'New part {part.part_no} added to model {part.model_no}',
+                    'icon': 'part'
+                })
+            
+            # Recent procedures
+            recent_procedures = PartProcedureDetail.objects.order_by('-created_at')[:5]
+            for proc in recent_procedures:
+                recent_activity.append({
+                    'timestamp': proc.created_at.isoformat(),
+                    'type': 'procedure_created',
+                    'description': f'Procedure configured for {proc.model_part.part_no}',
+                    'icon': 'procedure'
+                })
+            
+            # Sort by timestamp and limit to 15 most recent
+            recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
+            recent_activity = recent_activity[:15]
+            
+            chart_data = {
+                'models_over_time': models_over_time,
+                'parts_by_model': parts_by_model,
+                'production_by_section': production_by_section,
+                'recent_activity': recent_activity
+            }
+            
+            serializer = DashboardChartDataSerializer(chart_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(

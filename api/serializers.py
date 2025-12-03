@@ -191,3 +191,34 @@ class ProductionProcedureSerializer(serializers.Serializer):
             'created_parts': created_parts,
             'message': f'Successfully created procedure for {len(created_parts)} part(s)'
         }
+
+
+class DashboardStatsSerializer(serializers.Serializer):
+    """Serializer for dashboard statistics"""
+    total_models = serializers.IntegerField()
+    total_parts = serializers.IntegerField()
+    total_users = serializers.IntegerField()
+    total_procedures = serializers.IntegerField()
+    total_production_entries = serializers.IntegerField()
+    recent_models_count = serializers.IntegerField()
+    recent_parts_count = serializers.IntegerField()
+
+
+class DashboardChartDataSerializer(serializers.Serializer):
+    """Serializer for dashboard chart data"""
+    models_over_time = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='List of {date, count} objects for line chart'
+    )
+    parts_by_model = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='List of {model_no, count} objects for bar/pie chart'
+    )
+    production_by_section = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='List of {section, count} objects for production progress'
+    )
+    recent_activity = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='List of recent activities with timestamp and description'
+    )

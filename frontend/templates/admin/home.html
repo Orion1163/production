@@ -3,23 +3,110 @@
 
 {% block title %}Dashboard | Home{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block heading %}
 <div class="page-heading">
-    <h1>Home</h1>
+    <h1>Dashboard</h1>
     <hr />
 </div>
 {% endblock %}
 
 {% block content %}
+<div class="dashboard-container">
+    <!-- Welcome Section -->
+    <div class="dashboard-header">
+        <div class="refresh-btn-container">
+            <button id="refreshDashboard" class="refresh-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+                    <path d="M480-160q-133 0-226.5-93.5T160-480q0-133 93.5-226.5T480-800q85 0 149 34.5T740-671v-129h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/>
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
 
-<div class="page-shell">
-    <div class="page-header">
-        <div>
-            <p class="page-eyebrow">
-                Home
-            </p>
-            <h2 style="margin: 0">Home</h2>
+    <!-- Stats Cards -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card stat-card-primary">
+            <div class="stat-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="currentColor">
+                    <path d="M320-240 80-480l240-240 57 57-184 184 184 184-57 57Zm320 0-57-57 184-184-184-184 57-57 240 240-240 240Z"/>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value" id="totalModels">0</h3>
+                <p class="stat-label">Total Models</p>
+            </div>
+        </div>
+
+        <div class="stat-card stat-card-success">
+            <div class="stat-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="currentColor">
+                    <path d="M280-80q-33 0-56.5-23.5T200-160v-400q0-33 23.5-56.5T280-640h400q33 0 56.5 23.5T760-560v400q0 33-23.5 56.5T680-80H280Zm0-80h400v-400H280v400Zm200-240q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35ZM160-320v-480q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v160h-80v-160H240v480h320v80H240q-33 0-56.5-23.5T160-320Zm120-320h400v400H280v-400Z"/>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value" id="totalParts">0</h3>
+                <p class="stat-label">Total Parts</p>
+
+            </div>
+        </div>
+
+        <div class="stat-card stat-card-info">
+            <div class="stat-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="currentColor">
+                    <path d="M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v32q0 33-23.5 56.5T720-160H240q-33 0-56.5-23.5T160-240Zm80 0h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T560-640q0-33-23.5-56.5T480-720q-33 0-56.5 23.5T400-640q0 33 23.5 56.5T480-560Zm0-80Zm0 400Z"/>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value" id="totalUsers">0</h3>
+                <p class="stat-label">Total Users</p>
+            </div>
+        </div>
+
+        <div class="stat-card stat-card-warning">
+            <div class="stat-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="currentColor">
+                    <path d="M320-240 80-480l240-240 57 57-184 184 184 184-57 57Zm320 0-57-57 184-184-184-184 57-57 240 240-240 240Z"/>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value" id="totalProcedures">0</h3>
+                <p class="stat-label">Procedures</p>
+            </div>
+        </div>
+
+        <div class="stat-card stat-card-danger">
+            <div class="stat-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="32px" viewBox="0 -960 960 960" width="32px" fill="currentColor">
+                    <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h400q17 0 28.5-11.5T720-400v-160q0-17-11.5-28.5T680-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm-80-240h560v-80H200v80Zm0 160h560v-80H200v80Z"/>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <h3 class="stat-value" id="totalProduction">0</h3>
+                <p class="stat-label">Production Entries</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Section -->
+    <div class="activity-section">
+        <div class="activity-header">
+            <h3>Recent Activity</h3>
+            <p class="activity-subtitle">Latest updates and changes</p>
+        </div>
+        <div class="activity-list" id="activityList">
+            <div class="activity-loading">
+                <div class="spinner"></div>
+                <p>Loading activity...</p>
+            </div>
         </div>
     </div>
 </div>
+
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     UserDetailView, UserListCreateView, AdminLoginView, AdminLogoutView, 
     AdminProfileView, ProductionProcedureCreateView, ModelPartListView,
-    ProcedureDetailView
+    ProcedureDetailView, DashboardStatsView, DashboardChartDataView
 )
 
 urlpatterns = [
@@ -14,4 +14,6 @@ urlpatterns = [
     path('production-procedure/', ProductionProcedureCreateView.as_view(), name='production-procedure-create'),
     path('model-parts/', ModelPartListView.as_view(), name='model-part-list'),
     path('procedure-detail/<str:model_no>/', ProcedureDetailView.as_view(), name='procedure-detail'),
+    path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dashboard/charts/', DashboardChartDataView.as_view(), name='dashboard-charts'),
 ]
