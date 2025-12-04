@@ -25,8 +25,6 @@
   function showMessage(message, type = 'info') {
     if (typeof window.showToast === 'function') {
       window.showToast(message, type, { duration: 4000 });
-    } else {
-      console.log(`[${type.toUpperCase()}] ${message}`);
     }
   }
 

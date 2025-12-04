@@ -222,3 +222,37 @@ class DashboardChartDataSerializer(serializers.Serializer):
         child=serializers.DictField(),
         help_text='List of recent activities with timestamp and description'
     )
+
+
+class UserModelListSerializer(serializers.Serializer):
+    """Serializer for user model list - returns model_no, image, and part numbers"""
+    model_no = serializers.CharField()
+    image_url = serializers.SerializerMethodField()
+    part_numbers = serializers.SerializerMethodField()
+    part_count = serializers.SerializerMethodField()
+    
+    def get_image_url(self, obj):
+        """Return the first available image (form_image or part_image)"""
+        parts = obj.get('parts', [])
+        request = self.context.get('request')
+        
+        for part in parts:
+            if part.form_image:
+                if request:
+                    return request.build_absolute_uri(part.form_image.url)
+                return part.form_image.url
+            if part.part_image:
+                if request:
+                    return request.build_absolute_uri(part.part_image.url)
+                return part.part_image.url
+        return None
+    
+    def get_part_numbers(self, obj):
+        """Return list of part numbers for this model"""
+        parts = obj.get('parts', [])
+        return [part.part_no for part in parts]
+    
+    def get_part_count(self, obj):
+        """Return count of parts for this model"""
+        parts = obj.get('parts', [])
+        return len(parts)

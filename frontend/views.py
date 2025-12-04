@@ -15,6 +15,19 @@ def admin_login_required(view_func):
     return wrapper
 
 
+def user_login_required(view_func):
+    """
+    Decorator to check if user is logged in.
+    Redirects to login page if not authenticated.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.session.get('user_logged_in', False):
+            return redirect('login')
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 @admin_login_required
 def design_procedure(request):
     """
@@ -65,11 +78,25 @@ def create_new_user(request):
 def login(request):
     """
     Render the login page.
-    If admin is already logged in, redirect to home.
+    If admin or user is already logged in, redirect to respective home.
     """
     if request.session.get('admin_logged_in', False):
         return redirect('home')
+    if request.session.get('user_logged_in', False):
+        return redirect('user_home')
     return render(request, 'login/index.html')
+
+
+@user_login_required
+def user_home(request):
+    """
+    Render the user home page.
+    """
+    emp_id = request.session.get('user_emp_id', None)
+    context = {
+        'emp_id': emp_id
+    }
+    return render(request, 'user/home.html', context)
 
 
 def logout(request):
@@ -81,6 +108,22 @@ def logout(request):
         del request.session['admin_emp_id']
     if 'admin_logged_in' in request.session:
         del request.session['admin_logged_in']
+    
+    # Flush the session
+    request.session.flush()
+    
+    return redirect('login')
+
+
+def user_logout(request):
+    """
+    Handle user logout.
+    """
+    # Clear session data
+    if 'user_emp_id' in request.session:
+        del request.session['user_emp_id']
+    if 'user_logged_in' in request.session:
+        del request.session['user_logged_in']
     
     # Flush the session
     request.session.flush()

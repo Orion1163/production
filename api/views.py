@@ -2,7 +2,7 @@ from .models import User, Admin, ModelPart, PartProcedureDetail
 from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
     ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
-    DashboardStatsSerializer, DashboardChartDataSerializer
+    DashboardStatsSerializer, DashboardChartDataSerializer, UserModelListSerializer
 )
 from django.db.models import Max, Count, Q
 from django.db import connection
@@ -116,6 +116,61 @@ class AdminLoginView(APIView):
             {
                 'message': 'Login successful',
                 'admin': serializer.data
+            }, 
+            status=status.HTTP_200_OK
+        )
+
+
+class UserLoginView(APIView):
+    """
+    Handle user login authentication for normal users.
+    """
+    
+    def post(self, request):
+        emp_id = request.data.get('emp_id')
+        pin = request.data.get('pin')
+        
+        # Validate required fields
+        if not emp_id or not pin:
+            return Response(
+                {'error': 'emp_id and pin are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Convert pin to integer for comparison
+            pin = int(pin)
+            emp_id = int(emp_id)
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'emp_id and pin must be valid numbers'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user exists and pin matches
+        try:
+            user = User.objects.get(emp_id=emp_id)
+            if user.pin != pin:
+                return Response(
+                    {'error': 'Invalid credentials'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Invalid credentials'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Store user info in session
+        request.session['user_emp_id'] = user.emp_id
+        request.session['user_logged_in'] = True
+        
+        # Return full user details
+        serializer = UserSerializer(user)
+        return Response(
+            {
+                'message': 'Login successful',
+                'user': serializer.data
             }, 
             status=status.HTTP_200_OK
         )
@@ -571,6 +626,49 @@ class DashboardChartDataView(APIView):
             }
             
             serializer = DashboardChartDataSerializer(chart_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UserModelListView(APIView):
+    """
+    Get list of models for user home page.
+    Returns model_no, image, and part numbers grouped by model_no.
+    """
+    
+    def get(self, request):
+        try:
+            # Get all ModelParts
+            model_parts = ModelPart.objects.all().order_by('-created_at')
+            
+            # Group by model_no
+            grouped_data = {}
+            for model_part in model_parts:
+                model_no = model_part.model_no
+                if model_no not in grouped_data:
+                    grouped_data[model_no] = {
+                        'model_no': model_no,
+                        'parts': [],
+                        'created_at': model_part.created_at
+                    }
+                grouped_data[model_no]['parts'].append(model_part)
+            
+            # Convert to list and sort by most recent created_at
+            grouped_list = list(grouped_data.values())
+            grouped_list.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            # Serialize the data
+            serializer = UserModelListSerializer(
+                grouped_list,
+                many=True,
+                context={'request': request}
+            )
+            
             return Response(serializer.data, status=status.HTTP_200_OK)
             
         except Exception as e:
