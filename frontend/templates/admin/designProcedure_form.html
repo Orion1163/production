@@ -174,17 +174,17 @@
             <label class="checkbox-pill workflow-toggle">
               <input
                 type="checkbox"
-                data-panel-target="smd"
+                data-panel-target="kit"
                 onchange="togglePanel(this)"
               />
-              SMD
+              Kit Verifcation
             </label>
-            <div class="detail-panel" data-panel="smd">
-              <div class="panel-title">Default SMD Fields</div>
+            <div class="detail-panel" data-panel="kit">
+              <div class="panel-title">Default Kit Verification Fields</div>
               <div class="token-list">
-                <span class="token">SO Quantity</span>
-                <span class="token">Available Quantity</span>
-                <span class="token">Remaining Quantity</span>
+                <span class="token">SO No.</span>
+                <span class="token">Kit No.</span>
+                <span class="token">Kit Quantity</span>
               </div>
             </div>
           </div>
@@ -193,17 +193,85 @@
             <label class="checkbox-pill workflow-toggle">
               <input
                 type="checkbox"
-                data-panel-target="leaded"
+                data-panel-target="smd"
                 onchange="togglePanel(this)"
               />
-              Leaded
+              SMD
             </label>
-            <div class="detail-panel" data-panel="leaded">
-              <div class="panel-title">Default Leaded Fields</div>
+            <div class="detail-panel" data-panel="smd">
+              <div class="panel-title">Default SMD Fields</div>
               <div class="token-list">
-                <span class="token">SO Quantity</span>
                 <span class="token">Available Quantity</span>
-                <span class="token">Remaining Quantity</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
+                data-panel-target="smd_qc"
+                onchange="togglePanel(this)"
+              />
+              SMD QC
+            </label>
+            <div class="detail-panel" data-panel="smd_qc">
+              <div class="panel-title">Default SMD QC Fields</div>
+              <div class="token-list">
+                <span class="token">Available Quantity</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
+                data-panel-target="pre_forming_qc"
+                onchange="togglePanel(this)"
+              />
+            Pre-Forming QC
+            </label>
+            <div class="detail-panel" data-panel="pre_forming_qc">
+              <div class="panel-title">Default Pre-Forming QC Fields</div>
+              <div class="token-list">
+                <span class="token">Available Quantity</span>
+              </div>
+            </div>
+            </div>
+
+            
+            <div class="workflow-item">
+              <label class="checkbox-pill workflow-toggle">
+                <input
+                  type="checkbox"
+                  data-panel-target="accessories_packing"
+                  onchange="togglePanel(this)"
+                />
+                Accessories Packing
+              </label>
+              <div class="detail-panel" data-panel="accessories_packing">
+                <div class="panel-title">Default Accessories Packing Fields</div>
+                <div class="token-list">
+                  <span class="token">Available Quantity</span>
+                </div>
+              </div>
+            </div>
+            </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
+                data-panel-target="leaded_qc"
+                onchange="togglePanel(this)"
+              />
+              Leaded QC
+            </label>
+            <div class="detail-panel" data-panel="leaded_qc">
+              <div class="panel-title">Default Leaded QC Fields</div>
+              <div class="token-list">
+                <span class="token">Available Quantity</span>
               </div>
             </div>
           </div>
@@ -220,9 +288,7 @@
             <div class="detail-panel" data-panel="prod_qc">
               <div class="panel-title">Default Production QC Fields</div>
               <div class="token-list">
-                <span class="token">SO Quantity</span>
                 <span class="token">Available Quantity</span>
-                <span class="token">Remaining Quantity</span>
               </div>
             </div>
           </div>
@@ -323,6 +389,46 @@
                     </div>
                     <div class="input-list"></div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
+                data-panel-target="heat_run"
+                onchange="togglePanel(this)"
+              />
+              Heat Run  
+            </label>
+            <div class="detail-panel" data-panel="heat_run">
+              <div class="panel-title">Heat Run Defaults</div>
+              <div class="token-list">
+                <span class="token">Serial Number</span>
+                <span class="token">USID</span>
+              </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Additional Inputs</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">
+                      +
+                    </button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checklist</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
+                      +
+                    </button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
                 </div>
               </div>
             </div>

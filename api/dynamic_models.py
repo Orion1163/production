@@ -14,23 +14,62 @@ class DynamicModelRegistry:
     """
     Registry to track dynamically created models.
     Maps part names to their dynamically created model classes.
+    Now stores two models per part: in_process and completion.
     """
-    _registry = {}
+    _registry = {}  # {part_name: {'in_process': model_class, 'completion': model_class}}
     
     @classmethod
-    def register(cls, part_name, model_class):
-        """Register a dynamic model for a part name."""
-        cls._registry[part_name] = model_class
+    def register(cls, part_name, model_class, table_type='in_process'):
+        """Register a dynamic model for a part name.
+        
+        Args:
+            part_name: The part name
+            model_class: The model class to register
+            table_type: 'in_process' or 'completion'
+        """
+        if part_name not in cls._registry:
+            cls._registry[part_name] = {}
+        cls._registry[part_name][table_type] = model_class
     
     @classmethod
-    def get(cls, part_name):
-        """Get a dynamic model class for a part name."""
-        return cls._registry.get(part_name)
+    def get(cls, part_name, table_type='in_process'):
+        """Get a dynamic model class for a part name.
+        
+        Args:
+            part_name: The part name
+            table_type: 'in_process' or 'completion'
+        """
+        if part_name in cls._registry:
+            return cls._registry[part_name].get(table_type)
+        return None
     
     @classmethod
-    def exists(cls, part_name):
-        """Check if a dynamic model exists for a part name."""
-        return part_name in cls._registry
+    def get_both(cls, part_name):
+        """Get both models (in_process and completion) for a part name.
+        
+        Returns:
+            tuple: (in_process_model, completion_model) or (None, None)
+        """
+        if part_name in cls._registry:
+            return (
+                cls._registry[part_name].get('in_process'),
+                cls._registry[part_name].get('completion')
+            )
+        return (None, None)
+    
+    @classmethod
+    def exists(cls, part_name, table_type=None):
+        """Check if a dynamic model exists for a part name.
+        
+        Args:
+            part_name: The part name
+            table_type: 'in_process', 'completion', or None (checks both)
+        """
+        if part_name not in cls._registry:
+            return False
+        if table_type is None:
+            return 'in_process' in cls._registry[part_name] or 'completion' in cls._registry[part_name]
+        return table_type in cls._registry[part_name]
     
     @classmethod
     def get_all(cls):
@@ -38,10 +77,20 @@ class DynamicModelRegistry:
         return cls._registry.copy()
     
     @classmethod
-    def unregister(cls, part_name):
-        """Unregister a dynamic model (use with caution)."""
+    def unregister(cls, part_name, table_type=None):
+        """Unregister a dynamic model (use with caution).
+        
+        Args:
+            part_name: The part name
+            table_type: 'in_process', 'completion', or None (unregisters both)
+        """
         if part_name in cls._registry:
-            del cls._registry[part_name]
+            if table_type is None:
+                del cls._registry[part_name]
+            elif table_type in cls._registry[part_name]:
+                del cls._registry[part_name][table_type]
+                if not cls._registry[part_name]:
+                    del cls._registry[part_name]
 
 
 def sanitize_part_name(part_name):
@@ -74,54 +123,89 @@ def sanitize_part_name(part_name):
     return sanitized
 
 
-def get_table_name(part_name):
+def get_table_name(part_name, suffix=''):
     """
     Generate a valid database table name from part name.
-    Format: <sanitized_part_name> (just the part name, no prefix)
+    Format: <sanitized_part_name>_<suffix> (e.g., eics112_part_in_process)
+    
+    Args:
+        part_name: The part name
+        suffix: Optional suffix (e.g., 'in_process', 'completion')
     """
     sanitized = sanitize_part_name(part_name)
     # Convert to lowercase for table name
     table_name = sanitized.lower()
+    if suffix:
+        table_name = f"{table_name}_{suffix}"
     import sys
-    print("Generated table name for '%s': '%s'" % (part_name, table_name), file=sys.stderr)
+    print("Generated table name for '%s' (suffix: '%s'): '%s'" % (part_name, suffix, table_name), file=sys.stderr)
     return table_name
 
 
-def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None):
+def split_sections_by_qc(enabled_sections, procedure_config):
     """
-    Create a dynamic Django model for a specific part number.
+    Split sections into pre-QC (in_process) and post-QC (completion) groups.
+    
+    Pre-QC sections: kit, smd, smd_qc, pre_forming_qc, accessories_packing, leaded_qc, prod_qc, qc
+    Post-QC sections: qc, testing, heat_run, glueing, cleaning, spraying, dispatch
     
     Args:
-        part_name (str): The part number/name (e.g., 'EICS112_Part')
-        enabled_sections (list): List of enabled main sections (e.g., ['qc', 'testing', 'dispatch'])
-        procedure_config (dict): Procedure configuration with fields from each section
+        enabled_sections: List of enabled section names
+        procedure_config: Full procedure configuration dict
+    
+    Returns:
+        tuple: (pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config)
+    """
+    pre_qc_sections_list = [
+        'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+        'leaded_qc', 'prod_qc', 'qc'
+    ]
+    post_qc_sections_list = [
+        'qc', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+    ]
+    
+    pre_qc_sections = [s for s in enabled_sections if s in pre_qc_sections_list]
+    post_qc_sections = [s for s in enabled_sections if s in post_qc_sections_list]
+    
+    # Build configs for each group
+    pre_qc_config = {}
+    post_qc_config = {}
+    
+    if procedure_config:
+        for section_name, section_data in procedure_config.items():
+            if section_name in pre_qc_sections_list:
+                pre_qc_config[section_name] = section_data
+            if section_name in post_qc_sections_list:
+                post_qc_config[section_name] = section_data
+    
+    return pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config
+
+
+def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, table_type, related_model_class=None):
+    """
+    Internal function to create a single dynamic model (either in_process or completion).
+    
+    Args:
+        part_name: The part number/name
+        enabled_sections: List of enabled sections for this model
+        procedure_config: Procedure configuration for this model
+        table_type: 'in_process' or 'completion'
+        related_model_class: For completion model, the in_process model class to link to
     
     Returns:
         Model class: The dynamically created model class
     """
-    # Check if model already exists
-    # If procedure_config is provided and different, we need to recreate the model
-    # to include new fields from the updated procedure_config
-    if DynamicModelRegistry.exists(part_name):
-        if procedure_config is None:
-            # No new config, return existing model
-            existing_model = DynamicModelRegistry.get(part_name)
-            return existing_model
-        else:
-            # New config provided - unregister old model and create new one
-            # This allows the model to be updated with new fields
-            import sys
-            print("Recreating model %s with updated procedure_config" % part_name, file=sys.stderr)
-            DynamicModelRegistry.unregister(part_name)
-    
     # Sanitize part name for class name
     class_name = sanitize_part_name(part_name)
+    if table_type == 'in_process':
+        class_name = f"{class_name}InProcess"
+    elif table_type == 'completion':
+        class_name = f"{class_name}Completion"
     
-    # Generate table name (just the part name)
-    db_table = get_table_name(part_name)
+    # Generate table name
+    db_table = get_table_name(part_name, table_type)
     
     # Define common fields that should NOT be section-prefixed
-    # These are shared across all sections
     COMMON_FIELDS = {
         'usid': 'USID',
         'serial_number': 'Serial Number',
@@ -133,14 +217,24 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
         'id': models.BigAutoField(primary_key=True),
     }
     
-    # Store field metadata (name -> label mapping)
+    # For completion model, add ForeignKey to in_process model
+    if table_type == 'completion' and related_model_class:
+        fields['in_process_entry'] = models.ForeignKey(
+            related_model_class,
+            on_delete=models.CASCADE,
+            related_name='completion_entries',
+            blank=True,
+            null=True,
+            help_text='Link to the corresponding in-process entry'
+        )
+    
+    # Store field metadata
     field_metadata = {}
     
     # Add common fields first (not section-prefixed)
     common_fields_added = set()
     for common_field, label in COMMON_FIELDS.items():
         if common_field == 'in-process_tag_number':
-            # Skip this - it's an alias for serial_number
             continue
         fields[common_field] = models.CharField(
             max_length=255,
@@ -150,20 +244,17 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             help_text=label
         )
         if common_field == 'usid':
-            # Make usid unique
             fields[common_field].unique = True
         common_fields_added.add(common_field)
         field_metadata[common_field] = {
             'label': label,
             'original_name': common_field,
-            'section': None,  # Common field, not section-specific
+            'section': None,
             'is_common': True
         }
     
     # Add fields from procedure_config if provided
     if procedure_config:
-        # Collect all fields from all enabled sections, organized by section
-        # Structure: {section_name: {field_name: {type: 'text'|'checkbox', label: str}}}
         section_fields = {}
         
         for section_name, section_data in procedure_config.items():
@@ -175,24 +266,15 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             # Add default fields (text fields) with section prefix
             default_fields = section_data.get('default_fields', [])
             for field_name in default_fields:
-                # Check if this is a common field - don't prefix it
                 if field_name in common_fields_added:
-                    # Common field already added, skip
                     continue
-                
-                # Handle alias: in-process_tag_number -> serial_number
                 if field_name == 'in-process_tag_number':
-                    # This is already handled as serial_number, skip
                     continue
                 
-                # Check if field already has section prefix to avoid double-prefixing
-                # (e.g., "dispatch_done_by" already has "dispatch_" prefix)
                 section_prefix = f"{section_name}_"
                 if field_name.startswith(section_prefix):
-                    # Field already has section prefix, use as-is
                     prefixed_name = field_name
                 else:
-                    # Prefix field name with section name to organize by section
                     prefixed_name = f"{section_name}_{field_name}"
                 
                 section_fields[section_name][prefixed_name] = {
@@ -201,7 +283,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                     'original_name': field_name,
                     'section': section_name
                 }
-                # Store metadata: original name for display, section for grouping
                 field_metadata[prefixed_name] = {
                     'label': field_name.replace('_', ' ').title(),
                     'original_name': field_name,
@@ -215,7 +296,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                 field_name = checkbox.get('name')
                 field_label = checkbox.get('label', field_name)
                 if field_name:
-                    # Prefix field name with section name
                     prefixed_name = f"{section_name}_{field_name}"
                     section_fields[section_name][prefixed_name] = {
                         'type': 'checkbox',
@@ -223,7 +303,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                         'original_name': field_name,
                         'section': section_name
                     }
-                    # Store metadata: original label for display, section for grouping
                     field_metadata[prefixed_name] = {
                         'label': field_label,
                         'original_name': field_name,
@@ -234,23 +313,19 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
         # Create fields for each section's fields
         for section_name in sorted(section_fields.keys()):
             for field_name, field_info in sorted(section_fields[section_name].items()):
-                # Get metadata for this field
                 meta = field_metadata.get(field_name, {})
                 if isinstance(meta, str):
-                    # Legacy format - convert to dict
                     meta = {'label': meta, 'section': field_info.get('section', '')}
                 
                 display_label = meta.get('label', field_name.replace('_', ' ').title())
                 
                 if field_info['type'] == 'checkbox':
-                    # Create boolean field for checkboxes
                     fields[field_name] = models.BooleanField(
                         default=False,
                         verbose_name=display_label,
                         help_text=display_label
                     )
                 else:
-                    # Create CharField for text fields
                     fields[field_name] = models.CharField(
                         max_length=255,
                         blank=True,
@@ -259,24 +334,7 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                         help_text=display_label
                     )
                 
-                # Store section info in field for admin organization
                 fields[field_name]._section = field_info.get('section', '')
-    
-    # Add boolean fields for all possible main sections
-    # These will be set to True/False based on enabled_sections
-    main_sections = [
-        'smd', 'leaded', 'prod_qc', 'qc', 'testing', 
-        'glueing', 'cleaning', 'spraying', 'dispatch'
-    ]
-    
-    for section in main_sections:
-        field_name = f'is_{section}'
-        # Set default to True if section is enabled, False otherwise
-        default_value = section in enabled_sections
-        fields[field_name] = models.BooleanField(
-            default=default_value,
-            help_text=f'Indicates if {section.upper()} section is enabled for this entry'
-        )
     
     # Add timestamps
     fields['created_at'] = models.DateTimeField(auto_now_add=True)
@@ -285,10 +343,10 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
     # Create Meta class
     meta_attrs = {
         'db_table': db_table,
-        'verbose_name': part_name,  # Use part name directly for admin display
-        'verbose_name_plural': f'{part_name} Entries',
+        'verbose_name': f'{part_name} - {table_type.replace("_", " ").title()}',
+        'verbose_name_plural': f'{part_name} - {table_type.replace("_", " ").title()} Entries',
         'ordering': ['-created_at'],
-        'app_label': 'api',  # Important: Associate with 'api' app
+        'app_label': 'api',
     }
     
     Meta = type('Meta', (), meta_attrs)
@@ -296,134 +354,170 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
     
     # Add __str__ method
     def __str__(self):
-        # Use usid as primary identifier
         identifier = None
         if hasattr(self, 'usid') and getattr(self, 'usid'):
             identifier = getattr(self, 'usid')
         elif hasattr(self, 'serial_number') and getattr(self, 'serial_number'):
             identifier = getattr(self, 'serial_number')
-        return f"{part_name} Entry: {identifier or 'N/A'}"
+        return f"{part_name} {table_type.replace('_', ' ').title()}: {identifier or 'N/A'}"
     
     fields['__str__'] = __str__
-    
-    # Store field metadata in the model class (for reference)
     fields['_field_labels'] = field_metadata
-    
-    # Add __module__ to make it appear in the api.models module
-    # This is critical for Django admin to discover the model
     fields['__module__'] = 'api.models'
-    
-    # Set __qualname__ for proper module resolution
     fields['__qualname__'] = class_name
     
     # Create the model class dynamically
     model_class = type(class_name, (models.Model,), fields)
     
     # Ensure the model is properly associated with the 'api' app
-    # This is critical for Django admin to discover it
     if hasattr(model_class._meta, 'app_label'):
         model_class._meta.app_label = 'api'
     else:
-        # Set app_label via Meta if not already set
         if hasattr(model_class, 'Meta'):
             model_class.Meta.app_label = 'api'
-    
-    # Register the model
-    DynamicModelRegistry.register(part_name, model_class)
-    
-    # Register with Django's app registry
-    # This is important for migrations and admin
-    app_config = apps.get_app_config('api')
-    if not hasattr(app_config, '_dynamic_models'):
-        app_config._dynamic_models = {}
-    app_config._dynamic_models[part_name] = model_class
-    
-    # Add to app's models module so Django can discover it
-    try:
-        from api import models as api_models
-        setattr(api_models, class_name, model_class)
-        
-        # Also add to app's models registry
-        if not hasattr(app_config, 'models'):
-            app_config.models = api_models
-    except Exception as e:
-        import sys
-        print("Warning: Could not add model to api.models module: %s" % str(e), file=sys.stderr)
-    
-    # Ensure model is in Django's app registry (critical for admin discovery)
-    try:
-        from django.apps import apps as django_apps
-        # Add to Django's all_models registry - this is how admin discovers models
-        if 'api' not in django_apps.all_models:
-            django_apps.all_models['api'] = {}
-        
-        # Use the lowercase class name as the model key (for admin URLs)
-        # Django admin uses the lowercase class name for URLs, not the table name
-        # This ensures URLs match: /admin/api/eics112_part/
-        class_key = class_name.lower()
-        django_apps.all_models['api'][class_key] = model_class
-        
-        # Also add with table name as key (for compatibility, in case it's different)
-        table_key = db_table.lower()
-        if table_key != class_key:
-            django_apps.all_models['api'][table_key] = model_class
-        
-        # Also ensure it's in the app config's models
-        app_config = django_apps.get_app_config('api')
-        if not hasattr(app_config, 'models'):
-            from api import models as api_models_module
-            app_config.models = api_models_module
-        
-        # Set the model in the app's models module (for admin discovery)
-        try:
-            from api import models as api_models_module
-            setattr(api_models_module, class_name, model_class)
-        except Exception as e:
-            import sys
-            print("Warning: Could not set model in api.models: %s" % str(e), file=sys.stderr)
-        
-        # Ensure model has proper metadata for admin index
-        if not hasattr(model_class._meta, 'verbose_name') or not model_class._meta.verbose_name:
-            model_class._meta.verbose_name = f'Data Entry for {part_name}'
-        if not hasattr(model_class._meta, 'verbose_name_plural') or not model_class._meta.verbose_name_plural:
-            model_class._meta.verbose_name_plural = f'Data Entries for {part_name}'
-        
-        import sys
-        print("Added model %s to Django's app registry (key: %s)" % (class_name, class_key), file=sys.stderr)
-        print("  - Verbose name: %s" % model_class._meta.verbose_name, file=sys.stderr)
-        print("  - App label: %s" % model_class._meta.app_label, file=sys.stderr)
-    except Exception as e:
-        import sys
-        import traceback
-        print("Warning: Could not add model to Django's model registry: %s" % str(e), file=sys.stderr)
-        traceback.print_exception(*sys.exc_info(), file=sys.stderr)
-    
-    # Register in Django admin immediately
-    try:
-        from api.admin import register_dynamic_model_in_admin
-        register_dynamic_model_in_admin(model_class, part_name)
-        import sys
-        print("Registered dynamic model '%s' in admin" % part_name, file=sys.stderr)
-    except Exception as e:
-        # Admin registration might fail if admin hasn't loaded yet
-        # It will be registered when admin loads via register_all_dynamic_models_in_admin
-        import sys
-        print("Note: Could not register %s in admin immediately: %s" % (part_name, str(e)), file=sys.stderr)
     
     return model_class
 
 
-def get_dynamic_part_model(part_name):
+def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None):
+    """
+    Create two dynamic Django models for a specific part number:
+    1. In-Process model: sections up to and including QC
+    2. Completion model: sections from QC onwards (with ForeignKey to In-Process)
+    
+    Args:
+        part_name (str): The part number/name (e.g., 'EICS112_Part')
+        enabled_sections (list): List of enabled main sections
+        procedure_config (dict): Procedure configuration with fields from each section
+    
+    Returns:
+        dict: {'in_process': model_class, 'completion': model_class}
+    """
+    # Check if models already exist
+    if DynamicModelRegistry.exists(part_name):
+        if procedure_config is None:
+            # No new config, return existing models
+            in_process_model, completion_model = DynamicModelRegistry.get_both(part_name)
+            return {'in_process': in_process_model, 'completion': completion_model}
+        else:
+            # New config provided - unregister old models and create new ones
+            import sys
+            print("Recreating models for %s with updated procedure_config" % part_name, file=sys.stderr)
+            DynamicModelRegistry.unregister(part_name)
+    
+    # Split sections into pre-QC and post-QC
+    pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config = split_sections_by_qc(
+        enabled_sections, procedure_config
+    )
+    
+    import sys
+    print("Creating two models for %s:" % part_name, file=sys.stderr)
+    print("  In-Process sections: %s" % pre_qc_sections, file=sys.stderr)
+    print("  Completion sections: %s" % post_qc_sections, file=sys.stderr)
+    
+    # Create in_process model first
+    in_process_model = None
+    if pre_qc_sections or pre_qc_config:
+        in_process_model = _create_single_dynamic_model(
+            part_name, pre_qc_sections, pre_qc_config, 'in_process'
+        )
+        # Register in_process model
+        DynamicModelRegistry.register(part_name, in_process_model, 'in_process')
+    
+    # Create completion model with ForeignKey to in_process
+    completion_model = None
+    if post_qc_sections or post_qc_config:
+        completion_model = _create_single_dynamic_model(
+            part_name, post_qc_sections, post_qc_config, 'completion', 
+            related_model_class=in_process_model
+        )
+        # Register completion model
+        DynamicModelRegistry.register(part_name, completion_model, 'completion')
+    
+    # Register both models with Django's app registry
+    models_to_register = []
+    if in_process_model:
+        models_to_register.append(('in_process', in_process_model))
+    if completion_model:
+        models_to_register.append(('completion', completion_model))
+    
+    # Register both models with Django's app registry and admin
+    for table_type, model_class in models_to_register:
+        class_name = model_class.__name__
+        db_table = model_class._meta.db_table
+        
+        # Register with Django's app registry
+        app_config = apps.get_app_config('api')
+        if not hasattr(app_config, '_dynamic_models'):
+            app_config._dynamic_models = {}
+        if part_name not in app_config._dynamic_models:
+            app_config._dynamic_models[part_name] = {}
+        app_config._dynamic_models[part_name][table_type] = model_class
+        
+        # Add to app's models module so Django can discover it
+        try:
+            from api import models as api_models
+            setattr(api_models, class_name, model_class)
+            if not hasattr(app_config, 'models'):
+                app_config.models = api_models
+        except Exception as e:
+            import sys
+            print("Warning: Could not add model to api.models module: %s" % str(e), file=sys.stderr)
+        
+        # Ensure model is in Django's app registry (critical for admin discovery)
+        try:
+            from django.apps import apps as django_apps
+            if 'api' not in django_apps.all_models:
+                django_apps.all_models['api'] = {}
+            
+            class_key = class_name.lower()
+            django_apps.all_models['api'][class_key] = model_class
+            
+            table_key = db_table.lower()
+            if table_key != class_key:
+                django_apps.all_models['api'][table_key] = model_class
+            
+            import sys
+            print("Added model %s (%s) to Django's app registry (key: %s)" % (class_name, table_type, class_key), file=sys.stderr)
+        except Exception as e:
+            import sys
+            import traceback
+            print("Warning: Could not add model to Django's model registry: %s" % str(e), file=sys.stderr)
+            traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+        
+        # Register in Django admin immediately
+        try:
+            from api.admin import register_dynamic_model_in_admin
+            register_dynamic_model_in_admin(model_class, f"{part_name}_{table_type}")
+            import sys
+            print("Registered dynamic model '%s' (%s) in admin" % (part_name, table_type), file=sys.stderr)
+        except Exception as e:
+            import sys
+            print("Note: Could not register %s (%s) in admin immediately: %s" % (part_name, table_type, str(e)), file=sys.stderr)
+    
+    # Return both models
+    return {'in_process': in_process_model, 'completion': completion_model}
+
+
+def get_dynamic_part_model(part_name, table_type='in_process'):
     """
     Get the dynamic model class for a part name.
-    Returns None if the model doesn't exist.
+    
+    Args:
+        part_name: The part name
+        table_type: 'in_process', 'completion', or None (returns dict with both)
+    
+    Returns:
+        Model class, dict, or None
     """
-    return DynamicModelRegistry.get(part_name)
+    if table_type is None:
+        return DynamicModelRegistry.get_both(part_name)
+    return DynamicModelRegistry.get(part_name, table_type)
 
 
 def ensure_dynamic_model_exists(part_name, enabled_sections, procedure_config=None):
     """
-    Ensure a dynamic model exists for a part. Create it if it doesn't.
+    Ensure dynamic models exist for a part. Create them if they don't.
     
     Args:
         part_name (str): The part number/name
@@ -431,12 +525,13 @@ def ensure_dynamic_model_exists(part_name, enabled_sections, procedure_config=No
         procedure_config (dict): Procedure configuration with fields
     
     Returns:
-        Model class: The dynamic model class
+        dict: {'in_process': model_class, 'completion': model_class}
     """
-    model = get_dynamic_part_model(part_name)
-    if model is None:
-        model = create_dynamic_part_model(part_name, enabled_sections, procedure_config)
-    return model
+    in_process_model, completion_model = get_dynamic_part_model(part_name, None)
+    if in_process_model is None and completion_model is None:
+        models_dict = create_dynamic_part_model(part_name, enabled_sections, procedure_config)
+        return models_dict
+    return {'in_process': in_process_model, 'completion': completion_model}
 
 
 def create_table_for_dynamic_model(model_class):

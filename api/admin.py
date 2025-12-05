@@ -66,15 +66,14 @@ def register_dynamic_model_in_admin(model_class, part_name):
     all_fields = [f.name for f in model_class._meta.get_fields() if not f.one_to_many and not f.many_to_many]
     
     # Separate fields into categories
-    section_checkboxes = [f for f in all_fields if f.startswith('is_')]
     timestamp_fields = ['created_at', 'updated_at']
     
     # Common fields that should NOT be section-prefixed
     common_fields_list = ['usid', 'serial_number']
     common_fields = [f for f in all_fields if f in common_fields_list]
     
-    # Dynamic fields (section-specific, excluding common fields)
-    dynamic_fields = [f for f in all_fields if f not in ['id'] + section_checkboxes + timestamp_fields + common_fields]
+    # Dynamic fields (section-specific, excluding common fields and timestamps)
+    dynamic_fields = [f for f in all_fields if f not in ['id'] + timestamp_fields + common_fields]
     
     # Get procedure_config to organize fields by section
     from api.models import ModelPart
@@ -84,18 +83,66 @@ def register_dynamic_model_in_admin(model_class, part_name):
         model_part = ModelPart.objects.filter(part_no=part_name).first()
         if model_part and hasattr(model_part, 'procedure_detail'):
             procedure_config = model_part.procedure_detail.procedure_config
-            section_order = ['smd', 'leaded', 'prod_qc', 'qc', 'testing', 'glueing', 'cleaning', 'spraying', 'dispatch']
+            # All possible sections in production workflow order
+            # Order: Kit → SMD → SMD QC → Pre-Forming QC → Accessories Packing → 
+            #        Leaded QC → Production QC → QC → Testing → Heat Run → 
+            #        Glueing → Cleaning → Spraying → Dispatch
+            section_order = [
+                'kit',                    # 1. Kit Verification (first step)
+                'smd',                    # 2. SMD (Surface Mount Device)
+                'smd_qc',                 # 3. SMD QC (QC after SMD)
+                'pre_forming_qc',         # 4. Pre-Forming QC
+                'accessories_packing',    # 5. Accessories Packing
+                'leaded_qc',              # 6. Leaded QC
+                'prod_qc',                # 7. Production QC
+                'qc',                     # 8. QC (general QC)
+                'testing',                # 9. Testing
+                'heat_run',               # 10. Heat Run
+                'glueing',                # 11. Glueing
+                'cleaning',               # 12. Cleaning
+                'spraying',               # 13. Spraying
+                'dispatch'                # 14. Dispatch (final step)
+            ]
             
-            # Group fields by section
+            # Group fields by section - ensure each section's fields are isolated
             for section_name in section_order:
                 if section_name in procedure_config and procedure_config[section_name].get('enabled'):
-                    section_fields = [f for f in dynamic_fields if f.startswith(f"{section_name}_")]
-                    if section_fields:
-                        section_map[section_name] = section_fields
+                    # Use exact prefix match to ensure fields are properly isolated
+                    # e.g., 'smd_' matches 'smd_available_quantity' but NOT 'smd_qc_available_quantity'
+                    section_prefix = f"{section_name}_"
+                    section_fields = [f for f in dynamic_fields if f.startswith(section_prefix) and not any(
+                        f.startswith(f"{other_section}_") for other_section in section_order 
+                        if other_section != section_name and f.startswith(f"{other_section}_")
+                    )]
+                    # More precise matching: ensure field starts with section prefix and doesn't match a longer section name
+                    # For example, 'smd_' should match 'smd_available_quantity' but not 'smd_qc_available_quantity'
+                    precise_section_fields = []
+                    for field_name in dynamic_fields:
+                        if field_name.startswith(section_prefix):
+                            # Check if this field belongs to a longer section name (e.g., smd_qc vs smd)
+                            belongs_to_longer_section = False
+                            for other_section in section_order:
+                                if other_section != section_name and len(other_section) > len(section_name):
+                                    other_prefix = f"{other_section}_"
+                                    if field_name.startswith(other_prefix):
+                                        belongs_to_longer_section = True
+                                        break
+                            if not belongs_to_longer_section:
+                                precise_section_fields.append(field_name)
+                    if precise_section_fields:
+                        section_map[section_name] = sorted(precise_section_fields)
         else:
             # Fallback: group by prefix if no procedure_config
+            # Use production workflow order
+            section_order = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'testing',
+                'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+            ]
+            # Process longer section names first to avoid conflicts
+            sorted_sections = sorted(section_order, key=len, reverse=True)
             for field_name in dynamic_fields:
-                for section in ['smd', 'leaded', 'prod_qc', 'qc', 'testing', 'glueing', 'cleaning', 'spraying', 'dispatch']:
+                for section in sorted_sections:
                     if field_name.startswith(f"{section}_"):
                         if section not in section_map:
                             section_map[section] = []
@@ -104,9 +151,16 @@ def register_dynamic_model_in_admin(model_class, part_name):
     except Exception as e:
         import sys
         print("Warning: Could not get procedure_config for admin: %s" % str(e), file=sys.stderr)
-        # Fallback grouping
+        # Fallback grouping - process longer section names first
+        # Use production workflow order
+        section_order = [
+            'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+            'leaded_qc', 'prod_qc', 'qc', 'testing',
+            'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+        ]
+        sorted_sections = sorted(section_order, key=len, reverse=True)
         for field_name in dynamic_fields:
-            for section in ['smd', 'leaded', 'prod_qc', 'qc', 'testing', 'glueing', 'cleaning', 'spraying', 'dispatch']:
+            for section in sorted_sections:
                 if field_name.startswith(f"{section}_"):
                     if section not in section_map:
                         section_map[section] = []
@@ -114,13 +168,13 @@ def register_dynamic_model_in_admin(model_class, part_name):
                     break
     
     # Build list_display - include common fields first, then some dynamic fields
-    list_display = ['id'] + common_fields + dynamic_fields[:3] + section_checkboxes[:2] + ['created_at']
+    list_display = ['id'] + common_fields + dynamic_fields[:5] + ['created_at']
     
     # Build search fields - include common fields and dynamic text fields
     search_fields = common_fields + [f for f in dynamic_fields if not f.startswith('_')][:7]
     
-    # Build list_filter from section checkboxes
-    list_filter = section_checkboxes + ['created_at']
+    # Build list_filter - no section checkboxes
+    list_filter = ['created_at']
     
     # Build fieldsets organized by section
     fieldsets_list = []
@@ -134,39 +188,66 @@ def register_dynamic_model_in_admin(model_class, part_name):
     
     # Section title mapping
     section_titles = {
+        'kit': 'Kit Verification',
         'smd': 'SMD',
-        'leaded': 'Leaded',
+        'smd_qc': 'SMD QC',
+        'pre_forming_qc': 'Pre-Forming QC',
+        'accessories_packing': 'Accessories Packing',
+        'leaded_qc': 'Leaded QC',
         'prod_qc': 'Production QC',
         'qc': 'QC',
         'testing': 'Testing',
+        'heat_run': 'Heat Run',
         'glueing': 'Glueing',
         'cleaning': 'Cleaning',
         'spraying': 'Spraying',
         'dispatch': 'Dispatch'
     }
     
-    # Add fieldsets for each section
-    section_order = ['smd', 'leaded', 'prod_qc', 'qc', 'testing', 'glueing', 'cleaning', 'spraying', 'dispatch']
-    for section_name in section_order:
+    # Add fieldsets for each section - process in order, longer names first to avoid conflicts
+    # Production workflow order for display in admin
+    section_order = [
+        'kit',                    # 1. Kit Verification
+        'smd',                    # 2. SMD
+        'smd_qc',                 # 3. SMD QC
+        'pre_forming_qc',         # 4. Pre-Forming QC
+        'accessories_packing',    # 5. Accessories Packing
+        'leaded_qc',              # 6. Leaded QC
+        'prod_qc',                # 7. Production QC
+        'qc',                     # 8. QC
+        'testing',                # 9. Testing
+        'heat_run',               # 10. Heat Run
+        'glueing',                # 11. Glueing
+        'cleaning',               # 12. Cleaning
+        'spraying',               # 13. Spraying
+        'dispatch'                # 14. Dispatch
+    ]
+    
+    # For field matching, we need to process longer section names first to avoid conflicts
+    # (e.g., 'smd_qc' before 'smd' to prevent 'smd' from matching 'smd_qc_*' fields)
+    section_order_sorted_for_matching = sorted(section_order, key=len, reverse=True)
+    
+    # For display order, we use the workflow order
+    section_order_sorted = section_order
+    # Process sections in production workflow order for display
+    # This ensures sections appear in the correct order in the admin interface
+    for section_name in section_order_sorted:
         if section_name in section_map and section_map[section_name]:
-            section_title = section_titles.get(section_name, section_name.upper())
+            section_title = section_titles.get(section_name, section_name.replace('_', ' ').title())
             fieldsets_list.append((section_title, {
-                'fields': tuple(sorted(section_map[section_name]))
+                'fields': tuple(sorted(section_map[section_name])),
+                'description': f'Fields for {section_title} section'
             }))
     
     # Add any remaining fields that don't match a section (shouldn't happen, but safety)
-    remaining_fields = [f for f in dynamic_fields if not any(f.startswith(f"{s}_") for s in section_order)]
+    # Use sorted order for matching to ensure proper field isolation
+    remaining_fields = [f for f in dynamic_fields if not any(f.startswith(f"{s}_") for s in section_order_sorted_for_matching)]
     if remaining_fields:
         fieldsets_list.append(('Other Fields', {
             'fields': tuple(remaining_fields)
         }))
     
-    # Add section checkboxes
-    if section_checkboxes:
-        fieldsets_list.append(('Section Status', {
-            'fields': tuple(section_checkboxes),
-            'classes': ('collapse',)
-        }))
+    # Section Status checkboxes removed - not needed in admin
     
     # Add timestamps
     fieldsets_list.append(('Timestamps', {
@@ -436,18 +517,29 @@ def register_all_dynamic_models_in_admin():
             from .dynamic_models import get_dynamic_part_model, ensure_dynamic_model_exists
             from .dynamic_model_utils import get_or_create_part_data_model
             
-            # Get or create the dynamic model
-            dynamic_model = get_or_create_part_data_model(
+            # Get or create both dynamic models
+            models_dict = get_or_create_part_data_model(
                 model_part.part_no,
                 procedure_detail.get_enabled_sections(),
-                procedure_detail.procedure_config
+                procedure_detail.procedure_config,
+                table_type=None  # Get both models
             )
             
-            if dynamic_model:
-                result = register_dynamic_model_in_admin(dynamic_model, model_part.part_no)
+            # Register in_process model
+            if models_dict.get('in_process'):
+                in_process_model = models_dict['in_process']
+                result = register_dynamic_model_in_admin(in_process_model, f"{model_part.part_no}_in_process")
                 if result:
                     registered_count += 1
-                    print("Registered: %s" % model_part.part_no, file=sys.stderr)
+                    print("Registered: %s (in_process)" % model_part.part_no, file=sys.stderr)
+            
+            # Register completion model
+            if models_dict.get('completion'):
+                completion_model = models_dict['completion']
+                result = register_dynamic_model_in_admin(completion_model, f"{model_part.part_no}_completion")
+                if result:
+                    registered_count += 1
+                    print("Registered: %s (completion)" % model_part.part_no, file=sys.stderr)
         except PartProcedureDetail.DoesNotExist:
             print("Skipping %s - no procedure_detail" % model_part.part_no, file=sys.stderr)
             continue
@@ -459,16 +551,19 @@ def register_all_dynamic_models_in_admin():
     
     # Also register any models in the registry that might not have ModelPart records yet
     all_models = DynamicModelRegistry.get_all()
-    for part_name, model_class in all_models.items():
-        # Check if already registered
-        is_registered = any(
-            registered_model == model_class 
-            for registered_model in admin.site._registry.keys()
-        )
-        if not is_registered:
-            result = register_dynamic_model_in_admin(model_class, part_name)
-            if result:
-                registered_count += 1
+    for part_name, models_dict in all_models.items():
+        # models_dict is now {'in_process': model, 'completion': model}
+        for table_type, model_class in models_dict.items():
+            if model_class:
+                # Check if already registered
+                is_registered = any(
+                    registered_model == model_class 
+                    for registered_model in admin.site._registry.keys()
+                )
+                if not is_registered:
+                    result = register_dynamic_model_in_admin(model_class, f"{part_name}_{table_type}")
+                    if result:
+                        registered_count += 1
     
     print("Total registered: %d dynamic models" % registered_count, file=sys.stderr)
     print("=" * 80, file=sys.stderr)

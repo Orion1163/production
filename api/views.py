@@ -566,11 +566,16 @@ class DashboardChartDataView(APIView):
             # 3. Production by section (from procedure details)
             production_by_section = []
             section_names = {
+                'kit': 'Kit Verification',
                 'smd': 'SMD',
-                'leaded': 'Leaded',
+                'smd_qc': 'SMD QC',
+                'pre_forming_qc': 'Pre-Forming QC',
+                'accessories_packing': 'Accessories Packing',
+                'leaded_qc': 'Leaded QC',
                 'prod_qc': 'Production QC',
                 'qc': 'QC',
                 'testing': 'Testing',
+                'heat_run': 'Heat Run',
                 'glueing': 'Glueing',
                 'cleaning': 'Cleaning',
                 'spraying': 'Spraying',

@@ -13,7 +13,7 @@ from .dynamic_models import (
 from .models import ModelPart, PartProcedureDetail
 
 
-def get_or_create_part_data_model(part_name, enabled_sections=None, procedure_config=None):
+def get_or_create_part_data_model(part_name, enabled_sections=None, procedure_config=None, table_type='in_process'):
     """
     Get or create a dynamic model for a part.
     
@@ -22,14 +22,20 @@ def get_or_create_part_data_model(part_name, enabled_sections=None, procedure_co
         enabled_sections (list, optional): List of enabled sections.
                                           If None, will try to get from PartProcedureDetail
         procedure_config (dict, optional): Procedure configuration
+        table_type (str): 'in_process', 'completion', or None (returns dict with both)
     
     Returns:
-        Model class: The dynamic model class
+        Model class or dict: The dynamic model class(es)
     """
-    # Try to get existing model
-    model = get_dynamic_part_model(part_name)
-    if model:
-        return model
+    # Try to get existing model(s)
+    if table_type is None:
+        in_process, completion = get_dynamic_part_model(part_name, None)
+        if in_process or completion:
+            return {'in_process': in_process, 'completion': completion}
+    else:
+        model = get_dynamic_part_model(part_name, table_type)
+        if model:
+            return model
     
     # If enabled_sections or procedure_config not provided, try to get from database
     if enabled_sections is None or procedure_config is None:
@@ -47,8 +53,11 @@ def get_or_create_part_data_model(part_name, enabled_sections=None, procedure_co
             enabled_sections = enabled_sections or []
             procedure_config = procedure_config or {}
     
-    # Create the model
-    return ensure_dynamic_model_exists(part_name, enabled_sections or [], procedure_config)
+    # Create the models
+    models_dict = ensure_dynamic_model_exists(part_name, enabled_sections or [], procedure_config)
+    if table_type is None:
+        return models_dict
+    return models_dict.get(table_type)
 
 
 def create_entry_for_part(part_name, data):
@@ -112,8 +121,10 @@ def create_dynamic_table_in_db(model_class):
                 if cursor.fetchone():
                     table_exists = True
                     # Get existing columns - PRAGMA doesn't support parameters, use string formatting
-                    # This is safe because table_name is already validated
-                    cursor.execute("PRAGMA table_info(\"%s\")" % table_name.replace('"', '""'))
+                    # This is safe because table_name is already validated and sanitized
+                    # Escape quotes properly for SQLite
+                    safe_table_name = table_name.replace('"', '""')
+                    cursor.execute(f'PRAGMA table_info("{safe_table_name}")')
                     existing_columns = {row[1] for row in cursor.fetchall()}
             else:
                 cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = %s", [table_name])
@@ -367,36 +378,46 @@ def ensure_all_dynamic_tables_exist():
             enabled_sections = procedure_detail.get_enabled_sections()
             procedure_config = procedure_detail.procedure_config
             print("  Enabled sections: %s" % enabled_sections, file=sys.stderr)
-            dynamic_model = ensure_dynamic_model_exists(
+            models_dict = ensure_dynamic_model_exists(
                 model_part.part_no,
                 enabled_sections,
                 procedure_config
             )
-            print("  Dynamic model created: %s" % dynamic_model.__name__, file=sys.stderr)
-            print("  Table name: %s" % dynamic_model._meta.db_table, file=sys.stderr)
             
-            # Create table if it doesn't exist
-            result = create_dynamic_table_in_db(dynamic_model)
-            print("  Table creation result: %s" % result, file=sys.stderr)
-            if result:
-                # Register in admin after table is successfully created
-                try:
-                    from api.admin import register_dynamic_model_in_admin
-                    admin_registered = register_dynamic_model_in_admin(dynamic_model, model_part.part_no)
-                    if admin_registered:
-                        print("  SUCCESS: Registered in admin: %s" % model_part.part_no, file=sys.stderr)
-                    else:
-                        print("  WARNING: Admin registration returned False for %s" % model_part.part_no, file=sys.stderr)
-                except Exception as admin_error:
-                    import traceback
-                    print("  ERROR: Could not register in admin: %s" % str(admin_error), file=sys.stderr)
-                    traceback.print_exception(*sys.exc_info(), file=sys.stderr)
-                
+            # Process both models
+            all_success = True
+            from api.admin import register_dynamic_model_in_admin
+            
+            # Create in_process table
+            if models_dict.get('in_process'):
+                in_process_model = models_dict['in_process']
+                print("  In-Process model: %s" % in_process_model.__name__, file=sys.stderr)
+                print("  In-Process table: %s" % in_process_model._meta.db_table, file=sys.stderr)
+                result = create_dynamic_table_in_db(in_process_model)
+                if result:
+                    register_dynamic_model_in_admin(in_process_model, f"{model_part.part_no}_in_process")
+                    print("  SUCCESS: Created in_process table for %s" % model_part.part_no, file=sys.stderr)
+                else:
+                    all_success = False
+                    print("  FAILED: In-process table creation failed for %s" % model_part.part_no, file=sys.stderr)
+            
+            # Create completion table
+            if models_dict.get('completion'):
+                completion_model = models_dict['completion']
+                print("  Completion model: %s" % completion_model.__name__, file=sys.stderr)
+                print("  Completion table: %s" % completion_model._meta.db_table, file=sys.stderr)
+                result = create_dynamic_table_in_db(completion_model)
+                if result:
+                    register_dynamic_model_in_admin(completion_model, f"{model_part.part_no}_completion")
+                    print("  SUCCESS: Created completion table for %s" % model_part.part_no, file=sys.stderr)
+                else:
+                    all_success = False
+                    print("  FAILED: Completion table creation failed for %s" % model_part.part_no, file=sys.stderr)
+            
+            if all_success:
                 created_tables.append(model_part.part_no)
-                print("  SUCCESS: Table created for %s" % model_part.part_no, file=sys.stderr)
             else:
                 failed_tables.append(model_part.part_no)
-                print("  FAILED: Table creation failed for %s" % model_part.part_no, file=sys.stderr)
         except Exception as e:
             import traceback
             # Get full error information

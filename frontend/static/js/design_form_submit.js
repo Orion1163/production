@@ -64,25 +64,92 @@
      */
     const config = {};
 
-    // List of all possible sections
+    // List of all possible sections (matching the form HTML)
     const sections = [
-      'smd', 'leaded', 'prod_qc', 'qc', 'testing',
-      'glueing', 'cleaning', 'spraying', 'dispatch'
+      'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+      'leaded_qc', 'prod_qc', 'qc', 'testing',
+      'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
     ];
 
+    // Debug: Log all available checkboxes in the part entry
+    const allCheckboxesInEntry = partEntry.querySelectorAll('input[type="checkbox"][data-panel-target]');
+    const availableSections = Array.from(allCheckboxesInEntry).map(chk => ({
+      section: chk.getAttribute('data-panel-target'),
+      checked: chk.checked,
+      element: chk
+    }));
+    console.log('🔍 All checkboxes found in part entry:', availableSections);
+    console.log(`📊 Total checkboxes found: ${availableSections.length}, Expected sections: ${sections.length}`);
+
     sections.forEach(section => {
-      // Find the checkbox for this section
-      const checkbox = partEntry.querySelector(
-        `input[data-panel-target="${section}"]`
-      );
+      // Find the checkbox for this section - use the most reliable method first
+      let checkbox = null;
+      
+      // Most reliable: Search ALL checkboxes in part entry and match by data-panel-target attribute
+      // This works regardless of DOM structure
+      const allCheckboxes = partEntry.querySelectorAll('input[type="checkbox"]');
+      for (const chk of allCheckboxes) {
+        const panelTarget = chk.getAttribute('data-panel-target');
+        if (panelTarget === section) {
+          checkbox = chk;
+          break;
+        }
+      }
+      
+      // Fallback: Try querySelector (should work but sometimes fails with complex selectors)
+      if (!checkbox) {
+        checkbox = partEntry.querySelector(`input[data-panel-target="${section}"]`);
+      }
+      
+      // If still not found, try searching within workflow structure
+      if (!checkbox) {
+        const workflowBuilder = partEntry.querySelector('.workflow-builder');
+        if (workflowBuilder) {
+          const workflowCheckboxes = workflowBuilder.querySelectorAll('input[type="checkbox"]');
+          for (const chk of workflowCheckboxes) {
+            if (chk.getAttribute('data-panel-target') === section) {
+              checkbox = chk;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Last resort: Find by matching panel and then finding checkbox in same workflow-item
+      if (!checkbox) {
+        const workflowItems = partEntry.querySelectorAll('.workflow-item');
+        for (const item of workflowItems) {
+          const panel = item.querySelector(`.detail-panel[data-panel="${section}"]`);
+          if (panel) {
+            const chk = item.querySelector(`input[data-panel-target="${section}"]`);
+            if (chk) {
+              checkbox = chk;
+              break;
+            }
+          }
+        }
+      }
       
       if (!checkbox) {
+        console.warn(`❌ Checkbox not found for section: ${section}`);
+        // Debug: Show all available checkboxes
+        const allAvailable = partEntry.querySelectorAll('input[type="checkbox"][data-panel-target]');
+        const availableSections = Array.from(allAvailable).map(chk => ({
+          section: chk.getAttribute('data-panel-target'),
+          checked: chk.checked
+        }));
+        console.warn(`Available checkboxes:`, availableSections);
+        // Still add to config as disabled so it's in the output
         config[section] = { enabled: false };
         return;
       }
 
-      const isEnabled = checkbox.checked;
+      // Get checkbox checked state
+      const isEnabled = checkbox.checked === true;
       const sectionConfig = { enabled: isEnabled };
+      
+      // Debug logging
+      console.log(`Section ${section}: checkbox found, checked=${isEnabled}`);
 
       if (!isEnabled) {
         config[section] = sectionConfig;
@@ -90,10 +157,31 @@
       }
 
       // Find the detail panel for this section
+      // Try multiple methods to find the panel
+      let panel = null;
+      
+      // Method 1: Try using panelId from checkbox dataset
       const panelId = checkbox.dataset.panelId;
-      const panel = panelId ? document.getElementById(panelId) : null;
-
+      if (panelId) {
+        panel = document.getElementById(panelId);
+      }
+      
+      // Method 2: If not found, try finding by data-panel attribute directly within the part entry
       if (!panel) {
+        panel = partEntry.querySelector(`.detail-panel[data-panel="${section}"]`);
+      }
+      
+      // Method 3: If still not found, try finding by traversing from checkbox
+      if (!panel) {
+        const workflowItem = checkbox.closest('.workflow-item');
+        if (workflowItem) {
+          panel = workflowItem.querySelector(`.detail-panel[data-panel="${section}"]`);
+        }
+      }
+
+      // If panel still not found, still mark as enabled but log warning
+      if (!panel) {
+        console.warn(`Panel not found for section: ${section}, but checkbox is checked. Marking as enabled without fields.`);
         config[section] = sectionConfig;
         return;
       }
@@ -112,11 +200,16 @@
       
       // Add section-specific "_done_by" field to default fields
       const doneByFieldMap = {
+        'kit': 'kit_done_by',
         'smd': 'smd_done_by',
-        'leaded': 'leaded_done_by',
+        'smd_qc': 'smd_qc_done_by',
+        'pre_forming_qc': 'pre_forming_qc_done_by',
+        'accessories_packing': 'accessories_packing_done_by',
+        'leaded_qc': 'leaded_qc_done_by',
         'prod_qc': 'prodqc_done_by',
         'qc': 'qc_done_by',
         'testing': 'testing_done_by',
+        'heat_run': 'heat_run_done_by',
         'glueing': 'glueing_done_by',
         'cleaning': 'cleaning_done_by',
         'spraying': 'spraying_done_by',
@@ -135,11 +228,16 @@
       if (isEnabled) {
         // Map section names to display labels
         const sectionLabelMap = {
+          'kit': 'Kit Verification',
           'smd': 'SMD',
-          'leaded': 'Leaded',
+          'smd_qc': 'SMD QC',
+          'pre_forming_qc': 'Pre-Forming QC',
+          'accessories_packing': 'Accessories Packing',
+          'leaded_qc': 'Leaded QC',
           'prod_qc': 'Production QC',
           'qc': 'QC',
           'testing': 'Testing',
+          'heat_run': 'Heat Run',
           'glueing': 'Glueing',
           'cleaning': 'Cleaning',
           'spraying': 'Spraying',
@@ -195,6 +293,21 @@
 
       config[section] = sectionConfig;
     });
+
+    // Ensure ALL sections are in the config (even if not found, mark as disabled)
+    sections.forEach(section => {
+      if (!(section in config)) {
+        console.warn(`⚠️ Section ${section} was not processed, adding as disabled`);
+        config[section] = { enabled: false };
+      }
+    });
+
+    // Debug: Log the extracted config
+    console.log('📋 Extracted procedure config:', JSON.stringify(config, null, 2));
+    const enabledSections = Object.keys(config).filter(s => config[s].enabled);
+    console.log('✅ Enabled sections:', enabledSections);
+    const disabledSections = Object.keys(config).filter(s => !config[s].enabled);
+    console.log('❌ Disabled sections:', disabledSections);
 
     return config;
   };

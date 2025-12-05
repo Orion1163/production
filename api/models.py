@@ -21,7 +21,6 @@ class Admin(models.Model):
     def __str__(self):
         return str(self.emp_id)
 
-
 class ModelPart(models.Model):
     """
     Table 1: Model and Part information with media files.
@@ -115,8 +114,11 @@ class PartProcedureDetail(models.Model):
         Returns a list of section names that are enabled (checked).
         """
         enabled = []
-        sections = ['smd', 'leaded', 'prod_qc', 'qc', 'testing', 
-                   'glueing', 'cleaning', 'spraying', 'dispatch']
+        sections = [
+            'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+            'leaded_qc', 'prod_qc', 'qc', 'testing',
+            'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+        ]
         
         for section in sections:
             section_data = self.procedure_config.get(section, {})
@@ -127,99 +129,96 @@ class PartProcedureDetail(models.Model):
     
     def create_dynamic_model(self):
         """
-        Create the dynamic model for this part based on enabled sections and procedure config.
+        Create the dynamic models for this part based on enabled sections and procedure config.
         This is called automatically when the procedure detail is saved.
+        Returns both in_process and completion models.
         """
         enabled_sections = self.get_enabled_sections()
-        dynamic_model = ensure_dynamic_model_exists(
+        models_dict = ensure_dynamic_model_exists(
             self.model_part.part_no,
             enabled_sections,
             procedure_config=self.procedure_config
         )
-        return dynamic_model
+        return models_dict
 
 
 @receiver(post_save, sender=PartProcedureDetail)
 def create_dynamic_model_on_save(sender, instance, created, **kwargs):
     """
-    Signal handler to automatically create the dynamic model, database table, and register in admin
+    Signal handler to automatically create the dynamic models, database tables, and register in admin
     when a PartProcedureDetail is saved.
+    Creates two models: in_process and completion.
     """
     part_name = instance.model_part.part_no
     
-    # Create the dynamic model for this part
-    dynamic_model = instance.create_dynamic_model()
+    # Create the dynamic models for this part (returns dict with both models)
+    models_dict = instance.create_dynamic_model()
     
-    # Create the database table for this model
-    if dynamic_model:
+    # Create database tables for both models
+    from api.dynamic_model_utils import create_dynamic_table_in_db
+    from api.admin import register_dynamic_model_in_admin, register_all_dynamic_models_in_admin
+    from django.contrib import admin
+    
+    # Process in_process model first
+    if models_dict.get('in_process'):
+        in_process_model = models_dict['in_process']
         try:
-            from api.dynamic_model_utils import create_dynamic_table_in_db
-            result = create_dynamic_table_in_db(dynamic_model)
+            result = create_dynamic_table_in_db(in_process_model)
             if result:
                 import sys
-                print("SUCCESS: Created table for %s" % part_name, file=sys.stderr)
+                print("SUCCESS: Created in_process table for %s" % part_name, file=sys.stderr)
+                # Register in admin
+                register_dynamic_model_in_admin(in_process_model, f"{part_name}_in_process")
             else:
                 import sys
-                print("WARNING: Table creation returned False for %s" % part_name, file=sys.stderr)
+                print("WARNING: In-process table creation returned False for %s" % part_name, file=sys.stderr)
         except Exception as e:
             import sys
             import traceback
-            print("ERROR: Could not create table for %s: %s" % (part_name, str(e)), file=sys.stderr)
+            print("ERROR: Could not create in_process table for %s: %s" % (part_name, str(e)), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
-        
-        # Register the model in Django admin
-        # This MUST happen after table creation to ensure everything is ready
+    
+    # Process completion model (depends on in_process)
+    if models_dict.get('completion'):
+        completion_model = models_dict['completion']
         try:
-            from api.admin import register_dynamic_model_in_admin, register_all_dynamic_models_in_admin
-            from django.contrib import admin
-            
-            # First, register this specific model
-            admin_result = register_dynamic_model_in_admin(dynamic_model, part_name)
-            if admin_result:
+            result = create_dynamic_table_in_db(completion_model)
+            if result:
                 import sys
-                # Use model_name (lowercase class name) for admin URL
-                model_name_for_url = getattr(dynamic_model._meta, 'model_name', dynamic_model.__name__.lower())
-                admin_url = f"/admin/api/{model_name_for_url}/"
-                print("=" * 80, file=sys.stderr)
-                print("SUCCESS: Registered %s in admin" % part_name, file=sys.stderr)
-                print("  Admin URL: %s" % admin_url, file=sys.stderr)
-                print("  Table: %s" % dynamic_model._meta.db_table, file=sys.stderr)
-                print("  Model Name: %s" % getattr(dynamic_model._meta, 'model_name', 'N/A'), file=sys.stderr)
-                print("=" * 80, file=sys.stderr)
+                print("SUCCESS: Created completion table for %s" % part_name, file=sys.stderr)
+                # Register in admin
+                register_dynamic_model_in_admin(completion_model, f"{part_name}_completion")
             else:
                 import sys
-                print("WARNING: Admin registration returned False for %s" % part_name, file=sys.stderr)
-            
-            # Now run the full registration to ensure all models are properly registered
-            # This is equivalent to running: python manage.py register_dynamic_admin
-            try:
-                import sys
-                print("=" * 80, file=sys.stderr)
-                print("Running full dynamic model registration (equivalent to register_dynamic_admin command)...", file=sys.stderr)
-                print("=" * 80, file=sys.stderr)
-                
-                # Call the registration function directly
-                register_all_dynamic_models_in_admin()
-                
-                # Clear admin's app_dict cache to force rebuild
-                if hasattr(admin.site, '_app_dict'):
-                    delattr(admin.site, '_app_dict')
-                
-                import sys
-                print("=" * 80, file=sys.stderr)
-                print("SUCCESS: Full registration completed for all dynamic models", file=sys.stderr)
-                print("=" * 80, file=sys.stderr)
-            except Exception as e:
-                import sys
-                import traceback
-                print("WARNING: Full registration had errors (this is usually okay): %s" % str(e), file=sys.stderr)
-                traceback.print_exception(*sys.exc_info(), file=sys.stderr)
-                
+                print("WARNING: Completion table creation returned False for %s" % part_name, file=sys.stderr)
         except Exception as e:
             import sys
             import traceback
-            print("ERROR: Could not register %s in admin: %s" % (part_name, str(e)), file=sys.stderr)
+            print("ERROR: Could not create completion table for %s: %s" % (part_name, str(e)), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+    
+    # Run full registration to ensure all models are properly registered
+    try:
+        import sys
+        print("=" * 80, file=sys.stderr)
+        print("Running full dynamic model registration...", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        
+        register_all_dynamic_models_in_admin()
+        
+        # Clear admin's app_dict cache to force rebuild
+        if hasattr(admin.site, '_app_dict'):
+            delattr(admin.site, '_app_dict')
+        
+        import sys
+        print("=" * 80, file=sys.stderr)
+        print("SUCCESS: Full registration completed for all dynamic models", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+    except Exception as e:
+        import sys
+        import traceback
+        print("WARNING: Full registration had errors (this is usually okay): %s" % str(e), file=sys.stderr)
+        traceback.print_exception(*sys.exc_info(), file=sys.stderr)
 
 
 class ProductionProcedure(models.Model):
