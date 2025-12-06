@@ -85,12 +85,47 @@ class DynamicModelRegistry:
             table_type: 'in_process', 'completion', or None (unregisters both)
         """
         if part_name in cls._registry:
+            models_to_remove = []
             if table_type is None:
+                # Remove both models
+                if 'in_process' in cls._registry[part_name]:
+                    models_to_remove.append(cls._registry[part_name]['in_process'])
+                if 'completion' in cls._registry[part_name]:
+                    models_to_remove.append(cls._registry[part_name]['completion'])
                 del cls._registry[part_name]
             elif table_type in cls._registry[part_name]:
+                models_to_remove.append(cls._registry[part_name][table_type])
                 del cls._registry[part_name][table_type]
                 if not cls._registry[part_name]:
                     del cls._registry[part_name]
+            
+            # Clean up from Django's app registry and api.models module
+            for model_class in models_to_remove:
+                if model_class:
+                    try:
+                        from django.apps import apps as django_apps
+                        class_name = model_class.__name__
+                        class_key = class_name.lower()
+                        db_table = model_class._meta.db_table
+                        table_key = db_table.lower()
+                        
+                        # Remove from all_models
+                        if 'api' in django_apps.all_models:
+                            if class_key in django_apps.all_models['api']:
+                                del django_apps.all_models['api'][class_key]
+                            if table_key in django_apps.all_models['api']:
+                                del django_apps.all_models['api'][table_key]
+                        
+                        # Remove from api.models module
+                        try:
+                            from api import models as api_models
+                            if hasattr(api_models, class_name):
+                                delattr(api_models, class_name)
+                        except:
+                            pass
+                    except Exception as e:
+                        import sys
+                        print("Warning: Could not clean up model %s: %s" % (class_name, str(e)), file=sys.stderr)
 
 
 def sanitize_part_name(part_name):
@@ -146,8 +181,10 @@ def split_sections_by_qc(enabled_sections, procedure_config):
     """
     Split sections into pre-QC (in_process) and post-QC (completion) groups.
     
-    Pre-QC sections: kit, smd, smd_qc, pre_forming_qc, accessories_packing, leaded_qc, prod_qc, qc
+    Pre-QC sections: kit, smd, smd_qc, pre_forming_qc, accessories_packing, leaded_qc, prod_qc
     Post-QC sections: qc, testing, heat_run, glueing, cleaning, spraying, dispatch
+    
+    Note: 'qc' is only in post-QC (completion) to avoid redundancy.
     
     Args:
         enabled_sections: List of enabled section names
@@ -158,7 +195,7 @@ def split_sections_by_qc(enabled_sections, procedure_config):
     """
     pre_qc_sections_list = [
         'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-        'leaded_qc', 'prod_qc', 'qc'
+        'leaded_qc', 'prod_qc'
     ]
     post_qc_sections_list = [
         'qc', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
@@ -206,6 +243,8 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
     db_table = get_table_name(part_name, table_type)
     
     # Define common fields that should NOT be section-prefixed
+    # For in_process table, usid and serial_number are NOT common (each entry is different)
+    # For completion table, they can be common fields
     COMMON_FIELDS = {
         'usid': 'USID',
         'serial_number': 'Serial Number',
@@ -232,9 +271,13 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
     field_metadata = {}
     
     # Add common fields first (not section-prefixed)
+    # For in_process table, exclude usid and serial_number from common fields
     common_fields_added = set()
     for common_field, label in COMMON_FIELDS.items():
         if common_field == 'in-process_tag_number':
+            continue
+        # Skip usid and serial_number for in_process table (they're not common)
+        if table_type == 'in_process' and common_field in ['usid', 'serial_number']:
             continue
         fields[common_field] = models.CharField(
             max_length=255,
@@ -403,7 +446,24 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             # New config provided - unregister old models and create new ones
             import sys
             print("Recreating models for %s with updated procedure_config" % part_name, file=sys.stderr)
+            # Unregister both models and clean up from Django registry
             DynamicModelRegistry.unregister(part_name)
+            
+            # Also clean up from api.models module to avoid conflicts
+            try:
+                from api import models as api_models
+                from api.dynamic_models import sanitize_part_name
+                class_base = sanitize_part_name(part_name)
+                in_process_class = f"{class_base}InProcess"
+                completion_class = f"{class_base}Completion"
+                
+                if hasattr(api_models, in_process_class):
+                    delattr(api_models, in_process_class)
+                if hasattr(api_models, completion_class):
+                    delattr(api_models, completion_class)
+            except Exception as e:
+                import sys
+                print("Warning: Could not clean up api.models: %s" % str(e), file=sys.stderr)
     
     # Split sections into pre-QC and post-QC
     pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config = split_sections_by_qc(
@@ -455,30 +515,78 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
         app_config._dynamic_models[part_name][table_type] = model_class
         
         # Add to app's models module so Django can discover it
+        # Check if already exists to avoid duplicates (by db_table)
         try:
             from api import models as api_models
-            setattr(api_models, class_name, model_class)
+            should_add = True
+            
+            if hasattr(api_models, class_name):
+                existing_model = getattr(api_models, class_name)
+                # Check if existing model has the same db_table
+                if hasattr(existing_model, '_meta') and hasattr(existing_model._meta, 'db_table'):
+                    if existing_model._meta.db_table == db_table:
+                        # Same table - don't add to avoid duplicate
+                        should_add = False
+                        import sys
+                        print("Model %s already exists in api.models with table %s, skipping" % (class_name, db_table), file=sys.stderr)
+                    elif existing_model != model_class:
+                        # Different model, different table - replace it
+                        setattr(api_models, class_name, model_class)
+                        should_add = False  # Already set
+                elif existing_model == model_class:
+                    # Same model instance - don't add
+                    should_add = False
+            
+            if should_add:
+                setattr(api_models, class_name, model_class)
+            
             if not hasattr(app_config, 'models'):
                 app_config.models = api_models
         except Exception as e:
             import sys
             print("Warning: Could not add model to api.models module: %s" % str(e), file=sys.stderr)
         
-        # Ensure model is in Django's app registry (critical for admin discovery)
+        # Register model in Django's app registry for admin discovery
+        # We need to manually register since models are created at runtime
+        # But we must be careful to avoid duplicates
         try:
             from django.apps import apps as django_apps
             if 'api' not in django_apps.all_models:
                 django_apps.all_models['api'] = {}
             
             class_key = class_name.lower()
-            django_apps.all_models['api'][class_key] = model_class
-            
             table_key = db_table.lower()
-            if table_key != class_key:
-                django_apps.all_models['api'][table_key] = model_class
             
-            import sys
-            print("Added model %s (%s) to Django's app registry (key: %s)" % (class_name, table_type, class_key), file=sys.stderr)
+            # Check if model with this db_table is already registered
+            # Django's system check looks for duplicate db_table values
+            already_registered = False
+            existing_model = None
+            
+            # Check all models in 'api' to see if any have the same db_table
+            for key, registered_model in django_apps.all_models['api'].items():
+                if hasattr(registered_model, '_meta') and hasattr(registered_model._meta, 'db_table'):
+                    if registered_model._meta.db_table == db_table:
+                        # Found a model with the same table
+                        if registered_model == model_class or registered_model.__name__ == class_name:
+                            # It's the same model - already registered
+                            already_registered = True
+                            existing_model = registered_model
+                            break
+                        else:
+                            # Different model with same table - this is a conflict
+                            import sys
+                            print("WARNING: Table %s already registered with different model %s, removing old registration" % (db_table, registered_model.__name__), file=sys.stderr)
+                            # Remove the conflicting registration
+                            del django_apps.all_models['api'][key]
+            
+            if not already_registered:
+                # Register with class_key only (Django uses this for admin URLs)
+                django_apps.all_models['api'][class_key] = model_class
+                import sys
+                print("Registered model %s (%s) in Django's app registry (key: %s, table: %s)" % (class_name, table_type, class_key, table_key), file=sys.stderr)
+            else:
+                import sys
+                print("Model %s (%s) already registered (table: %s), skipping" % (class_name, table_type, table_key), file=sys.stderr)
         except Exception as e:
             import sys
             import traceback

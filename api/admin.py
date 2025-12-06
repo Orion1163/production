@@ -69,7 +69,18 @@ def register_dynamic_model_in_admin(model_class, part_name):
     timestamp_fields = ['created_at', 'updated_at']
     
     # Common fields that should NOT be section-prefixed
+    # For in_process models, usid and serial_number are NOT common (each entry is different)
+    # Check if this is an in_process model by checking the class name or table name
+    is_in_process_model = (
+        'inprocess' in model_class.__name__.lower() or 
+        'in_process' in model_class._meta.db_table.lower()
+    )
+    
+    # Common fields list - exclude usid and serial_number for in_process models
     common_fields_list = ['usid', 'serial_number']
+    if is_in_process_model:
+        # For in_process models, these are not common fields
+        common_fields_list = []
     common_fields = [f for f in all_fields if f in common_fields_list]
     
     # Dynamic fields (section-specific, excluding common fields and timestamps)
@@ -377,30 +388,10 @@ def register_dynamic_model_in_admin(model_class, part_name):
         if not hasattr(model_class._meta, 'verbose_name_plural') or not model_class._meta.verbose_name_plural:
             model_class._meta.verbose_name_plural = f'{part_name} Entries'
         
-        # Ensure model is in Django's app registry for admin discovery
-        from django.apps import apps as django_apps
-        
-        # Add to all_models with the correct key (lowercase class name)
-        # This is critical for admin index to show the model
-        if 'api' not in django_apps.all_models:
-            django_apps.all_models['api'] = {}
-        
-        model_key = model_class.__name__.lower()
-        django_apps.all_models['api'][model_key] = model_class
-        
-        # Also ensure it's in the app config
-        app_config = django_apps.get_app_config('api')
-        if not hasattr(app_config, 'models'):
-            from api import models as api_models_module
-            app_config.models = api_models_module
-        
-        # Add to api.models module for discovery
-        try:
-            from api import models as api_models_module
-            setattr(api_models_module, model_class.__name__, model_class)
-        except Exception as e:
-            import sys
-            print("Warning: Could not add model to api.models: %s" % str(e), file=sys.stderr)
+        # Note: Model should already be in Django's app registry from create_dynamic_part_model
+        # We don't add it here to avoid duplicates - the model registration in 
+        # django_apps.all_models and api.models happens in dynamic_models.py
+        # We only register it in Django admin here
         
         # Register the model - handle AlreadyRegistered gracefully
         try:
@@ -590,8 +581,103 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                     url_parts = url_name.split('_')
                     if len(url_parts) >= 3:
                         # Reconstruct model name (everything between 'api' and last part)
-                        model_name = '_'.join(url_parts[1:-1])
+                        model_name_from_url = '_'.join(url_parts[1:-1])
                         action = url_parts[-1]
+                        
+                        # Try to find the actual model by searching through registered models
+                        # This handles variations in model names (with/without underscores)
+                        actual_model_name = None
+                        from django.apps import apps as django_apps
+                        from .dynamic_models import DynamicModelRegistry
+                        
+                        # Normalize the model name from URL (remove underscores for comparison)
+                        normalized_url_name = model_name_from_url.lower().replace('_', '')
+                        
+                        # First, try exact match in Django's app registry
+                        if 'api' in django_apps.all_models:
+                            for registered_key, registered_model in django_apps.all_models['api'].items():
+                                # Exact match
+                                if registered_key == model_name_from_url.lower():
+                                    actual_model_name = registered_key
+                                    break
+                                # Normalized match (handles underscore variations)
+                                normalized_registered = registered_key.replace('_', '')
+                                if normalized_registered == normalized_url_name:
+                                    actual_model_name = registered_key
+                                    break
+                        
+                        # If not found, search in DynamicModelRegistry and admin registry
+                        if actual_model_name is None:
+                            # Also check admin registry
+                            for registered_model in admin.site._registry.keys():
+                                if registered_model._meta.app_label != 'api':
+                                    continue
+                                
+                                class_name_lower = registered_model.__name__.lower()
+                                model_name_attr = getattr(registered_model._meta, 'model_name', class_name_lower)
+                                
+                                # Check exact match
+                                if (model_name_attr == model_name_from_url.lower() or 
+                                    class_name_lower == model_name_from_url.lower()):
+                                    actual_model_name = model_name_attr
+                                    break
+                                
+                                # Check normalized match
+                                normalized_class = class_name_lower.replace('_', '')
+                                normalized_model_attr = model_name_attr.replace('_', '')
+                                if (normalized_class == normalized_url_name or 
+                                    normalized_model_attr == normalized_url_name):
+                                    actual_model_name = model_name_attr
+                                    break
+                            
+                            # If still not found, search in DynamicModelRegistry
+                            if actual_model_name is None:
+                                all_models = DynamicModelRegistry.get_all()
+                                for part_name, models_dict in all_models.items():
+                                    for table_type, model_class in models_dict.items():
+                                        if model_class is None:
+                                            continue
+                                        
+                                        # Get model name variations
+                                        class_name_lower = model_class.__name__.lower()
+                                        model_name_attr = getattr(model_class._meta, 'model_name', class_name_lower)
+                                        
+                                        # Check exact match
+                                        if (model_name_attr == model_name_from_url.lower() or 
+                                            class_name_lower == model_name_from_url.lower()):
+                                            actual_model_name = model_name_attr
+                                            break
+                                        
+                                        # Check normalized match
+                                        normalized_class = class_name_lower.replace('_', '')
+                                        normalized_model_attr = model_name_attr.replace('_', '')
+                                        if (normalized_class == normalized_url_name or 
+                                            normalized_model_attr == normalized_url_name):
+                                            actual_model_name = model_name_attr
+                                            break
+                                        
+                                        # Check if URL name contains keywords (for variations like partinprocess vs part_in_process)
+                                        # Handle "inprocess" or "in_process" variations
+                                        if ('inprocess' in normalized_url_name or 'in_process' in model_name_from_url.lower()):
+                                            if ('inprocess' in normalized_class or 'in_process' in class_name_lower):
+                                                if table_type == 'in_process':
+                                                    actual_model_name = model_name_attr
+                                                    break
+                                        
+                                        # Handle "completion" variations
+                                        if 'completion' in normalized_url_name or 'completion' in model_name_from_url.lower():
+                                            if 'completion' in normalized_class or 'completion' in class_name_lower:
+                                                if table_type == 'completion':
+                                                    actual_model_name = model_name_attr
+                                                    break
+                                    
+                                    if actual_model_name:
+                                        break
+                        
+                        # Use the found model name, or fall back to the URL model name
+                        # Try to use the actual model name if found, otherwise use URL name
+                        # But also try variations if the catch-all view can handle them
+                        model_name = actual_model_name or model_name_from_url.lower()
                         
                         # Get object_id from args or kwargs
                         object_id = None
@@ -600,7 +686,8 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                         elif kwargs and 'object_id' in kwargs:
                             object_id = kwargs['object_id']
                         
-                        # Build the URL manually
+                        # Build the URL manually - use the model name as-is
+                        # The catch-all view will handle matching variations
                         if action == 'changelist':
                             return '/admin/api/%s/' % model_name
                         elif action == 'add':
@@ -628,6 +715,9 @@ def catch_all_view_with_dynamic_models(request, url):
     """
     Custom catch-all view that handles dynamic models registered after startup.
     """
+    import sys
+    print("Catch-all view called with URL: %s" % url, file=sys.stderr)
+    
     # First, try to find the model in the registry
     from django.apps import apps as django_apps
     
@@ -637,6 +727,7 @@ def catch_all_view_with_dynamic_models(request, url):
     if len(url_parts) >= 2:
         app_label = url_parts[0]
         model_name = url_parts[1]
+        print("Parsed URL - app_label: %s, model_name: %s" % (app_label, model_name), file=sys.stderr)
         
         # Check if this is a dynamic model in the 'api' app
         if app_label == 'api':
@@ -654,15 +745,64 @@ def catch_all_view_with_dynamic_models(request, url):
                 try:
                     # Try to find by part name (model_name might be the table name)
                     all_models = DynamicModelRegistry.get_all()
-                    for part_name, registered_model in all_models.items():
-                        # Check if the model_name matches the table name or class name
-                        if (registered_model._meta.db_table == model_name or 
-                            registered_model.__name__.lower() == model_name):
-                            model_class = registered_model
+                    
+                    # Normalize model_name for matching (remove underscores, convert to lowercase)
+                    normalized_model_name = model_name.lower().replace('_', '')
+                    
+                    for part_name, models_dict in all_models.items():
+                        # models_dict is now {'in_process': model, 'completion': model}
+                        # Check both models
+                        for table_type, registered_model in models_dict.items():
+                            if registered_model is None:
+                                continue
+                            
+                            # Try multiple matching strategies
+                            registered_class_name = registered_model.__name__.lower()
+                            registered_table_name = registered_model._meta.db_table.lower()
+                            registered_class_normalized = registered_class_name.replace('_', '')
+                            registered_table_normalized = registered_table_name.replace('_', '')
+                            
+                            # Check exact matches
+                            if (registered_model._meta.db_table == model_name or 
+                                registered_model.__name__.lower() == model_name):
+                                model_class = registered_model
+                                break
+                            
+                            # Check normalized matches (handles underscore variations)
+                            if (normalized_model_name == registered_class_normalized or
+                                normalized_model_name == registered_table_normalized):
+                                model_class = registered_model
+                                break
+                            
+                            # Check if model_name matches part name (for base part URLs)
+                            # e.g., "eics112_part" should match "EICS112_Part" models
+                            from .dynamic_models import sanitize_part_name
+                            sanitized_part = sanitize_part_name(part_name).lower()
+                            if model_name == sanitized_part or normalized_model_name == sanitized_part.replace('_', ''):
+                                # For base part name, default to in_process model
+                                if table_type == 'in_process':
+                                    model_class = registered_model
+                                    break
+                            
+                            # Check if model_name contains part name with suffix
+                            # e.g., "eics112_part_completion" or "eics112_partcompletion"
+                            if sanitized_part in model_name.lower() or sanitized_part.replace('_', '') in normalized_model_name:
+                                # Check if suffix matches table_type
+                                if ('completion' in model_name.lower() and table_type == 'completion') or \
+                                   ('inprocess' in normalized_model_name and table_type == 'in_process') or \
+                                   ('in_process' in model_name.lower() and table_type == 'in_process'):
+                                    model_class = registered_model
+                                    break
+                                # If no suffix specified and it's in_process, use it
+                                elif table_type == 'in_process' and 'completion' not in model_name.lower():
+                                    model_class = registered_model
+                                    break
+                        
+                        if model_class is not None:
                             break
                 except Exception as e:
                     import sys
-                    print("Error checking DynamicModelRegistry: %s" % str(e), file=sys.stderr)
+                    print("Error checking DynamicModelRegistry: {}".format(str(e)), file=sys.stderr)
             
             # If we found a model, try to register it if not already registered
             if model_class is not None:
@@ -711,9 +851,13 @@ def catch_all_view_with_dynamic_models(request, url):
                             if not part_name or part_name == model_name:
                                 # Try to get from DynamicModelRegistry
                                 all_models = DynamicModelRegistry.get_all()
-                                for pn, m in all_models.items():
-                                    if m == model_class:
-                                        part_name = pn
+                                for pn, models_dict in all_models.items():
+                                    # models_dict is {'in_process': model, 'completion': model}
+                                    for table_type, m in models_dict.items():
+                                        if m == model_class:
+                                            part_name = pn
+                                            break
+                                    if part_name and part_name != model_name:
                                         break
                             
                             result = register_dynamic_model_in_admin(model_class, part_name)

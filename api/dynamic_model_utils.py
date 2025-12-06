@@ -138,16 +138,30 @@ def create_dynamic_table_in_db(model_class):
                     existing_columns = {row[0] for row in cursor.fetchall()}
     except Exception as e:
         import sys
-        print("Error checking table existence: %s" % str(e), file=sys.stderr)
+        error_msg = str(e)
+        # Use format() instead of % to avoid issues with % characters in error messages
+        print("Error checking table existence: {}".format(error_msg), file=sys.stderr)
     
     # If table exists, check for missing columns and add them
     if table_exists:
         missing_columns = []
-        model_fields = {f.name for f in model_class._meta.get_fields() if not f.one_to_many and not f.many_to_many}
+        from django.db import models
         
-        for field_name in model_fields:
-            if field_name not in existing_columns:
-                missing_columns.append(field_name)
+        # Get all fields and their corresponding column names
+        for field in model_class._meta.get_fields():
+            # Skip reverse relations
+            if field.one_to_many or field.many_to_many:
+                continue
+            
+            # For ForeignKey fields, use the column name (usually {field_name}_id)
+            if isinstance(field, models.ForeignKey):
+                column_name = field.column  # This is the actual database column name
+                if column_name not in existing_columns:
+                    missing_columns.append(column_name)
+            else:
+                # For other fields, use the field name
+                if field.name not in existing_columns:
+                    missing_columns.append(field.name)
         
         if missing_columns:
             import sys
@@ -198,6 +212,57 @@ def create_dynamic_table_in_db(model_class):
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
             return False
     
+    # Final check: Always verify table exists and has all required columns
+    # This handles cases where table existence check failed or table was created without all columns
+    try:
+        with connection.cursor() as cursor:
+            # Check if table exists
+            table_found = False
+            if connection.vendor == 'sqlite':
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name])
+                if cursor.fetchone():
+                    table_found = True
+                    safe_table_name = table_name.replace('"', '""')
+                    cursor.execute(f'PRAGMA table_info("{safe_table_name}")')
+                    final_existing_columns = {row[1] for row in cursor.fetchall()}
+            else:
+                cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = %s", [table_name])
+                if cursor.fetchone():
+                    table_found = True
+                    cursor.execute("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = %s
+                    """, [table_name])
+                    final_existing_columns = {row[0] for row in cursor.fetchall()}
+            
+            if table_found:
+                # Check for missing columns
+                from django.db import models
+                final_missing_columns = []
+                for field in model_class._meta.get_fields():
+                    if field.one_to_many or field.many_to_many:
+                        continue
+                    if isinstance(field, models.ForeignKey):
+                        column_name = field.column
+                        if column_name not in final_existing_columns:
+                            final_missing_columns.append(column_name)
+                    else:
+                        if field.name not in final_existing_columns and field.name != 'id':
+                            final_missing_columns.append(field.name)
+                
+                if final_missing_columns:
+                    import sys
+                    print("Final check: Table %s missing columns: %s" % (table_name, ', '.join(final_missing_columns)), file=sys.stderr)
+                    result = _add_missing_columns(model_class, connection, table_name, final_missing_columns, final_existing_columns)
+                    if result:
+                        print("Successfully added missing columns in final check for %s" % table_name, file=sys.stderr)
+                        return True
+                else:
+                    return True  # Table exists with all columns
+    except Exception as final_error:
+        import sys
+        print("Warning: Final column check failed: %s" % str(final_error), file=sys.stderr)
+    
     return False
 
 
@@ -210,58 +275,76 @@ def _add_missing_columns(model_class, connection, table_name, missing_columns, e
     
     try:
         with connection.cursor() as cursor:
-            for field_name in missing_columns:
+            for column_name in missing_columns:
                 # Get the field from the model
+                # For ForeignKey fields, the column name is {field_name}_id, so we need to find the field
                 field = None
                 for f in model_class._meta.get_fields():
-                    if f.name == field_name:
+                    # Check if this field's column matches the missing column name
+                    if hasattr(f, 'column') and f.column == column_name:
+                        field = f
+                        break
+                    # Also check if the field name matches (for non-ForeignKey fields)
+                    elif f.name == column_name and not isinstance(f, models.ForeignKey):
                         field = f
                         break
                 
                 if not field:
-                    print("Warning: Field %s not found in model" % field_name, file=sys.stderr)
+                    print("Warning: Field for column %s not found in model" % column_name, file=sys.stderr)
                     continue
                 
-                # Determine field type
-                field_type = 'TEXT'
-                nullable = 'NULL'
-                
-                if isinstance(field, models.CharField):
-                    max_length = getattr(field, 'max_length', 255)
-                    if max_length:
-                        field_type = 'VARCHAR(%d)' % max_length
-                    else:
-                        field_type = 'TEXT'
-                elif isinstance(field, models.IntegerField):
+                # Handle ForeignKey fields - they use {field_name}_id column
+                if isinstance(field, models.ForeignKey):
+                    # Verify the column name matches
+                    if field.column != column_name:
+                        print("Warning: ForeignKey field %s column mismatch: expected %s, got %s" % (field.name, field.column, column_name), file=sys.stderr)
+                        continue
+                    
                     field_type = 'INTEGER'
-                elif isinstance(field, models.BooleanField):
-                    field_type = 'INTEGER'  # SQLite uses INTEGER for booleans
-                elif isinstance(field, models.DateTimeField):
-                    field_type = 'DATETIME'
-                
-                if not getattr(field, 'null', False) and not getattr(field, 'primary_key', False):
-                    nullable = 'NOT NULL'
-                
-                default = ''
-                if hasattr(field, 'default') and field.default is not None and field.default != models.NOT_PROVIDED:
-                    if isinstance(field.default, bool):
-                        default = ' DEFAULT %d' % (1 if field.default else 0)
-                    elif isinstance(field.default, int):
-                        default = ' DEFAULT %d' % field.default
-                    elif isinstance(field.default, str):
-                        default = " DEFAULT '%s'" % field.default.replace("'", "''")
+                    nullable = 'NULL' if getattr(field, 'null', False) else 'NOT NULL'
+                    default = ''
+                else:
+                    # Determine field type for non-ForeignKey fields
+                    field_type = 'TEXT'
+                    nullable = 'NULL'
+                    
+                    if isinstance(field, models.CharField):
+                        max_length = getattr(field, 'max_length', 255)
+                        if max_length:
+                            field_type = 'VARCHAR(%d)' % max_length
+                        else:
+                            field_type = 'TEXT'
+                    elif isinstance(field, models.IntegerField):
+                        field_type = 'INTEGER'
+                    elif isinstance(field, models.BooleanField):
+                        field_type = 'INTEGER'  # SQLite uses INTEGER for booleans
+                    elif isinstance(field, models.DateTimeField):
+                        field_type = 'DATETIME'
+                    
+                    if not getattr(field, 'null', False) and not getattr(field, 'primary_key', False):
+                        nullable = 'NOT NULL'
+                    
+                    # Set default value for non-ForeignKey fields
+                    default = ''
+                    if hasattr(field, 'default') and field.default is not None and field.default != models.NOT_PROVIDED:
+                        if isinstance(field.default, bool):
+                            default = ' DEFAULT %d' % (1 if field.default else 0)
+                        elif isinstance(field.default, int):
+                            default = ' DEFAULT %d' % field.default
+                        elif isinstance(field.default, str):
+                            default = " DEFAULT '%s'" % field.default.replace("'", "''")
                 
                 # Add column
                 alter_sql = 'ALTER TABLE "%s" ADD COLUMN "%s" %s %s%s' % (
-                    table_name, field_name, field_type, nullable, default
+                    table_name, column_name, field_type, nullable, default
                 )
                 
                 try:
                     cursor.execute(alter_sql)
-                    print("Added column %s to table %s" % (field_name, table_name), file=sys.stderr)
+                    print("Added column %s to table %s" % (column_name, table_name), file=sys.stderr)
                 except Exception as e:
                     # Column might already exist or other error
-                    print("Warning: Could not add column %s: %s" % (field_name, str(e)), file=sys.stderr)
+                    print("Warning: Could not add column %s: %s" % (column_name, str(e)), file=sys.stderr)
         
         return True
     except Exception as e:
@@ -287,6 +370,19 @@ def _create_table_manually(model_class, connection, table_name):
     # Add other fields
     for field in model_class._meta.get_fields():
         if field.name == 'id':
+            continue
+        
+        # Skip reverse relations (one_to_many, many_to_many)
+        if field.one_to_many or field.many_to_many:
+            continue
+        
+        # Handle ForeignKey fields - they create a {field_name}_id column
+        if isinstance(field, models.ForeignKey):
+            column_name = field.column  # Django uses {field_name}_id for ForeignKey
+            field_type = 'INTEGER'
+            nullable = 'NULL' if getattr(field, 'null', False) else 'NOT NULL'
+            default = ''
+            columns.append('"%s" %s %s%s' % (column_name, field_type, nullable, default))
             continue
         
         field_type = 'TEXT'
@@ -338,6 +434,44 @@ def _create_table_manually(model_class, connection, table_name):
             if table_name in existing_tables:
                 import sys
                 print("Successfully created table: %s" % table_name, file=sys.stderr)
+                # After creating table, check for missing columns and add them
+                # This handles the case where table already existed but was missing columns
+                try:
+                    # Get existing columns
+                    if connection.vendor == 'sqlite':
+                        safe_table_name = table_name.replace('"', '""')
+                        cursor.execute(f'PRAGMA table_info("{safe_table_name}")')
+                        existing_columns_after = {row[1] for row in cursor.fetchall()}
+                    else:
+                        cursor.execute("""
+                            SELECT column_name FROM information_schema.columns 
+                            WHERE table_name = %s
+                        """, [table_name])
+                        existing_columns_after = {row[0] for row in cursor.fetchall()}
+                    
+                    # Check for missing columns
+                    missing_columns_after = []
+                    from django.db import models
+                    for field in model_class._meta.get_fields():
+                        if field.one_to_many or field.many_to_many:
+                            continue
+                        if isinstance(field, models.ForeignKey):
+                            column_name = field.column
+                            if column_name not in existing_columns_after:
+                                missing_columns_after.append(column_name)
+                        else:
+                            if field.name not in existing_columns_after and field.name != 'id':
+                                missing_columns_after.append(field.name)
+                    
+                    if missing_columns_after:
+                        print("Table %s exists but missing columns after creation: %s" % (table_name, ', '.join(missing_columns_after)), file=sys.stderr)
+                        result = _add_missing_columns(model_class, connection, table_name, missing_columns_after, existing_columns_after)
+                        if result:
+                            print("Successfully added missing columns to %s" % table_name, file=sys.stderr)
+                except Exception as col_error:
+                    import sys
+                    print("Warning: Could not check/add missing columns: %s" % str(col_error), file=sys.stderr)
+                
                 return True
             else:
                 import sys

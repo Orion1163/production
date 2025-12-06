@@ -41,7 +41,7 @@ body {
   background-color: var(--primary-bg);
   color: var(--primary-strong);
   min-height: 100vh;
-  padding: 2rem;
+  /* padding: 2rem; */
 }
 
 .container {

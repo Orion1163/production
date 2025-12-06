@@ -467,13 +467,17 @@ class DashboardStatsView(APIView):
                 from .dynamic_model_utils import get_dynamic_part_model
                 
                 all_dynamic_models = DynamicModelRegistry.get_all()
-                for part_name, model_class in all_dynamic_models.items():
-                    try:
-                        count = model_class.objects.count()
-                        total_production_entries += count
-                    except Exception:
-                        # Table might not exist yet
-                        continue
+                for part_name, models_dict in all_dynamic_models.items():
+                    # models_dict is {'in_process': model, 'completion': model}
+                    for table_type, model_class in models_dict.items():
+                        if model_class is None:
+                            continue
+                        try:
+                            count = model_class.objects.count()
+                            total_production_entries += count
+                        except Exception:
+                            # Table might not exist yet
+                            continue
                 
                 # Also check database directly for any dynamic tables
                 with connection.cursor() as cursor:
