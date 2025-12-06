@@ -99,6 +99,32 @@ def user_home(request):
     return render(request, 'user/home.html', context)
 
 
+@user_login_required
+def user_model_parts(request, model_no):
+    """
+    Render the parts page for a specific model.
+    """
+    emp_id = request.session.get('user_emp_id', None)
+    context = {
+        'emp_id': emp_id,
+        'model_no': model_no
+    }
+    return render(request, 'user/parts.html', context)
+
+
+@user_login_required
+def user_part_procedure(request, part_no):
+    """
+    Render the part procedure page with dynamic sidebar.
+    """
+    emp_id = request.session.get('user_emp_id', None)
+    context = {
+        'emp_id': emp_id,
+        'part_no': part_no
+    }
+    return render(request, 'user/part_procedure.html', context)
+
+
 def logout(request):
     """
     Handle admin logout.

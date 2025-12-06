@@ -32,6 +32,12 @@
     5: 'Cleaning',
     6: 'Spraying',
     7: 'Dispatch',
+    8: 'Kit Verification',
+    9: 'SMD',
+    10: 'SMD QC',
+    11: 'Pre-Forming QC',
+    12: 'Leaded QC',
+    13: 'Production QC',
   };
 
   const applyEditPinVisibilityState = (shouldShow) => {

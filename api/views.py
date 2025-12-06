@@ -2,7 +2,8 @@ from .models import User, Admin, ModelPart, PartProcedureDetail
 from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
     ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
-    DashboardStatsSerializer, DashboardChartDataSerializer, UserModelListSerializer
+    DashboardStatsSerializer, DashboardChartDataSerializer, UserModelListSerializer,
+    ModelPartSerializer
 )
 from django.db.models import Max, Count, Q
 from django.db import connection
@@ -679,6 +680,108 @@ class UserModelListView(APIView):
             )
             
             return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UserModelPartsView(APIView):
+    """
+    Get all parts for a specific model_no.
+    Returns list of ModelPart objects for the given model.
+    """
+    
+    def get(self, request, model_no):
+        try:
+            # Get all ModelParts for this model_no
+            model_parts = ModelPart.objects.filter(model_no=model_no).order_by('-created_at')
+            
+            if not model_parts.exists():
+                return Response(
+                    {'error': f'No parts found for model {model_no}'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Serialize using ModelPartSerializer
+            serializer = ModelPartSerializer(
+                model_parts,
+                many=True,
+                context={'request': request}
+            )
+            
+            return Response({
+                'model_no': model_no,
+                'parts': serializer.data,
+                'count': len(serializer.data)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UserPartSectionsView(APIView):
+    """
+    Get enabled sections for a specific part_no.
+    Returns list of enabled sections with their display names.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            # Get ModelPart by part_no
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure detail if it exists
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail exists, return empty list
+                enabled_sections = []
+            
+            # Section names mapping
+            section_names = {
+                'kit': 'Kit Verification',
+                'smd': 'SMD',
+                'smd_qc': 'SMD QC',
+                'pre_forming_qc': 'Pre-Forming QC',
+                'accessories_packing': 'Accessories Packing',
+                'leaded_qc': 'Leaded QC',
+                'prod_qc': 'Production QC',
+                'qc': 'QC',
+                'testing': 'Testing',
+                'heat_run': 'Heat Run',
+                'glueing': 'Glueing',
+                'cleaning': 'Cleaning',
+                'spraying': 'Spraying',
+                'dispatch': 'Dispatch'
+            }
+            
+            # Format sections with display names
+            sections_data = []
+            for section_key in enabled_sections:
+                sections_data.append({
+                    'key': section_key,
+                    'name': section_names.get(section_key, section_key.replace('_', ' ').title())
+                })
+            
+            return Response({
+                'part_no': part_no,
+                'model_no': model_part.model_no,
+                'sections': sections_data,
+                'count': len(sections_data)
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(

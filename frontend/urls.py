@@ -31,6 +31,8 @@ urlpatterns = [
     path('create-new-user/', views.create_new_user, name='create_new_user'),
     path('logout/', views.logout, name='logout'),
     path('user/home/', views.user_home, name='user_home'),
+    path('user/models/<str:model_no>/parts/', views.user_model_parts, name='user_model_parts'),
+    path('user/parts/<str:part_no>/procedure/', views.user_part_procedure, name='user_part_procedure'),
     path('user/logout/', views.user_logout, name='user_logout'),
     path('', views.login, name='login'),
 ]

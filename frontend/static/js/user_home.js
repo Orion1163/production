@@ -52,8 +52,13 @@
             </div>
         `;
 
-        card.addEventListener('click', function() {
-            window.location.href = `/procedure-detail/${model.model_no}/`;
+        card.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Navigate to parts page for this model
+            const url = `/user/models/${encodeURIComponent(model.model_no)}/parts/`;
+            console.log('Navigating to:', url);
+            window.location.href = url;
         });
 
         return card;
