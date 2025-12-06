@@ -125,6 +125,42 @@ def user_part_procedure(request, part_no):
     return render(request, 'user/part_procedure.html', context)
 
 
+@user_login_required
+def user_section_page(request, part_no, section):
+    """
+    Render section pages for a specific part.
+    Maps section keys to their template names.
+    """
+    emp_id = request.session.get('user_emp_id', None)
+    
+    # Map section keys to template names
+    section_template_map = {
+        'kit': 'user/pages/kit_verification.html',
+        'smd': 'user/pages/smd.html',
+        'smd_qc': 'user/pages/smd_qc.html',
+        'pre_forming_qc': 'user/pages/pre_forming_qc.html',
+        'accessories_packing': 'user/pages/accessories_packing.html',
+        'leaded_qc': 'user/pages/leaded_qc.html',
+        'prod_qc': 'user/pages/prod_qc.html',
+        'qc': 'user/pages/qc.html',
+        'testing': 'user/pages/testing.html',
+        'heat_run': 'user/pages/heat_run.html',
+        'glueing': 'user/pages/glueing.html',
+        'cleaning': 'user/pages/cleaning.html',
+        'spraying': 'user/pages/spraying.html',
+        'dispatch': 'user/pages/dispatch.html',
+    }
+    
+    template_name = section_template_map.get(section, 'user/pages/qc.html')
+    
+    context = {
+        'emp_id': emp_id,
+        'part_no': part_no,
+        'section': section
+    }
+    return render(request, template_name, context)
+
+
 def logout(request):
     """
     Handle admin logout.

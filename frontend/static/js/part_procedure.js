@@ -69,7 +69,10 @@
     function createSidebarItem(section) {
         const li = document.createElement('li');
         const a = document.createElement('a');
-        a.href = '#';
+        
+        // Create URL for the section page
+        const sectionUrl = `/user/parts/${encodeURIComponent(PART_NO)}/section/${encodeURIComponent(section.key)}/`;
+        a.href = sectionUrl;
         a.setAttribute('data-section', section.key);
         
         // Get specific icon for section or use default
@@ -80,13 +83,6 @@
         `;
         
         a.innerHTML = iconSvg + `<span>${section.name}</span>`;
-        
-        // Add click handler
-        a.addEventListener('click', function(e) {
-            e.preventDefault();
-            // Handle section click - you can customize this
-            console.log('Section clicked:', section.key);
-        });
         
         li.appendChild(a);
         return li;

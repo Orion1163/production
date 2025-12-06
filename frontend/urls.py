@@ -33,6 +33,7 @@ urlpatterns = [
     path('user/home/', views.user_home, name='user_home'),
     path('user/models/<str:model_no>/parts/', views.user_model_parts, name='user_model_parts'),
     path('user/parts/<str:part_no>/procedure/', views.user_part_procedure, name='user_part_procedure'),
+    path('user/parts/<str:part_no>/section/<str:section>/', views.user_section_page, name='user_section_page'),
     path('user/logout/', views.user_logout, name='user_logout'),
     path('', views.login, name='login'),
 ]
