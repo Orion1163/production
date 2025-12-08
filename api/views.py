@@ -231,6 +231,39 @@ class AdminProfileView(APIView):
             )
 
 
+class UserProfileView(APIView):
+    """
+    Get current user's profile details.
+    """
+    
+    def get(self, request):
+        # Check if user is logged in
+        if not request.session.get('user_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        emp_id = request.session.get('user_emp_id')
+        if not emp_id:
+            return Response(
+                {'error': 'User ID not found in session'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            user = User.objects.get(emp_id=emp_id)
+            serializer = UserSerializer(user)
+            return Response({
+                'user': serializer.data
+            }, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
 class ProductionProcedureCreateView(APIView):
     """
     Handle production procedure form submission.

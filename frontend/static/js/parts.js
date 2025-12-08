@@ -74,19 +74,14 @@
                 if (sectionsData && sectionsData.sections && sectionsData.sections.length > 0) {
                     const firstSection = sectionsData.sections[0];
                     const url = `/user/parts/${encodeURIComponent(part.part_no)}/section/${encodeURIComponent(firstSection.key)}/`;
-                    console.log('Navigating to first section:', firstSection.name, url);
                     window.location.href = url;
                 } else {
-                    // No sections enabled, navigate to procedure page as fallback
-                    const url = `/user/parts/${encodeURIComponent(part.part_no)}/procedure/`;
-                    console.log('No sections enabled, navigating to procedure page:', url);
-                    window.location.href = url;
+                    // No sections enabled for this part
+                    alert(`No sections are enabled for part ${part.part_no}. Please contact an administrator.`);
                 }
             } catch (error) {
                 console.error('Error fetching sections:', error);
-                // On error, navigate to procedure page as fallback
-                const url = `/user/parts/${encodeURIComponent(part.part_no)}/procedure/`;
-                window.location.href = url;
+                alert(`Unable to load sections for part ${part.part_no}. Please try again later.`);
             }
         });
 
