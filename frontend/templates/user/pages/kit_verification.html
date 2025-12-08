@@ -5,10 +5,270 @@
 
 {% block page_title %}Kit Verification{% endblock %}
 
+{% block extra_head %}
+<style>
+  .kit-verification-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .kit-form-card {
+    width: 100%;
+    height: 100%;
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .form-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .form-header p {
+    color: var(--text-muted, rgba(229, 231, 235, 0.8));
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .input-group {
+    position: relative;
+  }
+
+  .input-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-muted, #a5adcb);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .input-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+  }
+
+  .input-field-wrapper {
+    position: relative;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 1rem 1rem 1rem 3rem;
+    background: var(--surface, #2a2b38);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-sm, 10px);
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.5));
+  }
+
+  .input-field:focus {
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    background: var(--card-bg, #1f202b);
+  }
+
+  .input-field-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    pointer-events: none;
+    transition: color 0.3s ease;
+  }
+
+  .input-field:focus + .input-field-icon {
+    color: var(--primary, #8b5cf6);
+  }
+
+  .input-field[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .input-field[type="number"]::-webkit-outer-spin-button,
+  .input-field[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .kit-form-card {
+      padding: 1.5rem;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .kit-form-card {
+      padding: 1rem;
+    }
+
+    .input-field {
+      padding: 0.875rem 0.875rem 0.875rem 2.75rem;
+      font-size: 0.95rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
-  <h1>Kit Verification</h1>
-  <p>Hello</p>
+<div class="kit-verification-container">
+  <div class="page-heading">
+    <h1>Kit Verification</h1>
+    <hr />
+  </div>
+  
+  <div class="kit-form-card">
+    <div class="form-header">
+      <p>Enter the details below to verify kit information</p>
+    </div>
+
+    <form id="kitVerificationForm" class="kit-verification-form">
+      <div class="form-grid">
+        <!-- SO No Input -->
+        <div class="input-group">
+          <label class="input-label" for="soNo">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            SO No
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="soNo" 
+              name="soNo" 
+              class="input-field" 
+              placeholder="Enter Sales Order Number"
+              required
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Kit No Input -->
+        <div class="input-group">
+          <label class="input-label" for="kitNo">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+            Kit No
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="kitNo" 
+              name="kitNo" 
+              class="input-field" 
+              placeholder="Enter Kit Number"
+              required
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Kit Quantity Input -->
+        <div class="input-group">
+          <label class="input-label" for="kitQuantity">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            </svg>
+            Kit Quantity
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="number" 
+              id="kitQuantity" 
+              name="kitQuantity" 
+              class="input-field" 
+              placeholder="Enter Kit Quantity"
+              min="1"
+              step="1"
+              required
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="submit-section">
+        <button type="submit" class="submit-btn">
+          Verify Kit
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
