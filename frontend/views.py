@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect
 from functools import wraps
+from .decorators import admin_role_required
+from .role_constants import get_accessible_sections, has_role_access
 
 
 def admin_login_required(view_func):
@@ -29,6 +31,7 @@ def user_login_required(view_func):
 
 
 @admin_login_required
+@admin_role_required
 def design_procedure(request):
     """
     Render the procedure listing table.
@@ -37,6 +40,7 @@ def design_procedure(request):
 
 
 @admin_login_required
+@admin_role_required
 def design_procedure_create(request):
     """
     Render the standalone form for creating/editing a procedure.
@@ -44,6 +48,7 @@ def design_procedure_create(request):
     return render(request, 'admin/designProcedure_form.html')
 
 @admin_login_required
+@admin_role_required
 def add_user(request):
     """
     Render the add user page.
@@ -51,6 +56,7 @@ def add_user(request):
     return render(request, 'admin/add_user.html')
 
 @admin_login_required
+@admin_role_required
 def profile(request):
     """
     Render the profile page.
@@ -62,6 +68,7 @@ def profile(request):
     return render(request, 'admin/profile.html', context)
 
 @admin_login_required
+@admin_role_required
 def home(request):
     """
     Render the home page.
@@ -69,6 +76,7 @@ def home(request):
     return render(request, 'admin/home.html')
 
 @admin_login_required
+@admin_role_required
 def create_new_user(request):
     """
     Render the create new user page.
@@ -93,8 +101,15 @@ def user_home(request):
     Render the user home page.
     """
     emp_id = request.session.get('user_emp_id', None)
+    user_roles = request.session.get('user_roles', [])
+    
+    # Check for access denied message and pass to template
+    access_denied_message = request.session.pop('access_denied_message', None)
+    
     context = {
-        'emp_id': emp_id
+        'emp_id': emp_id,
+        'user_roles': user_roles,
+        'access_denied_message': access_denied_message
     }
     return render(request, 'user/home.html', context)
 
@@ -105,9 +120,11 @@ def user_model_parts(request, model_no):
     Render the parts page for a specific model.
     """
     emp_id = request.session.get('user_emp_id', None)
+    user_roles = request.session.get('user_roles', [])
     context = {
         'emp_id': emp_id,
-        'model_no': model_no
+        'model_no': model_no,
+        'user_roles': user_roles
     }
     return render(request, 'user/parts.html', context)
 
@@ -118,9 +135,11 @@ def user_part_procedure(request, part_no):
     Render the part procedure page with dynamic sidebar.
     """
     emp_id = request.session.get('user_emp_id', None)
+    user_roles = request.session.get('user_roles', [])
     context = {
         'emp_id': emp_id,
-        'part_no': part_no
+        'part_no': part_no,
+        'user_roles': user_roles
     }
     return render(request, 'user/part_procedure.html', context)
 
@@ -132,6 +151,12 @@ def user_section_page(request, part_no, section):
     Maps section keys to their template names.
     """
     emp_id = request.session.get('user_emp_id', None)
+    user_roles = request.session.get('user_roles', [])
+    
+    # Check access to this specific section
+    if not has_role_access(user_roles, section):
+        request.session['access_denied_message'] = f'You do not have permission to access the {section} section.'
+        return redirect('user_home')
     
     # Map section keys to template names
     section_template_map = {
@@ -156,7 +181,8 @@ def user_section_page(request, part_no, section):
     context = {
         'emp_id': emp_id,
         'part_no': part_no,
-        'section': section
+        'section': section,
+        'user_roles': user_roles
     }
     return render(request, template_name, context)
 
@@ -170,6 +196,8 @@ def logout(request):
         del request.session['admin_emp_id']
     if 'admin_logged_in' in request.session:
         del request.session['admin_logged_in']
+    if 'user_roles' in request.session:
+        del request.session['user_roles']
     
     # Flush the session
     request.session.flush()
@@ -186,6 +214,8 @@ def user_logout(request):
         del request.session['user_emp_id']
     if 'user_logged_in' in request.session:
         del request.session['user_logged_in']
+    if 'user_roles' in request.session:
+        del request.session['user_roles']
     
     # Flush the session
     request.session.flush()

@@ -65,6 +65,18 @@
                 });
 
                 if (!sectionsResponse.ok) {
+                    if (sectionsResponse.status === 403) {
+                        // Access denied
+                        const errorData = await sectionsResponse.json().catch(() => ({}));
+                        const errorMessage = errorData.message || 'You do not have permission to access this part.';
+                        
+                        if (typeof showError === 'function') {
+                            showError(errorMessage, { duration: 6000 });
+                        } else if (typeof window.showToast === 'function') {
+                            window.showToast(errorMessage, 'error', { duration: 6000 });
+                        }
+                        return;
+                    }
                     throw new Error(`HTTP error! status: ${sectionsResponse.status}`);
                 }
 
@@ -77,11 +89,21 @@
                     window.location.href = url;
                 } else {
                     // No sections enabled for this part
-                    alert(`No sections are enabled for part ${part.part_no}. Please contact an administrator.`);
+                    const message = `No sections are enabled for part ${part.part_no}. Please contact an administrator.`;
+                    if (typeof showWarning === 'function') {
+                        showWarning(message, { duration: 5000 });
+                    } else if (typeof window.showToast === 'function') {
+                        window.showToast(message, 'warning', { duration: 5000 });
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching sections:', error);
-                alert(`Unable to load sections for part ${part.part_no}. Please try again later.`);
+                const message = `Unable to load sections for part ${part.part_no}. Please try again later.`;
+                if (typeof showError === 'function') {
+                    showError(message, { duration: 5000 });
+                } else if (typeof window.showToast === 'function') {
+                    window.showToast(message, 'error', { duration: 5000 });
+                }
             }
         });
 

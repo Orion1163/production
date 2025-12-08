@@ -101,6 +101,23 @@
             });
 
             if (!response.ok) {
+                if (response.status === 403) {
+                    // Access denied - show toast and redirect
+                    const errorData = await response.json().catch(() => ({}));
+                    const errorMessage = errorData.message || 'You do not have permission to access this resource.';
+                    
+                    if (typeof showError === 'function') {
+                        showError(errorMessage, { duration: 6000 });
+                    } else if (typeof window.showToast === 'function') {
+                        window.showToast(errorMessage, 'error', { duration: 6000 });
+                    }
+                    
+                    // Redirect to home after a short delay
+                    setTimeout(() => {
+                        window.location.href = '/user/home/';
+                    }, 2000);
+                    return;
+                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 

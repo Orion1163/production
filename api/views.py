@@ -110,6 +110,8 @@ class AdminLoginView(APIView):
         # Store admin info in session
         request.session['admin_emp_id'] = admin.emp_id
         request.session['admin_logged_in'] = True
+        # Store admin role (Administrator = role 1) in session for role-based access control
+        request.session['user_roles'] = [1]  # Administrator role
         
         # Return admin data
         serializer = AdminSerializer(admin)
@@ -165,6 +167,8 @@ class UserLoginView(APIView):
         # Store user info in session
         request.session['user_emp_id'] = user.emp_id
         request.session['user_logged_in'] = True
+        # Store user roles in session for role-based access control
+        request.session['user_roles'] = user.roles if user.roles else []
         
         # Return full user details
         serializer = UserSerializer(user)
@@ -761,11 +765,17 @@ class UserModelPartsView(APIView):
 class UserPartSectionsView(APIView):
     """
     Get enabled sections for a specific part_no.
-    Returns list of enabled sections with their display names.
+    Returns list of enabled sections with their display names, filtered by user roles.
     """
     
     def get(self, request, part_no):
         try:
+            # Get user roles from session
+            user_roles = request.session.get('user_roles', [])
+            
+            # Import role utilities
+            from frontend.role_constants import has_role_access, SECTION_NAMES
+            
             # Get ModelPart by part_no
             try:
                 model_part = ModelPart.objects.get(part_no=part_no)
@@ -783,30 +793,18 @@ class UserPartSectionsView(APIView):
                 # No procedure detail exists, return empty list
                 enabled_sections = []
             
-            # Section names mapping
-            section_names = {
-                'kit': 'Kit Verification',
-                'smd': 'SMD',
-                'smd_qc': 'SMD QC',
-                'pre_forming_qc': 'Pre-Forming QC',
-                'accessories_packing': 'Accessories Packing',
-                'leaded_qc': 'Leaded QC',
-                'prod_qc': 'Production QC',
-                'qc': 'QC',
-                'testing': 'Testing',
-                'heat_run': 'Heat Run',
-                'glueing': 'Glueing',
-                'cleaning': 'Cleaning',
-                'spraying': 'Spraying',
-                'dispatch': 'Dispatch'
-            }
+            # Filter sections by user roles - only return sections user has access to
+            accessible_sections = []
+            for section_key in enabled_sections:
+                if has_role_access(user_roles, section_key):
+                    accessible_sections.append(section_key)
             
             # Format sections with display names
             sections_data = []
-            for section_key in enabled_sections:
+            for section_key in accessible_sections:
                 sections_data.append({
                     'key': section_key,
-                    'name': section_names.get(section_key, section_key.replace('_', ' ').title())
+                    'name': SECTION_NAMES.get(section_key, section_key.replace('_', ' ').title())
                 })
             
             return Response({
