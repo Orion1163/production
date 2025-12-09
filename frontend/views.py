@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.views.decorators.csrf import ensure_csrf_cookie
 from functools import wraps
 from .decorators import admin_role_required
 from .role_constants import get_accessible_sections, has_role_access
@@ -83,6 +84,9 @@ def create_new_user(request):
     """
     return render(request, 'admin/add_user_form.html')
 
+from django.views.decorators.csrf import ensure_csrf_cookie
+
+@ensure_csrf_cookie
 def login(request):
     """
     Render the login page.

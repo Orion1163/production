@@ -3,7 +3,7 @@ from .views import (
     UserDetailView, UserListCreateView, UserLoginView, AdminLoginView, AdminLogoutView, 
     AdminProfileView, UserProfileView, ProductionProcedureCreateView, ModelPartListView,
     ProcedureDetailView, DashboardStatsView, DashboardChartDataView, UserModelListView,
-    UserModelPartsView, UserPartSectionsView
+    UserModelPartsView, UserPartSectionsView, KitVerificationView
 )
 
 urlpatterns = [
@@ -22,4 +22,5 @@ urlpatterns = [
     path('procedure-detail/<str:model_no>/', ProcedureDetailView.as_view(), name='procedure-detail'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/charts/', DashboardChartDataView.as_view(), name='dashboard-charts'),
+    path('kit-verification/', KitVerificationView.as_view(), name='kit-verification'),
 ]

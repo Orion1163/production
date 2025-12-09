@@ -256,3 +256,13 @@ class UserModelListSerializer(serializers.Serializer):
         """Return count of parts for this model"""
         parts = obj.get('parts', [])
         return len(parts)
+
+
+class KitVerificationSerializer(serializers.Serializer):
+    """Serializer for kit verification data"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    kit_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the kit verification')
+    kit_no = serializers.CharField(required=True, help_text='Kit number')
+    kit_quantity = serializers.IntegerField(required=True, help_text='Kit quantity')
+    kit_verification = serializers.BooleanField(required=True, help_text='Kit verification status')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')

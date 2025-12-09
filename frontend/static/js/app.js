@@ -91,18 +91,27 @@ startAutoRotation();
   }
 
   function getCsrfToken(form) {
+    // Priority 1: Get from form input (most reliable)
     if (form) {
       const csrfInput = form.querySelector('input[name="csrfmiddlewaretoken"]');
       if (csrfInput && csrfInput.value) {
         return csrfInput.value;
       }
     }
+    
+    // Also try to find CSRF input anywhere in the document
+    const csrfInputAnywhere = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInputAnywhere && csrfInputAnywhere.value) {
+      return csrfInputAnywhere.value;
+    }
 
+    // Priority 2: Get from meta tag
     const metaTag = document.querySelector('meta[name="csrf-token"]');
     if (metaTag && metaTag.content) {
       return metaTag.content;
     }
 
+    // Priority 3: Get from cookie
     return getCookie('csrftoken');
   }
 
@@ -155,6 +164,18 @@ startAutoRotation();
     }
 
     const csrfToken = getCsrfToken(adminForm);
+    
+    // Debug: Log CSRF token retrieval
+    if (!csrfToken) {
+      console.warn('CSRF token not found. Attempting to get from form input...');
+      const csrfInput = adminForm.querySelector('input[name="csrfmiddlewaretoken"]');
+      if (csrfInput) {
+        console.log('Found CSRF token in form input');
+      } else {
+        console.warn('CSRF token not found in form input either');
+      }
+    }
+    
     const submitButton = adminForm.querySelector('.sign-btn');
     const originalButtonText = submitButton.value;
 
@@ -239,18 +260,27 @@ startAutoRotation();
     }
 
     function getCsrfToken(form) {
+      // Priority 1: Get from form input (most reliable)
       if (form) {
         const csrfInput = form.querySelector('input[name="csrfmiddlewaretoken"]');
         if (csrfInput && csrfInput.value) {
           return csrfInput.value;
         }
       }
+      
+      // Also try to find CSRF input anywhere in the document
+      const csrfInputAnywhere = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      if (csrfInputAnywhere && csrfInputAnywhere.value) {
+        return csrfInputAnywhere.value;
+      }
 
+      // Priority 2: Get from meta tag
       const metaTag = document.querySelector('meta[name="csrf-token"]');
       if (metaTag && metaTag.content) {
         return metaTag.content;
       }
 
+      // Priority 3: Get from cookie
       return getCookie('csrftoken');
     }
 
@@ -324,6 +354,18 @@ startAutoRotation();
       }
 
       const csrfToken = getCsrfToken(userForm);
+      
+      // Debug: Log CSRF token retrieval
+      if (!csrfToken) {
+        console.warn('CSRF token not found. Attempting to get from form input...');
+        const csrfInput = userForm.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (csrfInput) {
+          console.log('Found CSRF token in form input');
+        } else {
+          console.warn('CSRF token not found in form input either');
+        }
+      }
+      
       const submitButton = userForm.querySelector('.sign-btn');
       const originalButtonText = submitButton ? submitButton.value : 'Sign In';
 

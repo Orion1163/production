@@ -59,8 +59,11 @@
       </div>
     </main>
     <script>
-      // Pass part_no to JavaScript
+      // Pass part_no and emp_id to JavaScript
       window.PART_NO = "{{ part_no }}";
+      {% if emp_id %}
+      window.USER_EMP_ID = "{{ emp_id }}";
+      {% endif %}
     </script>
     <script src="{% static 'js/part_procedure.js' %}"></script>
     {% block extra_scripts %}{% endblock %}
