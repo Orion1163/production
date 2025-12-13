@@ -153,20 +153,23 @@
   }
 
   /**
-   * Update submit button state based on available quantity
+   * Update submit button state based on available quantity and forwarding quantity
    */
   function updateSubmitButtonState() {
     const form = document.getElementById('prodQCForm');
     const submitButton = form ? form.querySelector('button[type="submit"]') : null;
     const prodQCAvailableQuantityInput = document.getElementById('prodQCAvailableQuantity');
+    const forwardingQuantityInput = document.getElementById('forwardingQuantity');
     
     if (!submitButton || !prodQCAvailableQuantityInput) {
       return;
     }
 
     const availableQuantity = parseInt(prodQCAvailableQuantityInput.value, 10) || 0;
+    const forwardingQuantity = forwardingQuantityInput ? (parseInt(forwardingQuantityInput.value, 10) || 0) : 0;
     
-    if (availableQuantity <= 0) {
+    // Disable if available quantity is 0 or less, or if forwarding quantity exceeds available quantity
+    if (availableQuantity <= 0 || forwardingQuantity > availableQuantity) {
       submitButton.disabled = true;
       submitButton.style.opacity = '0.6';
       submitButton.style.cursor = 'not-allowed';
@@ -339,15 +342,6 @@
         throw new Error('Forwarding quantity must be a valid number greater than or equal to 0');
       }
 
-      // Get current Prod QC available quantity
-      const currentProdQCQuantity = prodQCAvailableQuantityInput ? 
-        (parseInt(prodQCAvailableQuantityInput.value, 10) || 0) : 0;
-
-      // Validate forwarding quantity doesn't exceed available
-      if (forwardingQuantity > currentProdQCQuantity) {
-        throw new Error(`Forwarding quantity (${forwardingQuantity}) cannot be greater than available quantity (${currentProdQCQuantity})`);
-      }
-
       // Get part number
       const partNo = getPartNo();
       if (!partNo) {
@@ -466,6 +460,13 @@
       if (prodQCAvailableQuantityInput) {
         prodQCAvailableQuantityInput.addEventListener('input', updateSubmitButtonState);
         prodQCAvailableQuantityInput.addEventListener('change', updateSubmitButtonState);
+      }
+      
+      // Listen for changes in Forwarding Quantity to update submit button state
+      const forwardingQuantityInput = document.getElementById('forwardingQuantity');
+      if (forwardingQuantityInput) {
+        forwardingQuantityInput.addEventListener('input', updateSubmitButtonState);
+        forwardingQuantityInput.addEventListener('change', updateSubmitButtonState);
       }
       
       // Initial state check
