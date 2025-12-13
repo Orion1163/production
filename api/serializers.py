@@ -266,3 +266,88 @@ class KitVerificationSerializer(serializers.Serializer):
     kit_quantity = serializers.IntegerField(required=True, help_text='Kit quantity')
     kit_verification = serializers.BooleanField(required=True, help_text='Kit verification status')
     so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class SMDDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching SMD data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class SMDUpdateSerializer(serializers.Serializer):
+    """Serializer for updating SMD data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    smd_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD')
+
+
+class SMDQCDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching SMD QC data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class SMDQCUpdateSerializer(serializers.Serializer):
+    """Serializer for updating SMD QC data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    smd_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD QC')
+
+
+class PreFormingQCDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Pre-Forming QC data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class PreFormingQCUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Pre-Forming QC data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    pre_forming_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Pre-Forming QC')
+
+
+class LeadedQCDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Leaded QC data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class LeadedQCUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Leaded QC data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    leaded_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded QC')
+
+
+class ProdQCDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Prod QC data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class ProdQCUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Prod QC data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    prodqc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Prod QC')
+    production_qc = serializers.BooleanField(required=False, default=True, help_text='Alternative field name for Prod QC boolean')
+
+
+class AccessoriesPackingDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Accessories Packing data by SO No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+
+
+class AccessoriesPackingUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Accessories Packing data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    accessories_packing_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Accessories Packing')

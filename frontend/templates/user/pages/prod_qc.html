@@ -5,10 +5,453 @@
 
 {% block page_title %}Production QC{% endblock %}
 
+{% block extra_head %}
+<style>
+  .prod-qc-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .prod-qc-form-card {
+    width: 100%;
+    height: 100%;
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  @keyframes shimmer {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .form-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .form-header p {
+    color: var(--text-muted, rgba(229, 231, 235, 0.8));
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .input-group {
+    position: relative;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+  }
+
+  .input-group:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+
+  .input-group:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .input-group:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .input-group:nth-child(4) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .input-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-muted, #a5adcb);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .input-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    transition: transform 0.3s ease;
+  }
+
+  .input-group:hover .input-icon {
+    transform: scale(1.1);
+  }
+
+  .input-field-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .search-btn {
+    background: transparent;
+    border: none;
+    padding: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary, #8b5cf6);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .search-btn:hover {
+    color: var(--primary-strong, #f5f7fb);
+    transform: scale(1.1);
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: var(--radius-sm, 10px);
+  }
+
+  .search-btn:active {
+    transform: scale(0.95);
+  }
+
+  .search-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .search-btn svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 1rem 1rem 1rem 3rem;
+    background: var(--surface, #2a2b38);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-sm, 10px);
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+    flex: 1;
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.5));
+    transition: opacity 0.3s ease;
+  }
+
+  .input-field:focus::placeholder {
+    opacity: 0.6;
+  }
+
+  .input-field:focus {
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    background: var(--card-bg, #1f202b);
+    transform: translateY(-1px);
+  }
+
+  .input-field:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .input-field-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    pointer-events: none;
+    transition: all 0.3s ease;
+  }
+
+  .input-field:focus ~ .input-field-icon {
+    color: var(--primary, #8b5cf6);
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  .input-field[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .input-field[type="number"]::-webkit-outer-spin-button,
+  .input-field[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 2.5rem;
+    animation: fadeInUp 0.6s ease-out 0.5s both;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+  }
+
+  .submit-btn:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .submit-btn span {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .prod-qc-form-card {
+      padding: 1.5rem;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 1rem;
+    }
+
+    .form-header p {
+      font-size: 0.9rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .prod-qc-form-card {
+      padding: 1rem;
+      border-radius: var(--radius-md, 14px);
+    }
+
+    .input-field {
+      padding: 0.875rem 0.875rem 0.875rem 2.75rem;
+      font-size: 0.95rem;
+    }
+
+    .input-label {
+      font-size: 0.85rem;
+    }
+
+    .submit-btn {
+      font-size: 0.9rem;
+      padding: 0.875rem;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .form-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
-  <h1>Production QC</h1>
-  <p>Hello</p>
+<div class="prod-qc-container">
+  <div class="page-heading">
+    <h1>Production QC</h1>
+    <hr />
+  </div>
+  
+  <div class="prod-qc-form-card">
+    <div class="form-header">
+      <p>Enter the details below to process Production QC information</p>
+    </div>
+
+    <form id="prodQCForm" class="prod-qc-form">
+      <div class="form-grid">
+        <!-- SO No Input -->
+        <div class="input-group">
+          <label class="input-label" for="soNo">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            SO No
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="soNo" 
+              name="soNo" 
+              class="input-field" 
+              placeholder="Enter Sales Order Number"
+              required
+              autocomplete="off"
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <button type="button" id="searchProdQCBtn" class="search-btn" title="Search Prod QC Data">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Kit No Input -->
+        <div class="input-group">
+          <label class="input-label" for="kitNo">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+            Kit No
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="kitNo" 
+              name="kitNo" 
+              class="input-field" 
+              readonly
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Prod QC Available Quantity Input -->
+        <div class="input-group">
+          <label class="input-label" for="prodQCAvailableQuantity">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            Prod QC Available Quantity
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="number" 
+              id="prodQCAvailableQuantity" 
+              name="prodQCAvailableQuantity" 
+              class="input-field" 
+              readonly
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Forwarding Quantity Input -->
+        <div class="input-group">
+          <label class="input-label" for="forwardingQuantity">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            Forwarding Quantity
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="number" 
+              id="forwardingQuantity" 
+              name="forwardingQuantity" 
+              class="input-field" 
+              placeholder="Enter Forwarding Quantity"
+              min="0"
+              step="1"
+              required
+              autocomplete="off"
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="submit-section">
+        <button type="submit" class="submit-btn">
+          <span>Forward to Ready for Production</span>
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
+{% block extra_scripts %}
+<script src="{% static 'js/dynamic_api/prod_qc_api.js' %}" defer></script>
+{% endblock %}

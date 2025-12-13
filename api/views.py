@@ -1292,3 +1292,2892 @@ class KitVerificationView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class SMDDataFetchView(APIView):
+    """
+    GET API endpoint for fetching SMD data by SO No.
+    Returns kit_no, kit_available_quantity, and smd_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch SMD data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - kit_available_quantity: Kit available quantity
+        - smd_available_quantity: SMD available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name (try exact match, then variations, then partial match)
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        # Remove underscores and compare
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        # Check if field contains the name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                # Build filter dictionary
+                filter_dict = {so_no_field: so_no}
+                
+                # Get the most recent entry matching the SO No
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No kit verification entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                # Get the most recent entry
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find kit_available_quantity field
+                kit_available_quantity_field = find_field_name([
+                    'kit_available_quantity',
+                    'kit_kit_available_quantity',
+                    'available_quantity',
+                    'kit_quantity'
+                ])
+                
+                # Find smd_available_quantity field
+                smd_available_quantity_field = find_field_name([
+                    'smd_available_quantity',
+                    'smd_availablequantity',
+                    'smd_available_quantity_',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if kit_available_quantity_field:
+                    kit_available_quantity_value = getattr(entry, kit_available_quantity_field, None)
+                    response_data['kit_available_quantity'] = str(kit_available_quantity_value) if kit_available_quantity_value is not None else ''
+                else:
+                    response_data['kit_available_quantity'] = ''
+                
+                if smd_available_quantity_field:
+                    smd_available_quantity_value = getattr(entry, smd_available_quantity_field, None)
+                    response_data['smd_available_quantity'] = str(smd_available_quantity_value) if smd_available_quantity_value is not None else ''
+                else:
+                    response_data['smd_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SMDUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating SMD data with forwarding quantity.
+    Updates smd_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update SMD data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates smd_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import SMDUpdateSerializer
+            serializer = SMDUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            smd_done_by = validated_data['smd_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find smd_available_quantity field
+                smd_available_quantity_field = find_field_name([
+                    'smd_available_quantity',
+                    'smd_availablequantity',
+                    'smd_available_quantity_',
+                ])
+                
+                if not smd_available_quantity_field:
+                    return Response(
+                        {'error': 'SMD available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current smd_available_quantity
+                current_smd_available_quantity = getattr(entry, smd_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_smd_available_quantity, str):
+                        current_smd_available_quantity = int(current_smd_available_quantity) if current_smd_available_quantity else 0
+                    elif current_smd_available_quantity is None:
+                        current_smd_available_quantity = 0
+                    else:
+                        current_smd_available_quantity = int(current_smd_available_quantity)
+                except (ValueError, TypeError):
+                    current_smd_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_smd_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_smd_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new smd_available_quantity
+                new_smd_available_quantity = current_smd_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find next section after SMD
+                next_section_name = None
+                next_section_available_quantity_field = None
+                
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    
+                    # Find the index of 'smd' in enabled sections
+                    smd_index = None
+                    for i, section in enumerate(enabled_sections):
+                        if section == 'smd':
+                            smd_index = i
+                            break
+                    
+                    # Find the next enabled section after smd
+                    if smd_index is not None and smd_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[smd_index + 1]
+                        
+                        # Check if next section is in pre_qc_sections (same in_process table)
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        
+                        if next_section_name in pre_qc_sections:
+                            # Next section is also in in_process table, so we can update its field in the same entry
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            
+                            # Try exact match first
+                            for field_name in possible_field_names:
+                                if field_name in all_field_names:
+                                    next_section_available_quantity_field = field_name
+                                    break
+                            
+                            # If not found, try partial match (case-insensitive)
+                            if not next_section_available_quantity_field:
+                                for field_name in all_field_names:
+                                    field_lower = field_name.lower()
+                                    if 'available' in field_lower and 'quantity' in field_lower and next_section_name.lower() in field_lower:
+                                        next_section_available_quantity_field = field_name
+                                        break
+                except Exception as next_section_error:
+                    import sys
+                    import traceback
+                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                
+                # Find smd and smd_done_by fields
+                smd_field = find_field_name(['smd', 'smd_verification', 'smd_smd', 'smd_smd_verification'])
+                smd_done_by_field = find_field_name(['smd_done_by', 'smd_smd_done_by', 'smd_done_by_'])
+                
+                # Update the entry
+                update_data = {
+                    smd_available_quantity_field: str(new_smd_available_quantity)
+                }
+                
+                # Add smd boolean field (set to True - Python boolean, matching kit_verification pattern)
+                if smd_field:
+                    update_data[smd_field] = True  # Python boolean value
+                
+                # Add smd_done_by field
+                if smd_done_by_field:
+                    update_data[smd_done_by_field] = str(smd_done_by)
+                
+                # Add next section's available_quantity if found
+                if next_section_available_quantity_field:
+                    # Get current value and add forwarding quantity to it
+                    current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                    try:
+                        if isinstance(current_next_section_quantity, str):
+                            current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                        elif current_next_section_quantity is None:
+                            current_next_section_quantity = 0
+                        else:
+                            current_next_section_quantity = int(current_next_section_quantity)
+                    except (ValueError, TypeError):
+                        current_next_section_quantity = 0
+                    
+                    new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                    update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'SMD data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_smd_available_quantity': current_smd_available_quantity,
+                    'new_smd_available_quantity': new_smd_available_quantity,
+                    'smd_done_by': smd_done_by,
+                    'smd': True,  # SMD is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SMDQCDataFetchView(APIView):
+    """
+    GET API endpoint for fetching SMD QC data by SO No.
+    Returns kit_no, smd_available_quantity, and smd_qc_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch SMD QC data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - smd_available_quantity: SMD available quantity
+        - smd_qc_available_quantity: SMD QC available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find smd_available_quantity field
+                smd_available_quantity_field = find_field_name([
+                    'smd_available_quantity',
+                    'smd_availablequantity',
+                    'smd_available_quantity_',
+                ])
+                
+                # Find smd_qc_available_quantity field
+                smd_qc_available_quantity_field = find_field_name([
+                    'smd_qc_available_quantity',
+                    'smd_qc_availablequantity',
+                    'smd_qc_available_quantity_',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if smd_available_quantity_field:
+                    smd_available_quantity_value = getattr(entry, smd_available_quantity_field, None)
+                    response_data['smd_available_quantity'] = str(smd_available_quantity_value) if smd_available_quantity_value is not None else ''
+                else:
+                    response_data['smd_available_quantity'] = ''
+                
+                if smd_qc_available_quantity_field:
+                    smd_qc_available_quantity_value = getattr(entry, smd_qc_available_quantity_field, None)
+                    response_data['smd_qc_available_quantity'] = str(smd_qc_available_quantity_value) if smd_qc_available_quantity_value is not None else ''
+                else:
+                    response_data['smd_qc_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SMDQCUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating SMD QC data with forwarding quantity.
+    Updates smd_qc_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update SMD QC data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - smd_qc_done_by: Person who did the SMD QC (required)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates smd_qc_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import SMDQCUpdateSerializer
+            serializer = SMDQCUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            smd_qc_done_by = validated_data['smd_qc_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find smd_qc_available_quantity field
+                smd_qc_available_quantity_field = find_field_name([
+                    'smd_qc_available_quantity',
+                    'smd_qc_availablequantity',
+                    'smd_qc_available_quantity_',
+                ])
+                
+                if not smd_qc_available_quantity_field:
+                    return Response(
+                        {'error': 'SMD QC available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current smd_qc_available_quantity
+                current_smd_qc_available_quantity = getattr(entry, smd_qc_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_smd_qc_available_quantity, str):
+                        current_smd_qc_available_quantity = int(current_smd_qc_available_quantity) if current_smd_qc_available_quantity else 0
+                    elif current_smd_qc_available_quantity is None:
+                        current_smd_qc_available_quantity = 0
+                    else:
+                        current_smd_qc_available_quantity = int(current_smd_qc_available_quantity)
+                except (ValueError, TypeError):
+                    current_smd_qc_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_smd_qc_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_smd_qc_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new smd_qc_available_quantity
+                new_smd_qc_available_quantity = current_smd_qc_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find next section after SMD QC
+                next_section_name = None
+                next_section_available_quantity_field = None
+                
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    
+                    # Find the index of 'smd_qc' in enabled sections
+                    smd_qc_index = None
+                    for i, section in enumerate(enabled_sections):
+                        if section == 'smd_qc':
+                            smd_qc_index = i
+                            break
+                    
+                    # Find the next enabled section after smd_qc
+                    if smd_qc_index is not None and smd_qc_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[smd_qc_index + 1]
+                        
+                        # Check if next section is in pre_qc_sections (same in_process table)
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        
+                        if next_section_name in pre_qc_sections:
+                            # Next section is also in in_process table, so we can update its field in the same entry
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            
+                            # Try exact match first
+                            for field_name in possible_field_names:
+                                if field_name in all_field_names:
+                                    next_section_available_quantity_field = field_name
+                                    break
+                            
+                            # If not found, try partial match (case-insensitive)
+                            if not next_section_available_quantity_field:
+                                for field_name in all_field_names:
+                                    field_lower = field_name.lower()
+                                    if 'available' in field_lower and 'quantity' in field_lower and next_section_name.lower() in field_lower:
+                                        next_section_available_quantity_field = field_name
+                                        break
+                except Exception as next_section_error:
+                    import sys
+                    import traceback
+                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                
+                # Find smd_qc and smd_qc_done_by fields
+                smd_qc_field = find_field_name(['smd_qc', 'smd_qc_verification', 'smd_qc_smd_qc', 'smd_qc_smd_qc_verification'])
+                smd_qc_done_by_field = find_field_name(['smd_qc_done_by', 'smd_qc_smd_qc_done_by', 'smd_qc_done_by_'])
+                
+                # Update the entry
+                update_data = {
+                    smd_qc_available_quantity_field: str(new_smd_qc_available_quantity)
+                }
+                
+                # Add smd_qc boolean field (set to True - Python boolean, matching kit_verification pattern)
+                if smd_qc_field:
+                    update_data[smd_qc_field] = True  # Python boolean value
+                
+                # Add smd_qc_done_by field
+                if smd_qc_done_by_field:
+                    update_data[smd_qc_done_by_field] = str(smd_qc_done_by)
+                
+                # Add next section's available_quantity if found
+                if next_section_available_quantity_field:
+                    # Get current value and add forwarding quantity to it
+                    current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                    try:
+                        if isinstance(current_next_section_quantity, str):
+                            current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                        elif current_next_section_quantity is None:
+                            current_next_section_quantity = 0
+                        else:
+                            current_next_section_quantity = int(current_next_section_quantity)
+                    except (ValueError, TypeError):
+                        current_next_section_quantity = 0
+                    
+                    new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                    update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'SMD QC data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_smd_qc_available_quantity': current_smd_qc_available_quantity,
+                    'new_smd_qc_available_quantity': new_smd_qc_available_quantity,
+                    'smd_qc_done_by': smd_qc_done_by,
+                    'smd_qc': True,  # SMD QC is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PreFormingQCDataFetchView(APIView):
+    """
+    GET API endpoint for fetching Pre-Forming QC data by SO No.
+    Returns kit_no and pre_forming_qc_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch Pre-Forming QC data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - pre_forming_qc_available_quantity: Pre-Forming QC available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find pre_forming_qc_available_quantity field
+                pre_forming_qc_available_quantity_field = find_field_name([
+                    'pre_forming_qc_available_quantity',
+                    'pre_forming_qc_availablequantity',
+                    'pre_forming_qc_available_quantity_',
+                    'preforming_qc_available_quantity',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if pre_forming_qc_available_quantity_field:
+                    pre_forming_qc_available_quantity_value = getattr(entry, pre_forming_qc_available_quantity_field, None)
+                    response_data['pre_forming_qc_available_quantity'] = str(pre_forming_qc_available_quantity_value) if pre_forming_qc_available_quantity_value is not None else ''
+                else:
+                    response_data['pre_forming_qc_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PreFormingQCUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating Pre-Forming QC data with forwarding quantity.
+    Updates pre_forming_qc_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update Pre-Forming QC data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - pre_forming_qc_done_by: Person who did the Pre-Forming QC (required)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates pre_forming_qc_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import PreFormingQCUpdateSerializer
+            serializer = PreFormingQCUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            pre_forming_qc_done_by = validated_data['pre_forming_qc_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find pre_forming_qc_available_quantity field
+                pre_forming_qc_available_quantity_field = find_field_name([
+                    'pre_forming_qc_available_quantity',
+                    'pre_forming_qc_availablequantity',
+                    'pre_forming_qc_available_quantity_',
+                    'preforming_qc_available_quantity',
+                ])
+                
+                if not pre_forming_qc_available_quantity_field:
+                    return Response(
+                        {'error': 'Pre-Forming QC available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current pre_forming_qc_available_quantity
+                current_pre_forming_qc_available_quantity = getattr(entry, pre_forming_qc_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_pre_forming_qc_available_quantity, str):
+                        current_pre_forming_qc_available_quantity = int(current_pre_forming_qc_available_quantity) if current_pre_forming_qc_available_quantity else 0
+                    elif current_pre_forming_qc_available_quantity is None:
+                        current_pre_forming_qc_available_quantity = 0
+                    else:
+                        current_pre_forming_qc_available_quantity = int(current_pre_forming_qc_available_quantity)
+                except (ValueError, TypeError):
+                    current_pre_forming_qc_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_pre_forming_qc_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_pre_forming_qc_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new pre_forming_qc_available_quantity
+                new_pre_forming_qc_available_quantity = current_pre_forming_qc_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find next section after Pre-Forming QC
+                next_section_name = None
+                next_section_available_quantity_field = None
+                
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    
+                    # Find the index of 'pre_forming_qc' in enabled sections
+                    pre_forming_qc_index = None
+                    for i, section in enumerate(enabled_sections):
+                        if section == 'pre_forming_qc':
+                            pre_forming_qc_index = i
+                            break
+                    
+                    # Find the next enabled section after pre_forming_qc
+                    if pre_forming_qc_index is not None and pre_forming_qc_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[pre_forming_qc_index + 1]
+                        
+                        # Check if next section is in pre_qc_sections (same in_process table)
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        
+                        if next_section_name in pre_qc_sections:
+                            # Next section is also in in_process table, so we can update its field in the same entry
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            
+                            # Try exact match first
+                            for field_name in possible_field_names:
+                                if field_name in all_field_names:
+                                    next_section_available_quantity_field = field_name
+                                    break
+                            
+                            # If not found, try partial match (case-insensitive)
+                            if not next_section_available_quantity_field:
+                                for field_name in all_field_names:
+                                    field_lower = field_name.lower()
+                                    if 'available' in field_lower and 'quantity' in field_lower and next_section_name.lower() in field_lower:
+                                        next_section_available_quantity_field = field_name
+                                        break
+                except Exception as next_section_error:
+                    import sys
+                    import traceback
+                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                
+                # Find pre_forming_qc and pre_forming_qc_done_by fields
+                pre_forming_qc_field = find_field_name(['pre_forming_qc', 'pre_forming_qc_verification', 'pre_forming_qc_pre_forming_qc', 'pre_forming_qc_pre_forming_qc_verification', 'preforming_qc'])
+                pre_forming_qc_done_by_field = find_field_name(['pre_forming_qc_done_by', 'pre_forming_qc_pre_forming_qc_done_by', 'pre_forming_qc_done_by_', 'preforming_qc_done_by'])
+                
+                # Update the entry
+                update_data = {
+                    pre_forming_qc_available_quantity_field: str(new_pre_forming_qc_available_quantity)
+                }
+                
+                # Add pre_forming_qc boolean field (set to True - Python boolean, matching kit_verification pattern)
+                if pre_forming_qc_field:
+                    update_data[pre_forming_qc_field] = True  # Python boolean value
+                
+                # Add pre_forming_qc_done_by field
+                if pre_forming_qc_done_by_field:
+                    update_data[pre_forming_qc_done_by_field] = str(pre_forming_qc_done_by)
+                
+                # Add next section's available_quantity if found
+                if next_section_available_quantity_field:
+                    # Get current value and add forwarding quantity to it
+                    current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                    try:
+                        if isinstance(current_next_section_quantity, str):
+                            current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                        elif current_next_section_quantity is None:
+                            current_next_section_quantity = 0
+                        else:
+                            current_next_section_quantity = int(current_next_section_quantity)
+                    except (ValueError, TypeError):
+                        current_next_section_quantity = 0
+                    
+                    new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                    update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Pre-Forming QC data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_pre_forming_qc_available_quantity': current_pre_forming_qc_available_quantity,
+                    'new_pre_forming_qc_available_quantity': new_pre_forming_qc_available_quantity,
+                    'pre_forming_qc_done_by': pre_forming_qc_done_by,
+                    'pre_forming_qc': True,  # Pre-Forming QC is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeadedQCDataFetchView(APIView):
+    """
+    GET API endpoint for fetching Leaded QC data by SO No.
+    Returns kit_no and leaded_qc_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch Leaded QC data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - leaded_qc_available_quantity: Leaded QC available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find leaded_qc_available_quantity field
+                leaded_qc_available_quantity_field = find_field_name([
+                    'leaded_qc_available_quantity',
+                    'leaded_qc_availablequantity',
+                    'leaded_qc_available_quantity_',
+                    'leadedqc_available_quantity',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if leaded_qc_available_quantity_field:
+                    leaded_qc_available_quantity_value = getattr(entry, leaded_qc_available_quantity_field, None)
+                    response_data['leaded_qc_available_quantity'] = str(leaded_qc_available_quantity_value) if leaded_qc_available_quantity_value is not None else ''
+                else:
+                    response_data['leaded_qc_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeadedQCUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating Leaded QC data with forwarding quantity.
+    Updates leaded_qc_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update Leaded QC data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - leaded_qc_done_by: Person who did the Leaded QC (required)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates leaded_qc_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import LeadedQCUpdateSerializer
+            serializer = LeadedQCUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            leaded_qc_done_by = validated_data['leaded_qc_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find leaded_qc_available_quantity field
+                leaded_qc_available_quantity_field = find_field_name([
+                    'leaded_qc_available_quantity',
+                    'leaded_qc_availablequantity',
+                    'leaded_qc_available_quantity_',
+                    'leadedqc_available_quantity',
+                ])
+                
+                if not leaded_qc_available_quantity_field:
+                    return Response(
+                        {'error': 'Leaded QC available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current leaded_qc_available_quantity
+                current_leaded_qc_available_quantity = getattr(entry, leaded_qc_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_leaded_qc_available_quantity, str):
+                        current_leaded_qc_available_quantity = int(current_leaded_qc_available_quantity) if current_leaded_qc_available_quantity else 0
+                    elif current_leaded_qc_available_quantity is None:
+                        current_leaded_qc_available_quantity = 0
+                    else:
+                        current_leaded_qc_available_quantity = int(current_leaded_qc_available_quantity)
+                except (ValueError, TypeError):
+                    current_leaded_qc_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_leaded_qc_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_leaded_qc_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new leaded_qc_available_quantity
+                new_leaded_qc_available_quantity = current_leaded_qc_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find next section after Leaded QC
+                next_section_name = None
+                next_section_available_quantity_field = None
+                
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    
+                    # Find the index of 'leaded_qc' in enabled sections
+                    leaded_qc_index = None
+                    for i, section in enumerate(enabled_sections):
+                        if section == 'leaded_qc':
+                            leaded_qc_index = i
+                            break
+                    
+                    # Find the next enabled section after leaded_qc
+                    if leaded_qc_index is not None and leaded_qc_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[leaded_qc_index + 1]
+                        
+                        # Check if next section is in pre_qc_sections (same in_process table)
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        
+                        if next_section_name in pre_qc_sections:
+                            # Next section is also in in_process table, so we can update its field in the same entry
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            
+                            # Try exact match first
+                            for field_name in possible_field_names:
+                                if field_name in all_field_names:
+                                    next_section_available_quantity_field = field_name
+                                    break
+                            
+                            # If not found, try partial match (case-insensitive)
+                            if not next_section_available_quantity_field:
+                                for field_name in all_field_names:
+                                    field_lower = field_name.lower()
+                                    if 'available' in field_lower and 'quantity' in field_lower and next_section_name.lower() in field_lower:
+                                        next_section_available_quantity_field = field_name
+                                        break
+                except Exception as next_section_error:
+                    import sys
+                    import traceback
+                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                
+                # Find leaded_qc and leaded_qc_done_by fields
+                leaded_qc_field = find_field_name(['leaded_qc', 'leaded_qc_verification', 'leaded_qc_leaded_qc', 'leaded_qc_leaded_qc_verification', 'leadedqc'])
+                leaded_qc_done_by_field = find_field_name(['leaded_qc_done_by', 'leaded_qc_leaded_qc_done_by', 'leaded_qc_done_by_', 'leadedqc_done_by'])
+                
+                # Update the entry
+                update_data = {
+                    leaded_qc_available_quantity_field: str(new_leaded_qc_available_quantity)
+                }
+                
+                # Add leaded_qc boolean field (set to True - Python boolean, matching kit_verification pattern)
+                if leaded_qc_field:
+                    update_data[leaded_qc_field] = True  # Python boolean value
+                
+                # Add leaded_qc_done_by field
+                if leaded_qc_done_by_field:
+                    update_data[leaded_qc_done_by_field] = str(leaded_qc_done_by)
+                
+                # Add next section's available_quantity if found
+                if next_section_available_quantity_field:
+                    # Get current value and add forwarding quantity to it
+                    current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                    try:
+                        if isinstance(current_next_section_quantity, str):
+                            current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                        elif current_next_section_quantity is None:
+                            current_next_section_quantity = 0
+                        else:
+                            current_next_section_quantity = int(current_next_section_quantity)
+                    except (ValueError, TypeError):
+                        current_next_section_quantity = 0
+                    
+                    new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                    update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Leaded QC data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_leaded_qc_available_quantity': current_leaded_qc_available_quantity,
+                    'new_leaded_qc_available_quantity': new_leaded_qc_available_quantity,
+                    'leaded_qc_done_by': leaded_qc_done_by,
+                    'leaded_qc': True,  # Leaded QC is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProdQCDataFetchView(APIView):
+    """
+    GET API endpoint for fetching Prod QC data by SO No.
+    Returns kit_no and prod_qc_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch Prod QC data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - prod_qc_available_quantity: Prod QC available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find prod_qc_available_quantity field
+                prod_qc_available_quantity_field = find_field_name([
+                    'prod_qc_available_quantity',
+                    'prod_qc_availablequantity',
+                    'prod_qc_available_quantity_',
+                    'prodqc_available_quantity',
+                    'production_qc_available_quantity',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if prod_qc_available_quantity_field:
+                    prod_qc_available_quantity_value = getattr(entry, prod_qc_available_quantity_field, None)
+                    response_data['prod_qc_available_quantity'] = str(prod_qc_available_quantity_value) if prod_qc_available_quantity_value is not None else ''
+                else:
+                    response_data['prod_qc_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProdQCUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating Prod QC data with forwarding quantity.
+    Updates prod_qc_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update Prod QC data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - prodqc_done_by: Person who did the Prod QC (required)
+        - production_qc: Boolean flag indicating Prod QC is done (optional, defaults to True)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates prod_qc_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import ProdQCUpdateSerializer
+            serializer = ProdQCUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            prodqc_done_by = validated_data['prodqc_done_by']
+            production_qc = validated_data.get('production_qc', True)  # Default to True if not provided
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find prod_qc_available_quantity field
+                prod_qc_available_quantity_field = find_field_name([
+                    'prod_qc_available_quantity',
+                    'prod_qc_availablequantity',
+                    'prod_qc_available_quantity_',
+                    'prodqc_available_quantity',
+                    'production_qc_available_quantity',
+                ])
+                
+                if not prod_qc_available_quantity_field:
+                    return Response(
+                        {'error': 'Prod QC available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Verify the field is not a boolean field
+                try:
+                    field_obj = in_process_model._meta.get_field(prod_qc_available_quantity_field)
+                    from django.db import models
+                    if isinstance(field_obj, models.BooleanField):
+                        return Response(
+                            {'error': f'Field {prod_qc_available_quantity_field} is a boolean field, not a quantity field'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except:
+                    pass  # If we can't verify, continue anyway
+                
+                # Get current prod_qc_available_quantity
+                current_prod_qc_available_quantity = getattr(entry, prod_qc_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_prod_qc_available_quantity, str):
+                        current_prod_qc_available_quantity = int(current_prod_qc_available_quantity) if current_prod_qc_available_quantity else 0
+                    elif current_prod_qc_available_quantity is None:
+                        current_prod_qc_available_quantity = 0
+                    else:
+                        current_prod_qc_available_quantity = int(current_prod_qc_available_quantity)
+                except (ValueError, TypeError):
+                    current_prod_qc_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_prod_qc_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_prod_qc_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new prod_qc_available_quantity
+                new_prod_qc_available_quantity = current_prod_qc_available_quantity - forwarding_quantity
+                
+                # Debug: Log available fields
+                import sys
+                print(f"DEBUG: Available fields for {part_no}: {sorted(all_field_names)}", file=sys.stderr)
+                
+                # Find production_qc and prodqc_done_by fields first (before readyfor_production to avoid conflicts)
+                production_qc_field = find_field_name(['production_qc', 'production_qc_verification', 'prod_qc', 'prod_qc_verification', 'prod_qc_prod_qc', 'prod_qc_prod_qc_verification', 'prodqc'])
+                prodqc_done_by_field = find_field_name(['prodqc_done_by', 'prod_qc_done_by', 'prod_qc_prod_qc_done_by', 'prod_qc_done_by_', 'production_qc_done_by'])
+                
+                print(f"DEBUG: Found fields - production_qc_field: {production_qc_field}, prodqc_done_by_field: {prodqc_done_by_field}", file=sys.stderr)
+                
+                # Find readyfor_production field to add forwarding quantity
+                # Use a more precise search that excludes boolean fields
+                readyfor_production_field = None
+                possible_readyfor_production_names = [
+                    'readyfor_production',
+                    'ready_for_production',
+                    'readyforproduction',
+                    'ready_forproduction',
+                    'readyfor_production_quantity',
+                    'ready_for_production_quantity',
+                ]
+                
+                # First, try exact matches and verify field type
+                for name in possible_readyfor_production_names:
+                    if name in all_field_names:
+                        try:
+                            field_obj = in_process_model._meta.get_field(name)
+                            from django.db import models
+                            # Only accept if it's NOT a BooleanField
+                            if not isinstance(field_obj, models.BooleanField):
+                                readyfor_production_field = name
+                                break
+                        except:
+                            pass
+                
+                # If no exact match, try partial matching but verify field type
+                if not readyfor_production_field:
+                    for name in possible_readyfor_production_names:
+                        name_lower = name.lower()
+                        for field_name in all_field_names:
+                            field_lower = field_name.lower()
+                            # Check if field name contains our search term
+                            if (name_lower.replace('_', '') in field_lower.replace('_', '') or 
+                                field_lower.replace('_', '') in name_lower.replace('_', '')):
+                                try:
+                                    field_obj = in_process_model._meta.get_field(field_name)
+                                    from django.db import models
+                                    # Only accept if it's NOT a BooleanField and NOT already matched as production_qc
+                                    if (not isinstance(field_obj, models.BooleanField) and 
+                                        field_name != production_qc_field):
+                                        readyfor_production_field = field_name
+                                        break
+                                except:
+                                    pass
+                        if readyfor_production_field:
+                            break
+                
+                # Update the entry
+                update_data = {
+                    prod_qc_available_quantity_field: str(new_prod_qc_available_quantity)
+                }
+                
+                # Set production_qc boolean field (use value from payload or default to True)
+                # Verify the field is actually a boolean field before setting it
+                if production_qc_field:
+                    try:
+                        field_obj = in_process_model._meta.get_field(production_qc_field)
+                        # Only set if it's a BooleanField
+                        from django.db import models
+                        if isinstance(field_obj, models.BooleanField):
+                            update_data[production_qc_field] = bool(production_qc)  # Use value from payload, ensure it's a Python boolean
+                            print(f"DEBUG: Setting {production_qc_field} = {bool(production_qc)}", file=sys.stderr)
+                        else:
+                            print(f"DEBUG: Field {production_qc_field} is not a BooleanField (type: {type(field_obj)})", file=sys.stderr)
+                    except Exception as e:
+                        # If we can't verify the field type, log and skip setting it
+                        print(f"DEBUG: Error verifying {production_qc_field}: {str(e)}", file=sys.stderr)
+                        pass
+                else:
+                    print(f"DEBUG: production_qc_field not found", file=sys.stderr)
+                
+                # Add prodqc_done_by field
+                if prodqc_done_by_field:
+                    update_data[prodqc_done_by_field] = str(prodqc_done_by)
+                    print(f"DEBUG: Setting {prodqc_done_by_field} = {str(prodqc_done_by)}", file=sys.stderr)
+                else:
+                    print(f"DEBUG: prodqc_done_by_field not found", file=sys.stderr)
+                
+                print(f"DEBUG: update_data before verification: {update_data}", file=sys.stderr)
+                
+                # Add forwarding quantity to readyfor_production field if found
+                # Note: Field type verification already done during field finding
+                if readyfor_production_field:
+                    # Double-check field type before setting (safety check)
+                    try:
+                        field_obj = in_process_model._meta.get_field(readyfor_production_field)
+                        from django.db import models
+                        # Skip if it's a BooleanField - we don't want to set numeric values to boolean fields
+                        if isinstance(field_obj, models.BooleanField):
+                            # This shouldn't happen if field finding worked correctly, but log it
+                            import sys
+                            print(f"Warning: readyfor_production_field '{readyfor_production_field}' is a BooleanField, skipping update", file=sys.stderr)
+                            readyfor_production_field = None
+                        else:
+                            # Get current value and add forwarding quantity to it
+                            current_readyfor_production = getattr(entry, readyfor_production_field, None)
+                            try:
+                                if isinstance(current_readyfor_production, str):
+                                    current_readyfor_production = int(current_readyfor_production) if current_readyfor_production else 0
+                                elif current_readyfor_production is None:
+                                    current_readyfor_production = 0
+                                else:
+                                    current_readyfor_production = int(current_readyfor_production)
+                            except (ValueError, TypeError):
+                                current_readyfor_production = 0
+                            
+                            new_readyfor_production = current_readyfor_production + forwarding_quantity
+                            update_data[readyfor_production_field] = str(new_readyfor_production)
+                    except Exception as e:
+                        # If we can't verify the field, skip it to avoid errors
+                        import sys
+                        print(f"Warning: Could not verify readyfor_production_field '{readyfor_production_field}': {str(e)}", file=sys.stderr)
+                        readyfor_production_field = None
+                
+                # Before updating, verify all fields in update_data are correct types
+                from django.db import models
+                verified_update_data = {}
+                for field_name, value in update_data.items():
+                    try:
+                        field_obj = in_process_model._meta.get_field(field_name)
+                        # If it's a BooleanField, ensure value is boolean
+                        if isinstance(field_obj, models.BooleanField):
+                            if not isinstance(value, bool):
+                                # Try to convert string "true"/"false" to boolean
+                                if isinstance(value, str):
+                                    if value.lower() in ('true', '1', 'yes'):
+                                        verified_update_data[field_name] = True
+                                    elif value.lower() in ('false', '0', 'no', ''):
+                                        verified_update_data[field_name] = False
+                                    else:
+                                        # Invalid value for boolean field, skip it
+                                        print(f"Error: Attempting to set boolean field '{field_name}' with non-boolean value: {value} (type: {type(value)})", file=sys.stderr)
+                                        continue
+                                else:
+                                    verified_update_data[field_name] = bool(value)
+                            else:
+                                verified_update_data[field_name] = value
+                            print(f"DEBUG: Verified boolean field '{field_name}' = {verified_update_data[field_name]}", file=sys.stderr)
+                        else:
+                            # Not a boolean field, use value as-is
+                            verified_update_data[field_name] = value
+                            print(f"DEBUG: Verified non-boolean field '{field_name}' = {value}", file=sys.stderr)
+                    except Exception as e:
+                        # Field doesn't exist or can't be verified, log warning but skip it
+                        print(f"Warning: Could not verify field '{field_name}': {str(e)}", file=sys.stderr)
+                        # Skip this field to avoid errors
+                        continue
+                
+                print(f"DEBUG: verified_update_data: {verified_update_data}", file=sys.stderr)
+                
+                # Update the entry with verified data
+                for field_name, value in verified_update_data.items():
+                    try:
+                        setattr(entry, field_name, value)
+                        print(f"DEBUG: Set {field_name} = {value} on entry", file=sys.stderr)
+                    except Exception as e:
+                        print(f"Error: Failed to set {field_name} = {value}: {str(e)}", file=sys.stderr)
+                
+                try:
+                    entry.save()
+                    print(f"DEBUG: Entry saved successfully", file=sys.stderr)
+                except Exception as e:
+                    print(f"Error: Failed to save entry: {str(e)}", file=sys.stderr)
+                    import traceback
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                    raise
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Prod QC data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_prod_qc_available_quantity': current_prod_qc_available_quantity,
+                    'new_prod_qc_available_quantity': new_prod_qc_available_quantity,
+                    'prodqc_done_by': prodqc_done_by,
+                    'production_qc': True,  # Prod QC is marked as done
+                    'updated_fields': list(verified_update_data.keys())
+                }
+                
+                if readyfor_production_field:
+                    current_readyfor_production = getattr(entry, readyfor_production_field, None)
+                    try:
+                        if isinstance(current_readyfor_production, str):
+                            current_readyfor_production = int(current_readyfor_production) if current_readyfor_production else 0
+                        elif current_readyfor_production is None:
+                            current_readyfor_production = 0
+                        else:
+                            current_readyfor_production = int(current_readyfor_production)
+                    except (ValueError, TypeError):
+                        current_readyfor_production = 0
+                    
+                    response_data['readyfor_production'] = {
+                        'field_name': readyfor_production_field,
+                        'previous_quantity': current_readyfor_production,
+                        'quantity_added': forwarding_quantity,
+                        'new_quantity': current_readyfor_production + forwarding_quantity
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AccessoriesPackingDataFetchView(APIView):
+    """
+    GET API endpoint for fetching Accessories Packing data by SO No.
+    Returns kit_no and accessories_packing_available_quantity for a given SO No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch Accessories Packing data by SO No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        
+        Returns:
+        - kit_no: Kit number
+        - accessories_packing_available_quantity: Accessories Packing available quantity
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            so_no = request.query_params.get('so_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not so_no:
+                return Response(
+                    {'error': 'so_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find kit_no field
+                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                
+                # Find accessories_packing_available_quantity field
+                accessories_packing_available_quantity_field = find_field_name([
+                    'accessories_packing_available_quantity',
+                    'accessories_packing_availablequantity',
+                    'accessories_packing_available_quantity_',
+                    'accessoriespacking_available_quantity',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if kit_no_field:
+                    kit_no_value = getattr(entry, kit_no_field, None)
+                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                else:
+                    response_data['kit_no'] = ''
+                
+                if accessories_packing_available_quantity_field:
+                    accessories_packing_available_quantity_value = getattr(entry, accessories_packing_available_quantity_field, None)
+                    response_data['accessories_packing_available_quantity'] = str(accessories_packing_available_quantity_value) if accessories_packing_available_quantity_value is not None else ''
+                else:
+                    response_data['accessories_packing_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AccessoriesPackingUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating Accessories Packing data with forwarding quantity.
+    Updates accessories_packing_available_quantity and next section's available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update Accessories Packing data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - so_no: Sales Order Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - accessories_packing_done_by: Person who did the Accessories Packing (required)
+        
+        Logic:
+        - Finds entry by so_no
+        - Updates accessories_packing_available_quantity = current - forwarding_quantity
+        - Updates next section's available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import AccessoriesPackingUpdateSerializer
+            serializer = AccessoriesPackingUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            so_no = validated_data['so_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            accessories_packing_done_by = validated_data['accessories_packing_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by SO No
+            try:
+                filter_dict = {so_no_field: so_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for SO No: {so_no}',
+                            'message': 'No entry found for this Sales Order Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find accessories_packing_available_quantity field
+                accessories_packing_available_quantity_field = find_field_name([
+                    'accessories_packing_available_quantity',
+                    'accessories_packing_availablequantity',
+                    'accessories_packing_available_quantity_',
+                    'accessoriespacking_available_quantity',
+                ])
+                
+                if not accessories_packing_available_quantity_field:
+                    return Response(
+                        {'error': 'Accessories Packing available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Verify the field is not a boolean field
+                try:
+                    field_obj = in_process_model._meta.get_field(accessories_packing_available_quantity_field)
+                    from django.db import models
+                    if isinstance(field_obj, models.BooleanField):
+                        return Response(
+                            {'error': f'Field {accessories_packing_available_quantity_field} is a boolean field, not a quantity field'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except:
+                    pass  # If we can't verify, continue anyway
+                
+                # Get current accessories_packing_available_quantity
+                current_accessories_packing_available_quantity = getattr(entry, accessories_packing_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_accessories_packing_available_quantity, str):
+                        current_accessories_packing_available_quantity = int(current_accessories_packing_available_quantity) if current_accessories_packing_available_quantity else 0
+                    elif current_accessories_packing_available_quantity is None:
+                        current_accessories_packing_available_quantity = 0
+                    else:
+                        current_accessories_packing_available_quantity = int(current_accessories_packing_available_quantity)
+                except (ValueError, TypeError):
+                    current_accessories_packing_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_accessories_packing_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_accessories_packing_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new accessories_packing_available_quantity
+                new_accessories_packing_available_quantity = current_accessories_packing_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find next section after Accessories Packing
+                next_section_name = None
+                next_section_available_quantity_field = None
+                
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    
+                    # Find the index of 'accessories_packing' in enabled sections
+                    accessories_packing_index = None
+                    for i, section in enumerate(enabled_sections):
+                        if section == 'accessories_packing':
+                            accessories_packing_index = i
+                            break
+                    
+                    # Find the next enabled section after accessories_packing
+                    if accessories_packing_index is not None and accessories_packing_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[accessories_packing_index + 1]
+                        
+                        # Check if next section is in pre_qc_sections (same in_process table)
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        
+                        if next_section_name in pre_qc_sections:
+                            # Next section is also in in_process table, so we can update its field in the same entry
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            
+                            # Try exact match first
+                            for field_name in possible_field_names:
+                                if field_name in all_field_names:
+                                    next_section_available_quantity_field = field_name
+                                    break
+                            
+                            # If not found, try partial match (case-insensitive)
+                            if not next_section_available_quantity_field:
+                                for field_name in all_field_names:
+                                    field_lower = field_name.lower()
+                                    if 'available' in field_lower and 'quantity' in field_lower and next_section_name.lower() in field_lower:
+                                        next_section_available_quantity_field = field_name
+                                        break
+                except Exception as next_section_error:
+                    import sys
+                    import traceback
+                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
+                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
+                
+                # Find accessories_packing and accessories_packing_done_by fields
+                accessories_packing_field = find_field_name(['accessories_packing', 'accessories_packing_verification', 'accessories_packing_accessories_packing', 'accessories_packing_accessories_packing_verification', 'accessoriespacking'])
+                accessories_packing_done_by_field = find_field_name(['accessories_packing_done_by', 'accessories_packing_accessories_packing_done_by', 'accessories_packing_done_by_', 'accessoriespacking_done_by'])
+                
+                # Update the entry
+                update_data = {
+                    accessories_packing_available_quantity_field: str(new_accessories_packing_available_quantity)
+                }
+                
+                # Add accessories_packing boolean field (set to True - Python boolean, matching kit_verification pattern)
+                # Verify the field is actually a boolean field before setting it
+                if accessories_packing_field:
+                    try:
+                        field_obj = in_process_model._meta.get_field(accessories_packing_field)
+                        # Only set if it's a BooleanField
+                        from django.db import models
+                        if isinstance(field_obj, models.BooleanField):
+                            update_data[accessories_packing_field] = True  # Python boolean value
+                    except:
+                        # If we can't verify the field type, skip setting it
+                        pass
+                
+                # Add accessories_packing_done_by field
+                if accessories_packing_done_by_field:
+                    update_data[accessories_packing_done_by_field] = str(accessories_packing_done_by)
+                
+                # Add next section's available_quantity if found
+                if next_section_available_quantity_field:
+                    # Verify the field is not a boolean field before setting numeric value
+                    try:
+                        field_obj = in_process_model._meta.get_field(next_section_available_quantity_field)
+                        from django.db import models
+                        # Skip if it's a BooleanField - we don't want to set numeric values to boolean fields
+                        if isinstance(field_obj, models.BooleanField):
+                            next_section_available_quantity_field = None
+                        else:
+                            # Get current value and add forwarding quantity to it
+                            current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                            try:
+                                if isinstance(current_next_section_quantity, str):
+                                    current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                                elif current_next_section_quantity is None:
+                                    current_next_section_quantity = 0
+                                else:
+                                    current_next_section_quantity = int(current_next_section_quantity)
+                            except (ValueError, TypeError):
+                                current_next_section_quantity = 0
+                            
+                            new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                            update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                    except:
+                        # If we can't verify the field, try to set it anyway (fallback)
+                        current_next_section_quantity = getattr(entry, next_section_available_quantity_field, None)
+                        try:
+                            if isinstance(current_next_section_quantity, str):
+                                current_next_section_quantity = int(current_next_section_quantity) if current_next_section_quantity else 0
+                            elif current_next_section_quantity is None:
+                                current_next_section_quantity = 0
+                            else:
+                                current_next_section_quantity = int(current_next_section_quantity)
+                        except (ValueError, TypeError):
+                            current_next_section_quantity = 0
+                        
+                        new_next_section_quantity = current_next_section_quantity + forwarding_quantity
+                        update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Accessories Packing data updated successfully for SO No: {so_no}',
+                    'part_no': part_no,
+                    'so_no': so_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_accessories_packing_available_quantity': current_accessories_packing_available_quantity,
+                    'new_accessories_packing_available_quantity': new_accessories_packing_available_quantity,
+                    'accessories_packing_done_by': accessories_packing_done_by,
+                    'accessories_packing': True,  # Accessories Packing is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

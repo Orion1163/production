@@ -3,7 +3,10 @@ from .views import (
     UserDetailView, UserListCreateView, UserLoginView, AdminLoginView, AdminLogoutView, 
     AdminProfileView, UserProfileView, ProductionProcedureCreateView, ModelPartListView,
     ProcedureDetailView, DashboardStatsView, DashboardChartDataView, UserModelListView,
-    UserModelPartsView, UserPartSectionsView, KitVerificationView
+    UserModelPartsView, UserPartSectionsView, KitVerificationView, SMDDataFetchView, SMDUpdateView,
+    SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
+    LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
+    AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView
 )
 
 urlpatterns = [
@@ -23,4 +26,16 @@ urlpatterns = [
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('dashboard/charts/', DashboardChartDataView.as_view(), name='dashboard-charts'),
     path('kit-verification/', KitVerificationView.as_view(), name='kit-verification'),
+    path('smd-data-fetch/', SMDDataFetchView.as_view(), name='smd-data-fetch'),
+    path('smd-update/', SMDUpdateView.as_view(), name='smd-update'),
+    path('smd-qc-data-fetch/', SMDQCDataFetchView.as_view(), name='smd-qc-data-fetch'),
+    path('smd-qc-update/', SMDQCUpdateView.as_view(), name='smd-qc-update'),
+    path('pre-forming-qc-data-fetch/', PreFormingQCDataFetchView.as_view(), name='pre-forming-qc-data-fetch'),
+    path('pre-forming-qc-update/', PreFormingQCUpdateView.as_view(), name='pre-forming-qc-update'),
+    path('leaded-qc-data-fetch/', LeadedQCDataFetchView.as_view(), name='leaded-qc-data-fetch'),
+    path('leaded-qc-update/', LeadedQCUpdateView.as_view(), name='leaded-qc-update'),
+    path('prod-qc-data-fetch/', ProdQCDataFetchView.as_view(), name='prod-qc-data-fetch'),
+    path('prod-qc-update/', ProdQCUpdateView.as_view(), name='prod-qc-update'),
+    path('accessories-packing-data-fetch/', AccessoriesPackingDataFetchView.as_view(), name='accessories-packing-data-fetch'),
+    path('accessories-packing-update/', AccessoriesPackingUpdateView.as_view(), name='accessories-packing-update'),
 ]
