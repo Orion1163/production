@@ -225,3 +225,10 @@ def user_logout(request):
     request.session.flush()
     
     return redirect('login')
+
+
+def handler404(request, exception):
+    """
+    Custom 404 error handler.
+    """
+    return render(request, '404.html', status=404)
