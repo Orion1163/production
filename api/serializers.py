@@ -351,3 +351,39 @@ class AccessoriesPackingUpdateSerializer(serializers.Serializer):
     so_no = serializers.CharField(required=True, help_text='Sales Order Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     accessories_packing_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Accessories Packing')
+
+
+class QCProcedureConfigSerializer(serializers.Serializer):
+    """Serializer for QC procedure configuration - extracts custom fields and checkboxes"""
+    part_no = serializers.CharField(read_only=True)
+    custom_fields = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom input fields for QC section'
+    )
+    custom_checkboxes = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom checkboxes for QC section'
+    )
+    enabled = serializers.BooleanField(read_only=True, help_text='Whether QC section is enabled')
+
+
+class QCSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting QC data to completion table"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    incoming_batch_no = serializers.CharField(required=False, allow_blank=True, help_text='Incoming Batch Number')
+    qc_done_by = serializers.CharField(required=False, allow_blank=True, help_text='Person who did the QC')
+    # Dynamic fields - these will be validated based on procedure_config
+    custom_fields = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom field values (field_name: value)'
+    )
+    custom_checkboxes = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom checkbox values (checkbox_name: true/false)'
+    )

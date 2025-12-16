@@ -221,7 +221,37 @@
         defaultFields.push(doneByFieldMap[section]);
       }
 
-      // Extract custom checkboxes only (no custom fields in the desired structure)
+      // Extract custom input fields from the regular panel (not accent)
+      // These are text input fields that users add via "Add text field" button
+      // This includes fields from regular panel cards and manual-only sections (e.g., testing section)
+      const customInputFields = [];
+      if (panel) {
+        const inputFieldList = panel.querySelectorAll('.panel-card:not(.accent) .input-list');
+        inputFieldList.forEach(list => {
+          list.querySelectorAll('.dynamic-field input[type="text"]').forEach(input => {
+            if (input.value.trim()) {
+              const fieldLabel = input.value.trim();
+              const fieldName = fieldLabel.toLowerCase().replace(/\s+/g, '_');
+              
+              // Store as object with name and label (similar to custom_checkboxes)
+              // This preserves the original label for display in the dynamic table
+              customInputFields.push({
+                name: fieldName,
+                label: fieldLabel
+              });
+              
+              // Also add to defaultFields array for backward compatibility
+              // The backend will use default_fields to create CharField fields
+              if (!defaultFields.includes(fieldName)) {
+                defaultFields.push(fieldName);
+                console.log(`📝 Added custom input field "${fieldLabel}" (${fieldName}) to section ${section}`);
+              }
+            }
+          });
+        });
+      }
+
+      // Extract custom checkboxes from the accent panel
       const customCheckboxes = [];
 
       // Automatically add section checkbox as a default field when section is enabled
@@ -280,6 +310,12 @@
       // Add default fields (just array of names)
       if (defaultFields.length > 0) {
         sectionConfig.default_fields = defaultFields;
+      }
+
+      // Add custom input fields if any (with name and label for proper display)
+      if (customInputFields.length > 0) {
+        sectionConfig.custom_fields = customInputFields;
+        console.log(`✅ Section ${section} has ${customInputFields.length} custom input fields:`, customInputFields);
       }
 
       // Add custom checkboxes if any

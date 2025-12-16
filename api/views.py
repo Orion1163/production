@@ -1,14 +1,14 @@
-from .models import User, Admin, ModelPart, PartProcedureDetail
+from .models import User, Admin, ModelPart, PartProcedureDetail, USIDCounter
 from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
     ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
     DashboardStatsSerializer, DashboardChartDataSerializer, UserModelListSerializer,
-    ModelPartSerializer, KitVerificationSerializer
+    ModelPartSerializer, KitVerificationSerializer, QCProcedureConfigSerializer
 )
 from django.db.models import Max, Count, Q
 from django.db import connection
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -1294,6 +1294,8 @@ class KitVerificationView(APIView):
             )
 
 
+
+
 class SMDDataFetchView(APIView):
     """
     GET API endpoint for fetching SMD data by SO No.
@@ -1474,6 +1476,8 @@ class SMDDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class SMDUpdateView(APIView):
@@ -1762,6 +1766,8 @@ class SMDUpdateView(APIView):
             )
 
 
+
+
 class SMDQCDataFetchView(APIView):
     """
     GET API endpoint for fetching SMD QC data by SO No.
@@ -1935,6 +1941,8 @@ class SMDQCDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class SMDQCUpdateView(APIView):
@@ -2224,6 +2232,8 @@ class SMDQCUpdateView(APIView):
             )
 
 
+
+
 class PreFormingQCDataFetchView(APIView):
     """
     GET API endpoint for fetching Pre-Forming QC data by SO No.
@@ -2384,6 +2394,8 @@ class PreFormingQCDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class PreFormingQCUpdateView(APIView):
@@ -2674,6 +2686,8 @@ class PreFormingQCUpdateView(APIView):
             )
 
 
+
+
 class LeadedQCDataFetchView(APIView):
     """
     GET API endpoint for fetching Leaded QC data by SO No.
@@ -2834,6 +2848,8 @@ class LeadedQCDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class LeadedQCUpdateView(APIView):
@@ -3124,6 +3140,8 @@ class LeadedQCUpdateView(APIView):
             )
 
 
+
+
 class ProdQCDataFetchView(APIView):
     """
     GET API endpoint for fetching Prod QC data by SO No.
@@ -3285,6 +3303,8 @@ class ProdQCDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class ProdQCUpdateView(APIView):
@@ -3689,6 +3709,8 @@ class ProdQCUpdateView(APIView):
             )
 
 
+
+
 class AccessoriesPackingDataFetchView(APIView):
     """
     GET API endpoint for fetching Accessories Packing data by SO No.
@@ -3849,6 +3871,8 @@ class AccessoriesPackingDataFetchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 
 
 class AccessoriesPackingUpdateView(APIView):
@@ -4178,6 +4202,446 @@ class AccessoriesPackingUpdateView(APIView):
                 {
                     'error': str(e),
                     'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class QCProcedureConfigView(APIView):
+    """
+    Get QC procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the QC section of procedure_config.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            # Get ModelPart by part_no
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure detail if it exists
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail exists, return empty config
+                return Response(
+                    {
+                        'part_no': part_no,
+                        'custom_fields': [],
+                        'custom_checkboxes': [],
+                        'enabled': False
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Extract QC section from procedure_config
+            qc_config = procedure_config.get('qc', {})
+            
+            # Get custom fields and checkboxes
+            custom_fields = qc_config.get('custom_fields', [])
+            custom_checkboxes = qc_config.get('custom_checkboxes', [])
+            enabled = qc_config.get('enabled', False)
+            
+            # Prepare response data
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            
+            # Serialize and return
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class USIDGenerateView(APIView):
+    """
+    Generate a unique USID for QC page.
+    Format: yymmdd-partno-counter (e.g., 241220-EICS145-0001)
+    Counter increments per day per part.
+    """
+    parser_classes = [JSONParser, FormParser]
+    
+    def get(self, request):
+        """
+        Generate a new USID for the given part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        
+        Returns:
+        - usid: Generated USID string
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get today's date
+            today = date.today()
+            
+            # Format date as yymmdd (e.g., 241220 for Dec 20, 2024)
+            date_str = today.strftime('%y%m%d')
+            
+            # Check if USIDCounter table exists by trying a simple query
+            try:
+                # Try to check if table exists by attempting a count query
+                from django.db import connection
+                table_name = USIDCounter._meta.db_table
+                with connection.cursor() as cursor:
+                    if connection.vendor == 'sqlite':
+                        cursor.execute(
+                            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                            [table_name]
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = %s",
+                            [table_name]
+                        )
+                    if not cursor.fetchone():
+                        return Response(
+                            {
+                                'error': 'Database table not found',
+                                'message': f'The {table_name} table does not exist. Please run migrations: python manage.py migrate',
+                                'table_name': table_name
+                            },
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+            except Exception as table_check_error:
+                # If we can't check, proceed anyway and let the actual query fail with a better error
+                pass
+            
+            # Get or create counter for today and this part
+            counter_obj, created = USIDCounter.objects.get_or_create(
+                part_no=part_no,
+                date=today,
+                defaults={'counter': 0}
+            )
+            
+            # Increment counter atomically
+            counter_obj.counter += 1
+            counter_obj.save()
+            
+            # Format counter as 4-digit zero-padded number (e.g., 0001, 0002, ...)
+            counter_str = f"{counter_obj.counter:04d}"
+            
+            # Generate USID: yymmdd-partno-counter
+            usid = f"{date_str}-{part_no}-{counter_str}"
+            
+            return Response(
+                {
+                    'usid': usid,
+                    'part_no': part_no,
+                    'date': today.isoformat(),
+                    'counter': counter_obj.counter
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except ModelPart.DoesNotExist:
+            return Response(
+                {'error': f'Part {part_no} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            # Log the error for debugging
+            import sys
+            print(f"USID Generation Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            
+            # Check if it's a database table error
+            error_msg = str(e).lower()
+            if 'no such table' in error_msg or 'relation' in error_msg and 'does not exist' in error_msg:
+                return Response(
+                    {
+                        'error': 'Database table not found',
+                        'message': 'The USIDCounter table does not exist. Please run migrations: python manage.py migrate',
+                        'details': error_details
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to generate USID',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class QCSubmitView(APIView):
+    """
+    POST API endpoint for submitting QC data to completion table.
+    Creates a new entry in the completion table with QC data.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def post(self, request):
+        """
+        Submit QC data to completion table.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - usid: Unique Serial ID (required)
+        - serial_number: Serial Number/Tag No. (required)
+        - incoming_batch_no: Incoming Batch Number (optional)
+        - qc_done_by: Person who did the QC (optional)
+        - custom_fields: Dictionary of custom field values (optional)
+        - custom_checkboxes: Dictionary of custom checkbox values (optional)
+        """
+        try:
+            # Validate serializer
+            from .serializers import QCSubmitSerializer
+            serializer = QCSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            usid = validated_data['usid']
+            serial_number = validated_data['serial_number']
+            incoming_batch_no = validated_data.get('incoming_batch_no', '')
+            qc_done_by = validated_data.get('qc_done_by', '')
+            custom_fields = validated_data.get('custom_fields', {}) or {}
+            custom_checkboxes = validated_data.get('custom_checkboxes', {}) or {}
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with QC section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find corresponding in_process entry by serial_number (optional)
+            in_process_entry = None
+            try:
+                in_process_model = get_or_create_part_data_model(
+                    part_no,
+                    table_type='in_process'
+                )
+                if in_process_model:
+                    # Try to find in_process entry by serial_number
+                    # Check common field names for serial number
+                    serial_field_names = ['serial_number', 'tag_no', 'in-process_tag_number']
+                    for field_name in serial_field_names:
+                        if hasattr(in_process_model, field_name):
+                            try:
+                                in_process_entry = in_process_model.objects.filter(**{field_name: serial_number}).first()
+                                if in_process_entry:
+                                    break
+                            except:
+                                pass
+            except Exception as e:
+                import sys
+                print(f"Warning: Could not find in_process entry: {str(e)}", file=sys.stderr)
+            
+            # Prepare entry data
+            entry_data = {
+                'usid': usid,
+                'serial_number': serial_number,
+            }
+            
+            # Add incoming_batch_no if field exists in model
+            # Try both with and without qc_ prefix
+            incoming_batch_no_field = None
+            if 'qc_incoming_batch_no' in all_field_names:
+                incoming_batch_no_field = 'qc_incoming_batch_no'
+            elif 'incoming_batch_no' in all_field_names:
+                incoming_batch_no_field = 'incoming_batch_no'
+            
+            if incoming_batch_no_field:
+                entry_data[incoming_batch_no_field] = incoming_batch_no
+            else:
+                # Log warning if field doesn't exist but value was provided
+                if incoming_batch_no:
+                    import sys
+                    print(f"Warning: incoming_batch_no field not found in model. Available fields: {all_field_names[:10]}...", file=sys.stderr)
+            
+            # Add qc_done_by if field exists in model
+            # Try both with and without qc_ prefix
+            qc_done_by_field = None
+            if 'qc_qc_done_by' in all_field_names:
+                qc_done_by_field = 'qc_qc_done_by'
+            elif 'qc_done_by' in all_field_names:
+                qc_done_by_field = 'qc_done_by'
+            
+            if qc_done_by_field:
+                entry_data[qc_done_by_field] = qc_done_by
+            
+            # Add in_process_entry ForeignKey if found
+            if in_process_entry and 'in_process_entry' in all_field_names:
+                entry_data['in_process_entry'] = in_process_entry
+            
+            # Add custom fields from procedure_config
+            # Get procedure config to know which fields are valid
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+                qc_config = procedure_config.get('qc', {})
+                qc_custom_fields = qc_config.get('custom_fields', [])
+                qc_custom_checkboxes = qc_config.get('custom_checkboxes', [])
+                
+                # Process custom fields
+                # Fields in the database have qc_ prefix, but frontend sends without prefix
+                for field_config in qc_custom_fields:
+                    field_name = field_config.get('name')
+                    if field_name:
+                        # Try with qc_ prefix first (standard format)
+                        prefixed_field_name = f"qc_{field_name}" if not field_name.startswith('qc_') else field_name
+                        # Also try without prefix as fallback
+                        if prefixed_field_name in all_field_names:
+                            # Get value from custom_fields dict or use empty string
+                            field_value = custom_fields.get(field_name, '')
+                            entry_data[prefixed_field_name] = field_value
+                        elif field_name in all_field_names:
+                            # Fallback: use field name as-is if it exists
+                            field_value = custom_fields.get(field_name, '')
+                            entry_data[field_name] = field_value
+                
+                # Process custom checkboxes
+                # Checkboxes in the database have qc_ prefix, but frontend sends without prefix
+                for checkbox_config in qc_custom_checkboxes:
+                    checkbox_name = checkbox_config.get('name')
+                    # Skip 'qc' checkbox itself
+                    if checkbox_name and checkbox_name.lower() != 'qc':
+                        # Try with qc_ prefix first (standard format)
+                        prefixed_checkbox_name = f"qc_{checkbox_name}" if not checkbox_name.startswith('qc_') else checkbox_name
+                        # Also try without prefix as fallback
+                        if prefixed_checkbox_name in all_field_names:
+                            # Get value from custom_checkboxes dict or use False
+                            checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                            # Convert to boolean
+                            if isinstance(checkbox_value, str):
+                                checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                            entry_data[prefixed_checkbox_name] = bool(checkbox_value)
+                        elif checkbox_name in all_field_names:
+                            # Fallback: use checkbox name as-is if it exists
+                            checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                            if isinstance(checkbox_value, str):
+                                checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                            entry_data[checkbox_name] = bool(checkbox_value)
+                        else:
+                            # Log warning if checkbox field not found but value was provided
+                            checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                            if checkbox_value:
+                                import sys
+                                print(f"Warning: Checkbox field '{checkbox_name}' (tried '{prefixed_checkbox_name}') not found in model. Available fields: {[f for f in all_field_names if 'qc' in f.lower()][:10]}...", file=sys.stderr)
+                
+                # Set qc boolean flag if field exists
+                if 'qc_qc' in all_field_names:
+                    entry_data['qc_qc'] = True
+                elif 'qc' in all_field_names:
+                    entry_data['qc'] = True
+                    
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail, just use basic fields
+                pass
+            except Exception as e:
+                import sys
+                print(f"Warning: Could not process custom fields: {str(e)}", file=sys.stderr)
+            
+            # Create the entry in completion table
+            try:
+                entry = completion_model.objects.create(**entry_data)
+                
+                # Prepare response
+                response_data = {
+                    'message': f'QC data submitted successfully for USID: {usid}',
+                    'part_no': part_no,
+                    'usid': usid,
+                    'serial_number': serial_number,
+                    'entry_id': entry.id,
+                    'in_process_entry_linked': in_process_entry is not None
+                }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_201_CREATED
+                )
+                
+            except Exception as e:
+                import traceback
+                import sys
+                error_details = traceback.format_exc()
+                print(f"Error creating QC entry: {str(e)}", file=sys.stderr)
+                print(error_details, file=sys.stderr)
+                return Response(
+                    {
+                        'error': 'Failed to create QC entry',
+                        'message': str(e),
+                        'details': error_details
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"QC Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to submit QC data',
+                    'details': error_details
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

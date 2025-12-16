@@ -230,3 +230,35 @@ class ProductionProcedure(models.Model):
 
     def __str__(self):
         return "Production Procedure"
+
+
+class USIDCounter(models.Model):
+    """
+    Tracks daily counters for USID generation per part.
+    USID format: yymmdd-partno-counter (e.g., 241220-EICS145-0001)
+    """
+    part_no = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text='Part number'
+    )
+    date = models.DateField(
+        db_index=True,
+        help_text='Date for which the counter is valid'
+    )
+    counter = models.IntegerField(
+        default=0,
+        help_text='Daily counter for this part (increments for each USID generated)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [['part_no', 'date']]
+        ordering = ['-date', 'part_no']
+        verbose_name = 'USID Counter'
+        verbose_name_plural = 'USID Counters'
+        db_table = 'usid_counter'
+    
+    def __str__(self):
+        return f"{self.part_no} - {self.date} - Counter: {self.counter}"

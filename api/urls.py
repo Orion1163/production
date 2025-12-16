@@ -6,7 +6,8 @@ from .views import (
     UserModelPartsView, UserPartSectionsView, KitVerificationView, SMDDataFetchView, SMDUpdateView,
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
-    AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView
+    AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
+    USIDGenerateView, QCSubmitView
 )
 
 urlpatterns = [
@@ -38,4 +39,7 @@ urlpatterns = [
     path('prod-qc-update/', ProdQCUpdateView.as_view(), name='prod-qc-update'),
     path('accessories-packing-data-fetch/', AccessoriesPackingDataFetchView.as_view(), name='accessories-packing-data-fetch'),
     path('accessories-packing-update/', AccessoriesPackingUpdateView.as_view(), name='accessories-packing-update'),
+    path('qc-procedure-config/<str:part_no>/', QCProcedureConfigView.as_view(), name='qc-procedure-config'),
+    path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
+    path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
 ]

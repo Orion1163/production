@@ -374,6 +374,7 @@
               <div class="token-list" style="margin: 16px 0">
                 <span class="token">Serial Number</span>
                 <span class="token">USID</span>
+                <span class="token">Test Message</span>
               </div>
               <div class="manual-only" style="display: none">
                 <div class="dual-panel">
@@ -425,7 +426,7 @@
                 <span class="token">Serial Number</span>
                 <span class="token">USID</span>
               </div>
-              <div class="dual-panel" style="margin-top: 20px">
+              <!-- <div class="dual-panel" style="margin-top: 20px">
                 <div class="panel-card">
                   <h4>Additional Inputs</h4>
                   <div class="pill-input-row">
@@ -446,6 +447,26 @@
                   </div>
                   <div class="input-list"></div>
                 </div>
+              </div> -->
+            </div>
+          </div>
+
+
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
+                data-panel-target="cleaning"
+                onchange="togglePanel(this)"
+              />
+              Cleaning
+            </label>
+            <div class="detail-panel" data-panel="cleaning">
+              <div class="panel-title">Cleaning Defaults</div>
+              <div class="token-list">
+                <span class="token">Serial Number</span>
+                <span class="token">USID</span>
               </div>
             </div>
           </div>
@@ -465,70 +486,9 @@
                 <span class="token">Serial Number</span>
                 <span class="token">USID</span>
               </div>
-              <div class="dual-panel" style="margin-top: 20px">
-                <div class="panel-card">
-                  <h4>Additional Inputs</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addInputField(this)">
-                      +
-                    </button>
-                    <span>Add text field</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-                <div class="panel-card accent">
-                  <h4>Checklist</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
-                      +
-                    </button>
-                    <span>Add checkbox</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-              </div>
             </div>
           </div>
 
-          <div class="workflow-item">
-            <label class="checkbox-pill workflow-toggle">
-              <input
-                type="checkbox"
-                data-panel-target="cleaning"
-                onchange="togglePanel(this)"
-              />
-              Cleaning
-            </label>
-            <div class="detail-panel" data-panel="cleaning">
-              <div class="panel-title">Cleaning Defaults</div>
-              <div class="token-list">
-                <span class="token">Serial Number</span>
-                <span class="token">USID</span>
-              </div>
-              <div class="dual-panel" style="margin-top: 20px">
-                <div class="panel-card">
-                  <h4>Additional Inputs</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addInputField(this)">
-                      +
-                    </button>
-                    <span>Add text field</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-                <div class="panel-card accent">
-                  <h4>Checklist</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
-                      +
-                    </button>
-                    <span>Add checkbox</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <div class="workflow-item">
             <label class="checkbox-pill workflow-toggle">
@@ -545,31 +505,10 @@
                 <span class="token">Serial Number</span>
                 <span class="token">USID</span>
               </div>
-              <div class="dual-panel" style="margin-top: 20px">
-                <div class="panel-card">
-                  <h4>Additional Inputs</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addInputField(this)">
-                      +
-                    </button>
-                    <span>Add text field</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-                <div class="panel-card accent">
-                  <h4>Checklist</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
-                      +
-                    </button>
-                    <span>Add checkbox</span>
-                  </div>
-                  <div class="input-list"></div>
-                </div>
-              </div>
             </div>
           </div>
 
+         
           <div class="workflow-item dispatch-only" data-dispatch-item>
             <label class="checkbox-pill workflow-toggle dispatch-pill">
               <input

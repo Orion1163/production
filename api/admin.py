@@ -1,3 +1,4 @@
+import re
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.contrib.admin.apps import AdminConfig
@@ -5,7 +6,7 @@ from django.http import Http404
 from django.urls import reverse, NoReverseMatch
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from .models import User, Admin, ModelPart, PartProcedureDetail
+from .models import User, Admin, ModelPart, PartProcedureDetail, USIDCounter
 from .dynamic_models import DynamicModelRegistry
 
 
@@ -32,6 +33,15 @@ class PartProcedureDetailAdmin(admin.ModelAdmin):
     search_fields = ('model_part__part_no', 'model_part__model_no')
     list_filter = ('created_at',)
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(USIDCounter)
+class USIDCounterAdmin(admin.ModelAdmin):
+    list_display = ('part_no', 'date', 'counter', 'created_at', 'updated_at')
+    search_fields = ('part_no',)
+    list_filter = ('date', 'part_no')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-date', 'part_no')
 
 
 # Dynamic Model Admin Registration
@@ -61,6 +71,53 @@ def register_dynamic_model_in_admin(model_class, part_name):
                 return True
         except:
             pass
+    
+    # For completion models, ensure the related in_process model is also registered
+    # This prevents NoReverseMatch errors when Django admin tries to generate URLs for ForeignKey widgets
+    is_completion_model = (
+        'completion' in model_class.__name__.lower() or 
+        'completion' in model_class._meta.db_table.lower()
+    )
+    if is_completion_model:
+        # Check for ForeignKey fields that point to in_process models
+        for field in model_class._meta.get_fields():
+            if hasattr(field, 'remote_field') and field.remote_field:
+                related_model = field.remote_field.model
+                # Check if related model is an in_process model
+                is_related_in_process = (
+                    'inprocess' in related_model.__name__.lower() or 
+                    'in_process' in getattr(related_model._meta, 'db_table', '').lower()
+                )
+                if is_related_in_process and related_model not in admin.site._registry:
+                    # Extract part name from the completion model's part_name
+                    # The part_name should be like "eics120_completion", so we extract "eics120"
+                    if '_completion' in part_name.lower():
+                        related_part_name = part_name.lower().replace('_completion', '').rstrip('_')
+                    elif 'completion' in part_name.lower():
+                        related_part_name = part_name.lower().split('completion')[0].rstrip('_')
+                    else:
+                        # Fallback: try to extract from related model
+                        related_class_name = related_model.__name__.lower()
+                        if 'inprocess' in related_class_name:
+                            related_part_name = related_class_name.split('inprocess')[0].rstrip('_')
+                        else:
+                            related_part_name = related_class_name.replace('_in_process', '').replace('inprocess', '')
+                    
+                    # Register the related in_process model
+                    import sys
+                    print("Registering related in_process model for %s: %s" % (part_name, related_part_name), file=sys.stderr)
+                    try:
+                        # Use a flag to prevent infinite recursion
+                        if not hasattr(related_model, '_registering_in_admin'):
+                            related_model._registering_in_admin = True
+                            try:
+                                register_dynamic_model_in_admin(related_model, f"{related_part_name}_in_process")
+                            finally:
+                                if hasattr(related_model, '_registering_in_admin'):
+                                    delattr(related_model, '_registering_in_admin')
+                    except Exception as e:
+                        import sys
+                        print("Warning: Could not register related in_process model: %s" % str(e), file=sys.stderr)
     
     # Get all field names from the model
     all_fields = [f.name for f in model_class._meta.get_fields() if not f.one_to_many and not f.many_to_many]
@@ -286,6 +343,161 @@ def register_dynamic_model_in_admin(model_class, part_name):
             Return empty perms dict to avoid permission issues.
             """
             return {}
+        
+        def formfield_for_foreignkey(self, db_field, request, **kwargs):
+            """
+            Customize ForeignKey fields to handle URL reversal for dynamic models.
+            For completion models with ForeignKey to in_process models, prevent the add URL
+            from being generated to avoid NoReverseMatch errors.
+            """
+            from django.contrib.admin.widgets import RelatedFieldWidgetWrapper
+            from django.urls.exceptions import NoReverseMatch
+            
+            # Get the field using default behavior first
+            field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+            
+            # Check if this is the in_process_entry ForeignKey field or any ForeignKey to a dynamic model
+            is_dynamic_fk = (db_field.name == 'in_process_entry' or 
+                            (hasattr(db_field, 'remote_field') and db_field.remote_field and 
+                             ('inprocess' in str(db_field.remote_field.model).lower() or 
+                              'completion' in str(db_field.remote_field.model).lower())))
+            
+            # For all ForeignKey fields, especially dynamic model ForeignKeys, wrap widget methods
+            if field and hasattr(field, 'widget'):
+                widget = field.widget
+                
+                # Check if it's a RelatedFieldWidgetWrapper (Django admin wraps ForeignKey widgets)
+                if isinstance(widget, RelatedFieldWidgetWrapper):
+                    # First, ensure the related model is registered in admin
+                    if hasattr(db_field, 'remote_field') and db_field.remote_field:
+                        related_model = db_field.remote_field.model
+                        if related_model not in admin.site._registry:
+                            # Try to register the related model
+                            try:
+                                related_part_name = getattr(related_model._meta, 'verbose_name', None)
+                                if not related_part_name:
+                                    # Extract from model name
+                                    related_class_name = related_model.__name__.lower()
+                                    if 'inprocess' in related_class_name:
+                                        related_part_name = related_class_name.split('inprocess')[0].rstrip('_')
+                                    elif 'completion' in related_class_name:
+                                        related_part_name = related_class_name.split('completion')[0].rstrip('_')
+                                    else:
+                                        related_part_name = related_class_name
+                                
+                                import sys
+                                print("Auto-registering related model %s for ForeignKey field %s" % (
+                                    related_part_name, db_field.name
+                                ), file=sys.stderr)
+                                register_dynamic_model_in_admin(related_model, related_part_name)
+                            except Exception as e:
+                                import sys
+                                print("Warning: Could not auto-register related model: %s" % str(e), file=sys.stderr)
+                    
+                    # Override get_related_url to prevent URL reversal errors
+                    if hasattr(widget, 'get_related_url'):
+                        original_get_related_url = widget.get_related_url
+                        def safe_get_related_url(info, action, *args, **kwargs):
+                            try:
+                                # Try to get the URL using our custom reverse function
+                                return original_get_related_url(info, action, *args, **kwargs)
+                            except NoReverseMatch as e:
+                                # If URL reversal fails (NoReverseMatch), return None to hide the add button
+                                import sys
+                                print("Warning: Could not reverse URL for %s.%s.%s: %s" % (
+                                    info[0] if len(info) > 0 else 'unknown',
+                                    info[1] if len(info) > 1 else 'unknown',
+                                    action, str(e)
+                                ), file=sys.stderr)
+                                return None
+                            except Exception as e:
+                                # For other exceptions, also return None to be safe
+                                import sys
+                                print("Warning: Exception in get_related_url for %s.%s.%s: %s" % (
+                                    info[0] if len(info) > 0 else 'unknown',
+                                    info[1] if len(info) > 1 else 'unknown',
+                                    action, str(e)
+                                ), file=sys.stderr)
+                                return None
+                        widget.get_related_url = safe_get_related_url
+                    
+                    # Override get_context to catch any exceptions during template rendering
+                    # This is the method that calls get_related_url and can fail with NoReverseMatch
+                    if hasattr(widget, 'get_context'):
+                        original_get_context = widget.get_context
+                        def safe_get_context(name, value, attrs):
+                            try:
+                                return original_get_context(name, value, attrs)
+                            except NoReverseMatch as e:
+                                # If get_context fails due to NoReverseMatch,
+                                # catch the exception and create a safe context without the add URL
+                                import sys
+                                print("Warning: NoReverseMatch in widget get_context for %s: %s" % (
+                                    db_field.name, str(e)
+                                ), file=sys.stderr)
+                                
+                                # Get the base widget context (without the wrapper's add URL)
+                                try:
+                                    if hasattr(widget, 'widget'):
+                                        base_context = widget.widget.get_context(name, value, attrs)
+                                        # Remove add_related_url from context to prevent errors
+                                        base_context.pop('add_related_url', None)
+                                        base_context.pop('change_related_url', None)
+                                        base_context.pop('delete_related_url', None)
+                                        base_context.pop('can_add_related', None)
+                                        base_context.pop('can_change_related', None)
+                                        base_context.pop('can_delete_related', None)
+                                        return base_context
+                                    else:
+                                        # Fallback: return minimal context
+                                        return {
+                                            'widget': {'name': name, 'value': value, 'attrs': attrs},
+                                            'name': name,
+                                            'value': value,
+                                            'attrs': attrs,
+                                        }
+                                except Exception as inner_e:
+                                    import sys
+                                    print("Warning: Could not create fallback context: %s" % str(inner_e), file=sys.stderr)
+                                    # Return minimal context as last resort
+                                    return {
+                                        'widget': {'name': name, 'value': value, 'attrs': attrs},
+                                        'name': name,
+                                        'value': value,
+                                        'attrs': attrs,
+                                    }
+                            except Exception as e:
+                                # For other exceptions, try to handle gracefully
+                                import sys
+                                from django.urls.exceptions import NoReverseMatch
+                                if isinstance(e, NoReverseMatch):
+                                    # Same handling as above
+                                    try:
+                                        if hasattr(widget, 'widget'):
+                                            base_context = widget.widget.get_context(name, value, attrs)
+                                            base_context.pop('add_related_url', None)
+                                            base_context.pop('change_related_url', None)
+                                            base_context.pop('delete_related_url', None)
+                                            return base_context
+                                    except:
+                                        pass
+                                
+                                # For non-NoReverseMatch exceptions, re-raise them
+                                raise
+                        widget.get_context = safe_get_context
+                    
+                    # Override can_add_related to return False if URL reversal might fail
+                    if hasattr(widget, 'can_add_related'):
+                        original_can_add_related = widget.can_add_related
+                        def safe_can_add_related(*args, **kwargs):
+                            try:
+                                return original_can_add_related(*args, **kwargs)
+                            except (NoReverseMatch, Exception):
+                                # If we can't determine, return False to hide the add button
+                                return False
+                        widget.can_add_related = safe_can_add_related
+            
+            return field
         
         def response_post_save_add(self, request, obj):
             """
@@ -572,12 +784,21 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
         return _original_reverse(viewname, urlconf, args, kwargs, current_app)
     except NoReverseMatch:
         # If it fails, check if it's a dynamic model URL
-        if viewname.startswith('admin:') and '_' in viewname:
-            parts = viewname.split(':')
-            if len(parts) == 2:
-                url_name = parts[1]
-                # Check if it matches pattern: api_<model_name>_<action>
-                if url_name.startswith('api_') and url_name.count('_') >= 2:
+        # Handle both 'admin:' prefix and direct view names
+        is_admin_url = viewname.startswith('admin:')
+        if (is_admin_url or 'api_' in str(viewname)) and '_' in str(viewname):
+            # Extract the URL name (part after 'admin:' if present)
+            if is_admin_url:
+                parts = str(viewname).split(':')
+                if len(parts) == 2:
+                    url_name = parts[1]
+                else:
+                    url_name = str(viewname)
+            else:
+                url_name = str(viewname)
+            
+            # Check if it matches pattern: api_<model_name>_<action>
+            if url_name.startswith('api_') and url_name.count('_') >= 2:
                     url_parts = url_name.split('_')
                     if len(url_parts) >= 3:
                         # Reconstruct model name (everything between 'api' and last part)
@@ -608,7 +829,37 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                         
                         # If not found, search in DynamicModelRegistry and admin registry
                         if actual_model_name is None:
-                            # Also check admin registry
+                            # Extract part name and table type from URL model name
+                            # e.g., "eics120_partinprocess" -> part: "eics120", type: "in_process"
+                            # e.g., "eics120_partcompletion" -> part: "eics120", type: "completion"
+                            url_lower = model_name_from_url.lower()
+                            
+                            # Try to extract part name by removing known suffixes
+                            part_name_candidates = []
+                            table_type_candidates = []
+                            
+                            # Check for "partinprocess" or "part_inprocess" pattern
+                            if 'partinprocess' in url_lower or 'part_inprocess' in url_lower:
+                                # Remove "partinprocess" or "part_inprocess" to get part name
+                                for suffix in ['partinprocess', 'part_inprocess', '_partinprocess', '_part_inprocess']:
+                                    if url_lower.endswith(suffix):
+                                        candidate = url_lower[:-len(suffix)].rstrip('_')
+                                        if candidate:
+                                            part_name_candidates.append(candidate)
+                                            table_type_candidates.append('in_process')
+                                            break
+                            
+                            # Check for "partcompletion" or "part_completion" pattern
+                            if 'partcompletion' in url_lower or 'part_completion' in url_lower:
+                                for suffix in ['partcompletion', 'part_completion', '_partcompletion', '_part_completion']:
+                                    if url_lower.endswith(suffix):
+                                        candidate = url_lower[:-len(suffix)].rstrip('_')
+                                        if candidate:
+                                            part_name_candidates.append(candidate)
+                                            table_type_candidates.append('completion')
+                                            break
+                            
+                            # Also check admin registry - this is important for ForeignKey widgets
                             for registered_model in admin.site._registry.keys():
                                 if registered_model._meta.app_label != 'api':
                                     continue
@@ -622,62 +873,143 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                                     actual_model_name = model_name_attr
                                     break
                                 
-                                # Check normalized match
+                                # Check normalized match (remove all underscores)
                                 normalized_class = class_name_lower.replace('_', '')
                                 normalized_model_attr = model_name_attr.replace('_', '')
                                 if (normalized_class == normalized_url_name or 
                                     normalized_model_attr == normalized_url_name):
                                     actual_model_name = model_name_attr
                                     break
+                                
+                                # Check if URL contains key parts of the model name
+                                # e.g., "eics120_partinprocess" should match "EICS120_PartInProcess"
+                                # Extract part name and type from both
+                                url_lower_check = model_name_from_url.lower()
+                                if 'partinprocess' in url_lower_check or 'part_inprocess' in url_lower_check:
+                                    if 'inprocess' in class_name_lower or 'in_process' in class_name_lower:
+                                        # Check if the part name matches (everything before "part")
+                                        url_part_match = url_lower_check.split('part')[0].rstrip('_')
+                                        class_part_match = class_name_lower.split('part')[0].rstrip('_')
+                                        if url_part_match and class_part_match and url_part_match == class_part_match:
+                                            actual_model_name = model_name_attr
+                                            break
+                                
+                                if 'partcompletion' in url_lower_check or 'part_completion' in url_lower_check:
+                                    if 'completion' in class_name_lower:
+                                        # Check if the part name matches
+                                        url_part_match = url_lower_check.split('part')[0].rstrip('_')
+                                        class_part_match = class_name_lower.split('part')[0].rstrip('_')
+                                        if url_part_match and class_part_match and url_part_match == class_part_match:
+                                            actual_model_name = model_name_attr
+                                            break
                             
                             # If still not found, search in DynamicModelRegistry
                             if actual_model_name is None:
                                 all_models = DynamicModelRegistry.get_all()
-                                for part_name, models_dict in all_models.items():
-                                    for table_type, model_class in models_dict.items():
-                                        if model_class is None:
-                                            continue
-                                        
-                                        # Get model name variations
-                                        class_name_lower = model_class.__name__.lower()
-                                        model_name_attr = getattr(model_class._meta, 'model_name', class_name_lower)
-                                        
-                                        # Check exact match
-                                        if (model_name_attr == model_name_from_url.lower() or 
-                                            class_name_lower == model_name_from_url.lower()):
+                                
+                                # First, try matching by part name if we extracted it
+                                for part_candidate, table_type_candidate in zip(part_name_candidates, table_type_candidates):
+                                    if part_candidate in all_models:
+                                        models_dict = all_models[part_candidate]
+                                        if table_type_candidate in models_dict and models_dict[table_type_candidate]:
+                                            model_class = models_dict[table_type_candidate]
+                                            model_name_attr = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
                                             actual_model_name = model_name_attr
                                             break
+                                
+                                # If still not found, try all models
+                                if actual_model_name is None:
+                                    for part_name, models_dict in all_models.items():
+                                        for table_type, model_class in models_dict.items():
+                                            if model_class is None:
+                                                continue
+                                            
+                                            # Get model name variations
+                                            class_name_lower = model_class.__name__.lower()
+                                            model_name_attr = getattr(model_class._meta, 'model_name', class_name_lower)
+                                            
+                                            # Check exact match
+                                            if (model_name_attr == model_name_from_url.lower() or 
+                                                class_name_lower == model_name_from_url.lower()):
+                                                actual_model_name = model_name_attr
+                                                break
+                                            
+                                            # Check normalized match
+                                            normalized_class = class_name_lower.replace('_', '')
+                                            normalized_model_attr = model_name_attr.replace('_', '')
+                                            if (normalized_class == normalized_url_name or 
+                                                normalized_model_attr == normalized_url_name):
+                                                actual_model_name = model_name_attr
+                                                break
+                                            
+                                            # Check if URL name contains keywords (for variations like partinprocess vs part_in_process)
+                                            # Handle "inprocess" or "in_process" variations
+                                            if ('inprocess' in normalized_url_name or 'in_process' in model_name_from_url.lower()):
+                                                if ('inprocess' in normalized_class or 'in_process' in class_name_lower):
+                                                    if table_type == 'in_process':
+                                                        # Also check if part name matches
+                                                        normalized_part = part_name.lower().replace('_', '')
+                                                        if normalized_part in normalized_url_name or normalized_part in model_name_from_url.lower():
+                                                            actual_model_name = model_name_attr
+                                                            break
+                                            
+                                            # Handle "completion" variations
+                                            if 'completion' in normalized_url_name or 'completion' in model_name_from_url.lower():
+                                                if 'completion' in normalized_class or 'completion' in class_name_lower:
+                                                    if table_type == 'completion':
+                                                        # Also check if part name matches
+                                                        normalized_part = part_name.lower().replace('_', '')
+                                                        if normalized_part in normalized_url_name or normalized_part in model_name_from_url.lower():
+                                                            actual_model_name = model_name_attr
+                                                            break
                                         
-                                        # Check normalized match
-                                        normalized_class = class_name_lower.replace('_', '')
-                                        normalized_model_attr = model_name_attr.replace('_', '')
-                                        if (normalized_class == normalized_url_name or 
-                                            normalized_model_attr == normalized_url_name):
-                                            actual_model_name = model_name_attr
+                                        if actual_model_name:
                                             break
-                                        
-                                        # Check if URL name contains keywords (for variations like partinprocess vs part_in_process)
-                                        # Handle "inprocess" or "in_process" variations
-                                        if ('inprocess' in normalized_url_name or 'in_process' in model_name_from_url.lower()):
-                                            if ('inprocess' in normalized_class or 'in_process' in class_name_lower):
-                                                if table_type == 'in_process':
-                                                    actual_model_name = model_name_attr
-                                                    break
-                                        
-                                        # Handle "completion" variations
-                                        if 'completion' in normalized_url_name or 'completion' in model_name_from_url.lower():
-                                            if 'completion' in normalized_class or 'completion' in class_name_lower:
-                                                if table_type == 'completion':
-                                                    actual_model_name = model_name_attr
-                                                    break
-                                    
-                                    if actual_model_name:
-                                        break
+                        
+                        # If we still don't have a match, try to find the model by searching for the part name
+                        # This handles cases like "eics112_partinprocess" where we need to find "eics112partinprocess"
+                        if actual_model_name is None:
+                            # Try to extract part name from URL and find matching model
+                            url_lower = model_name_from_url.lower()
+                            
+                            # Check for in_process patterns
+                            if 'partinprocess' in url_lower or 'part_inprocess' in url_lower:
+                                # Extract part name (everything before "part")
+                                part_match = re.search(r'^(.+?)(?:part|_part)', url_lower)
+                                if part_match:
+                                    part_candidate = part_match.group(1).rstrip('_')
+                                    # Search for in_process model with this part name
+                                    all_models = DynamicModelRegistry.get_all()
+                                    for part_name, models_dict in all_models.items():
+                                        if part_name.lower().replace('_', '') == part_candidate.replace('_', ''):
+                                            if 'in_process' in models_dict and models_dict['in_process']:
+                                                model_class = models_dict['in_process']
+                                                actual_model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+                                                break
+                            
+                            # Check for completion patterns
+                            if actual_model_name is None and ('partcompletion' in url_lower or 'part_completion' in url_lower):
+                                # Extract part name (everything before "part")
+                                part_match = re.search(r'^(.+?)(?:part|_part)', url_lower)
+                                if part_match:
+                                    part_candidate = part_match.group(1).rstrip('_')
+                                    # Search for completion model with this part name
+                                    all_models = DynamicModelRegistry.get_all()
+                                    for part_name, models_dict in all_models.items():
+                                        if part_name.lower().replace('_', '') == part_candidate.replace('_', ''):
+                                            if 'completion' in models_dict and models_dict['completion']:
+                                                model_class = models_dict['completion']
+                                                actual_model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
+                                                break
                         
                         # Use the found model name, or fall back to the URL model name
                         # Try to use the actual model name if found, otherwise use URL name
-                        # But also try variations if the catch-all view can handle them
+                        # The catch-all view should be able to handle variations
                         model_name = actual_model_name or model_name_from_url.lower()
+                        
+                        # Ensure we have a valid model name (should always be true at this point)
+                        if not model_name:
+                            model_name = model_name_from_url.lower()
                         
                         # Get object_id from args or kwargs
                         object_id = None
@@ -698,6 +1030,46 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                             return '/admin/api/%s/%s/delete/' % (model_name, object_id)
                         elif action == 'history' and object_id:
                             return '/admin/api/%s/%s/history/' % (model_name, object_id)
+                        else:
+                            # For any other action, try to construct a URL
+                            # This handles cases where Django admin tries to reverse URLs we haven't explicitly handled
+                            return '/admin/api/%s/' % model_name
+                    
+                    # If we got here, we matched the pattern but couldn't build a URL
+                    # Return a default URL that the catch-all view can handle
+                    return '/admin/api/%s/' % model_name_from_url.lower()
+        
+        # If we can't handle it, check if it looks like a dynamic model URL anyway
+        # This is a last resort - return a URL that the catch-all view might handle
+        viewname_str = str(viewname)
+        if 'api_' in viewname_str and ('inprocess' in viewname_str.lower() or 'completion' in viewname_str.lower() or 'part' in viewname_str.lower()):
+            # Try to extract a model name from the viewname
+            if ':' in viewname_str:
+                viewname_str = viewname_str.split(':', 1)[1]
+            
+            # Extract model name (everything after 'api_' and before last '_')
+            if 'api_' in viewname_str and viewname_str.count('_') >= 2:
+                parts = viewname_str.split('_')
+                if len(parts) >= 3:
+                    model_name_guess = '_'.join(parts[1:-1])
+                    action_guess = parts[-1]
+                    if action_guess in ['add', 'change', 'delete', 'history', 'changelist']:
+                        if action_guess == 'changelist':
+                            return '/admin/api/%s/' % model_name_guess
+                        elif action_guess == 'add':
+                            return '/admin/api/%s/add/' % model_name_guess
+                        elif action_guess == 'change':
+                            # For change, we might have an object_id
+                            object_id = None
+                            if args and len(args) > 0:
+                                object_id = args[0]
+                            elif kwargs and 'object_id' in kwargs:
+                                object_id = kwargs['object_id']
+                            if object_id:
+                                return '/admin/api/%s/%s/' % (model_name_guess, object_id)
+                            return '/admin/api/%s/' % model_name_guess
+                        else:
+                            return '/admin/api/%s/' % model_name_guess
         
         # If we can't handle it, re-raise the original exception
         raise
@@ -705,6 +1077,13 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
 # Replace Django's reverse function
 import django.urls
 django.urls.reverse = reverse_with_dynamic_models
+
+# Also patch the reverse function in django.urls.resolvers since Django admin might import it directly
+try:
+    from django.urls.resolvers import reverse as resolvers_reverse
+    django.urls.resolvers.reverse = reverse_with_dynamic_models
+except:
+    pass
 
 # Override Django admin's catch-all view to handle dynamic models
 # This is necessary because Django admin's URL patterns are built at startup

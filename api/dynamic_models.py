@@ -306,9 +306,69 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             
             section_fields[section_name] = {}
             
+            # Track which fields we've already added to avoid duplicates
+            added_field_names = set()
+            # Track which fields are custom input fields (for logging)
+            custom_input_field_names = set()
+            
+            # Add custom input fields first (if they have labels preserved)
+            # These are user-added fields from the "Add text field" button
+            custom_fields = section_data.get('custom_fields', [])
+            if custom_fields:
+                import sys
+                print("  Processing %d custom_fields for section %s in %s table" % (
+                    len(custom_fields), section_name, table_type
+                ), file=sys.stderr)
+            for field_obj in custom_fields:
+                # custom_fields is an array of objects with 'name' and 'label'
+                if isinstance(field_obj, dict):
+                    field_name = field_obj.get('name')
+                    field_label = field_obj.get('label', field_name)
+                else:
+                    # Fallback: if it's just a string, use it as name
+                    field_name = str(field_obj)
+                    field_label = field_name.replace('_', ' ').title()
+                
+                if not field_name or field_name in common_fields_added:
+                    continue
+                if field_name == 'in-process_tag_number':
+                    continue
+                if field_name in added_field_names:
+                    continue
+                
+                section_prefix = f"{section_name}_"
+                if field_name.startswith(section_prefix):
+                    prefixed_name = field_name
+                else:
+                    prefixed_name = f"{section_name}_{field_name}"
+                
+                section_fields[section_name][prefixed_name] = {
+                    'type': 'text',
+                    'label': field_label,  # Use the preserved label
+                    'original_name': field_name,
+                    'section': section_name
+                }
+                field_metadata[prefixed_name] = {
+                    'label': field_label,  # Use the preserved label
+                    'original_name': field_name,
+                    'section': section_name,
+                    'is_common': False
+                }
+                added_field_names.add(field_name)
+                custom_input_field_names.add(prefixed_name)  # Track this as a custom input field
+                import sys
+                print("    ✓ Created custom input field: %s (label: %s)" % (
+                    prefixed_name, field_label
+                ), file=sys.stderr)
+            
             # Add default fields (text fields) with section prefix
+            # These are fallback fields or fields from token-list
             default_fields = section_data.get('default_fields', [])
             for field_name in default_fields:
+                # Skip if already added as custom field
+                if field_name in added_field_names:
+                    continue
+                
                 if field_name in common_fields_added:
                     continue
                 if field_name == 'in-process_tag_number':
@@ -332,6 +392,7 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                     'section': section_name,
                     'is_common': False
                 }
+                added_field_names.add(field_name)
             
             # Add custom checkboxes (boolean fields) with section prefix
             custom_checkboxes = section_data.get('custom_checkboxes', [])
@@ -354,7 +415,28 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                     }
         
         # Create fields for each section's fields
+        # Track custom fields across all sections for summary logging
+        all_custom_input_fields = set()
+        all_custom_checkbox_fields = []
+        
         for section_name in sorted(section_fields.keys()):
+            # Get the custom_input_field_names for this section (stored earlier)
+            section_custom_fields = set()
+            if section_name in procedure_config:
+                section_data_check = procedure_config[section_name]
+                custom_fields_check = section_data_check.get('custom_fields', [])
+                for field_obj in custom_fields_check:
+                    if isinstance(field_obj, dict):
+                        field_name_base = field_obj.get('name')
+                    else:
+                        field_name_base = str(field_obj)
+                    if field_name_base:
+                        section_prefix = f"{section_name}_"
+                        if field_name_base.startswith(section_prefix):
+                            section_custom_fields.add(field_name_base)
+                        else:
+                            section_custom_fields.add(f"{section_name}_{field_name_base}")
+            
             for field_name, field_info in sorted(section_fields[section_name].items()):
                 meta = field_metadata.get(field_name, {})
                 if isinstance(meta, str):
@@ -368,6 +450,7 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                         verbose_name=display_label,
                         help_text=display_label
                     )
+                    all_custom_checkbox_fields.append(field_name)
                 else:
                     fields[field_name] = models.CharField(
                         max_length=255,
@@ -376,8 +459,20 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                         verbose_name=display_label,
                         help_text=display_label
                     )
+                    # Check if this is a custom input field
+                    if field_name in section_custom_fields:
+                        all_custom_input_fields.add(field_name)
                 
                 fields[field_name]._section = field_info.get('section', '')
+        
+        # Log summary of created fields
+        if all_custom_input_fields or all_custom_checkbox_fields:
+            import sys
+            print("  Summary for %s table (%s):" % (table_type, part_name), file=sys.stderr)
+            if all_custom_input_fields:
+                print("    ✓ Custom input fields created: %s" % ', '.join(sorted(all_custom_input_fields)), file=sys.stderr)
+            if all_custom_checkbox_fields:
+                print("    ✓ Custom checkbox fields created: %s" % ', '.join(all_custom_checkbox_fields), file=sys.stderr)
     
     # Add timestamps
     fields['created_at'] = models.DateTimeField(auto_now_add=True)
