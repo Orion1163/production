@@ -147,7 +147,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
             # Use production workflow order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             # Process longer section names first to avoid conflicts

@@ -47,6 +47,7 @@ SECTION_ROLE_MAPPING = {
     'leaded_qc': [1, 12],
     'prod_qc': [1, 13],
     'qc': [1, 2],
+    'qc_images': [1, 2],  # Same access as QC
     'testing': [1, 3],
     'heat_run': [1, 3],
     'glueing': [1, 4],
@@ -58,7 +59,7 @@ SECTION_ROLE_MAPPING = {
 # All available sections
 ALL_SECTIONS = [
     'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-    'leaded_qc', 'prod_qc', 'qc', 'testing', 'heat_run',
+    'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run',
     'glueing', 'cleaning', 'spraying', 'dispatch'
 ]
 
@@ -72,6 +73,7 @@ SECTION_NAMES = {
     'leaded_qc': 'Leaded QC',
     'prod_qc': 'Production QC',
     'qc': 'QC',
+    'qc_images': 'QC Images',
     'testing': 'Testing',
     'heat_run': 'Heat Run',
     'glueing': 'Glueing',

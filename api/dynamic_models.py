@@ -198,7 +198,7 @@ def split_sections_by_qc(enabled_sections, procedure_config):
         'leaded_qc', 'prod_qc'
     ]
     post_qc_sections_list = [
-        'qc', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+        'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
     ]
     
     pre_qc_sections = [s for s in enabled_sections if s in pre_qc_sections_list]

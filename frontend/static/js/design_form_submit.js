@@ -67,7 +67,7 @@
     // List of all possible sections (matching the form HTML)
     const sections = [
       'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-      'leaded_qc', 'prod_qc', 'qc', 'testing',
+      'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
       'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
     ];
 
@@ -208,6 +208,7 @@
         'leaded_qc': 'leaded_qc_done_by',
         'prod_qc': 'prodqc_done_by',
         'qc': 'qc_done_by',
+        'qc_images': 'qc_images_done_by',
         'testing': 'testing_done_by',
         'heat_run': 'heat_run_done_by',
         'glueing': 'glueing_done_by',
@@ -236,6 +237,7 @@
           'leaded_qc': 'Leaded QC',
           'prod_qc': 'Production QC',
           'qc': 'QC',
+          'qc_images': 'QC Images',
           'testing': 'Testing',
           'heat_run': 'Heat Run',
           'glueing': 'Glueing',
@@ -244,14 +246,22 @@
           'dispatch': 'Dispatch'
         };
         
-        // Use section name as label (capitalized)
-        const checkboxLabel = sectionLabelMap[section] || section.charAt(0).toUpperCase() + section.slice(1);
-        
-        // Automatically add section checkbox to custom checkboxes (will be created as BooleanField in dynamic table)
-        customCheckboxes.push({
-          name: section.toLowerCase().replace(/\s+/g, '_'),
-          label: checkboxLabel
-        });
+        // Special handling for qc_images section - use "qc_image" as checkbox name
+        if (section === 'qc_images') {
+          customCheckboxes.push({
+            name: 'qc_image',
+            label: 'QC Image'
+          });
+        } else {
+          // Use section name as label (capitalized)
+          const checkboxLabel = sectionLabelMap[section] || section.charAt(0).toUpperCase() + section.slice(1);
+          
+          // Automatically add section checkbox to custom checkboxes (will be created as BooleanField in dynamic table)
+          customCheckboxes.push({
+            name: section.toLowerCase().replace(/\s+/g, '_'),
+            label: checkboxLabel
+          });
+        }
       }
 
       // Get checkbox fields from the accent panel (custom checkboxes added by user)

@@ -116,7 +116,7 @@ class PartProcedureDetail(models.Model):
         enabled = []
         sections = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-            'leaded_qc', 'prod_qc', 'qc', 'testing',
+            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
             'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
         ]
         

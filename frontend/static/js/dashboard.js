@@ -125,15 +125,25 @@ function animateValue(id, start, end, duration) {
     const element = document.getElementById(id);
     if (!element) return;
     
-    const range = end - start;
-    const increment = end > start ? 1 : -1;
-    const stepTime = Math.abs(Math.floor(duration / range));
-    let current = start;
+    const safeStart = Number(start) || 0;
+    const safeEnd = Number(end) || 0;
+
+    // If values are the same (e.g., no data), just set and exit to avoid
+    // negative counting or divide-by-zero timing.
+    if (safeStart === safeEnd) {
+        element.textContent = safeEnd.toLocaleString();
+        return;
+    }
+
+    const range = safeEnd - safeStart;
+    const increment = range > 0 ? 1 : -1;
+    const stepTime = Math.max(Math.floor(duration / Math.abs(range)), 16);
+    let current = safeStart;
     
     const timer = setInterval(function() {
         current += increment;
         element.textContent = current.toLocaleString();
-        if (current === end) {
+        if (current === safeEnd) {
             clearInterval(timer);
         }
     }, stepTime);

@@ -339,6 +339,21 @@
             <label class="checkbox-pill workflow-toggle">
               <input
                 type="checkbox"
+                data-panel-target="qc_images"
+                onchange="togglePanel(this)"
+              />
+              QC Images
+            </label>
+            <div class="detail-panel" data-panel="qc_images">
+              <div class="panel-title">QC Images</div>
+              <div class="token-list" style="display: none;"></div>
+            </div>
+          </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input
+                type="checkbox"
                 data-panel-target="testing"
                 onchange="togglePanel(this)"
               />

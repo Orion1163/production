@@ -291,6 +291,7 @@
         'leaded': 'Leaded',
         'prod_qc': 'Production QC',
         'qc': 'QC',
+        'qc_images': 'QC Images',
         'testing': 'Testing',
         'glueing': 'Glueing',
         'cleaning': 'Cleaning',
