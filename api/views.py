@@ -794,8 +794,12 @@ class UserPartSectionsView(APIView):
                 enabled_sections = []
             
             # Filter sections by user roles - only return sections user has access to
+            # Also exclude qc_images from sidebar (it should not appear as a sidebar option)
             accessible_sections = []
             for section_key in enabled_sections:
+                # Skip qc_images - it should not appear in the sidebar
+                if section_key == 'qc_images':
+                    continue
                 if has_role_access(user_roles, section_key):
                     accessible_sections.append(section_key)
             
@@ -4641,6 +4645,440 @@ class QCSubmitView(APIView):
                 {
                     'error': str(e),
                     'message': 'Failed to submit QC data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SerialNumberStatusView(APIView):
+    """
+    GET API endpoint to check serial number status in completion table.
+    Checks if serial number exists and validates section completion status.
+    """
+    
+    def get(self, request):
+        """
+        Check serial number status.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - exists: Boolean indicating if serial number exists
+        - is_new_entry: Boolean indicating if it's a new entry
+        - incomplete_sections: List of section names that are incomplete (if exists)
+        - message: Status message
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'exists': False,
+                        'is_new_entry': True,
+                        'incomplete_sections': [],
+                        'message': 'New entry - completion model not configured'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, it's a new entry
+            if not entry:
+                return Response(
+                    {
+                        'exists': False,
+                        'is_new_entry': True,
+                        'incomplete_sections': [],
+                        'message': 'New entry'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Entry exists - check section completion status
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+                enabled_sections = procedure_detail.get_enabled_sections()
+                
+                # Only check sections AFTER QC (serial numbers are assigned at QC stage)
+                # Pre-QC sections: kit, smd, smd_qc, pre_forming_qc, accessories_packing, leaded_qc, prod_qc
+                # Post-QC sections: testing, heat_run, glueing, cleaning, spraying, dispatch
+                sections_to_check = [
+                    'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+                ]
+                
+                incomplete_sections = []
+                
+                # Check each enabled section
+                for section in enabled_sections:
+                    if section not in sections_to_check:
+                        continue  # Skip sections we don't check
+                    
+                    # Try different field name patterns for this section
+                    section_field_patterns = [
+                        f'{section}',
+                        f'qc_{section}',
+                        f'{section}_done',
+                        f'{section}_completed',
+                        f'{section}_status'
+                    ]
+                    
+                    section_completed = False
+                    
+                    for field_pattern in section_field_patterns:
+                        if field_pattern in all_field_names:
+                            try:
+                                field_value = getattr(entry, field_pattern, None)
+                                # Check if it's a boolean True or string 'true' or '1'
+                                if isinstance(field_value, bool):
+                                    section_completed = field_value
+                                elif isinstance(field_value, str):
+                                    section_completed = field_value.lower() in ('true', '1', 'yes', 'on')
+                                elif isinstance(field_value, (int, float)):
+                                    section_completed = bool(field_value)
+                                break
+                            except Exception:
+                                continue
+                    
+                    if not section_completed:
+                        # Format section name for display
+                        display_name = section.replace('_', ' ').title()
+                        incomplete_sections.append(display_name)
+                
+                if incomplete_sections:
+                    return Response(
+                        {
+                            'exists': True,
+                            'is_new_entry': False,
+                            'incomplete_sections': incomplete_sections,
+                            'message': f'Entry exists but incomplete. Stuck at: {", ".join(incomplete_sections)}'
+                        },
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    return Response(
+                        {
+                            'exists': True,
+                            'is_new_entry': False,
+                            'incomplete_sections': [],
+                            'message': 'Entry exists and all sections are completed'
+                        },
+                        status=status.HTTP_200_OK
+                    )
+                    
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail - can't check sections
+                return Response(
+                    {
+                        'exists': True,
+                        'is_new_entry': False,
+                        'incomplete_sections': [],
+                        'message': 'Entry exists (procedure config not available)'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                import sys
+                print(f"Error checking section status: {str(e)}", file=sys.stderr)
+                return Response(
+                    {
+                        'exists': True,
+                        'is_new_entry': False,
+                        'incomplete_sections': [],
+                        'message': 'Entry exists (error checking section status)'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Serial Number Status Check Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to check serial number status',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class TestingSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if QC checkbox is true and all other section checkboxes are false.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # All possible section names
+            all_sections = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+            ]
+            
+            # Check QC checkbox is true
+            qc_checkbox_found = False
+            qc_checkbox_true = False
+            
+            # Try different patterns for QC checkbox
+            qc_patterns = ['qc_qc', 'qc']
+            for pattern in qc_patterns:
+                if pattern in all_field_names:
+                    try:
+                        qc_value = getattr(entry, pattern, None)
+                        qc_checkbox_found = True
+                        if isinstance(qc_value, bool):
+                            qc_checkbox_true = qc_value
+                        elif isinstance(qc_value, str):
+                            qc_checkbox_true = qc_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(qc_value, (int, float)):
+                            qc_checkbox_true = bool(qc_value)
+                        break
+                    except Exception:
+                        continue
+            
+            if not qc_checkbox_found:
+                return Response(
+                    {
+                        'error': 'QC checkbox field not found',
+                        'message': 'Cannot verify QC completion status'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if not qc_checkbox_true:
+                return Response(
+                    {
+                        'error': 'QC not completed',
+                        'message': 'QC checkbox is not checked for this serial number'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check all other section checkboxes are false
+            # Exclude QC section from check
+            other_sections = [s for s in all_sections if s != 'qc']
+            
+            for section in other_sections:
+                # Try different field name patterns for this section
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing
+                    f'{section}',  # e.g., testing
+                    f'qc_{section}',  # e.g., qc_testing
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            # Check if it's a boolean True or string 'true' or '1'
+                            section_completed = False
+                            if isinstance(section_value, bool):
+                                section_completed = section_value
+                            elif isinstance(section_value, str):
+                                section_completed = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_completed = bool(section_value)
+                            
+                            if section_completed:
+                                return Response(
+                                    {
+                                        'error': 'Other sections completed',
+                                        'message': f'Section {section} is already completed. Only QC should be completed.',
+                                        'completed_section': section
+                                    },
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+            
+            # All conditions met - return USID
+            usid = getattr(entry, 'usid', None)
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': 'Serial number found but USID is missing'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            return Response(
+                {
+                    'usid': usid,
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and QC completed'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Testing Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
                     'details': error_details
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

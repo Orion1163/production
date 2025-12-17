@@ -5,10 +5,507 @@
 
 {% block page_title %}Testing{% endblock %}
 
+{% block extra_head %}
+<style>
+  .testing-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .testing-form-card {
+    width: 100%;
+    margin: 0 auto;
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .form-header p {
+    color: var(--text-muted, rgba(229, 231, 235, 0.8));
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .input-group {
+    position: relative;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+  }
+
+  .input-group:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+
+  .input-group:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .input-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-muted, #a5adcb);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .input-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    transition: transform 0.3s ease;
+  }
+
+  .input-group:hover .input-icon {
+    transform: scale(1.1) rotate(5deg);
+  }
+
+  .input-field-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 1rem 1rem 1rem 3rem;
+    background: var(--surface, #2a2b38);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-sm, 10px);
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.5));
+    transition: opacity 0.3s ease;
+  }
+
+  .input-field:focus::placeholder {
+    opacity: 0.6;
+  }
+
+  .input-field:focus {
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1), 0 4px 12px rgba(139, 92, 246, 0.15);
+    background: var(--card-bg, #1f202b);
+    transform: translateY(-2px);
+  }
+
+  .input-field:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .input-field-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 1;
+  }
+
+  .input-field:focus ~ .input-field-icon {
+    color: var(--primary, #8b5cf6);
+    transform: translateY(-50%) scale(1.15);
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.5));
+  }
+
+  .input-field:invalid:not(:placeholder-shown) {
+    border-color: #ef4444;
+  }
+
+  .input-field:valid:not(:placeholder-shown) {
+    border-color: #10b981;
+  }
+
+  .input-field[readonly] {
+    background: var(--surface, #2a2b38);
+    cursor: not-allowed;
+    opacity: 0.8;
+  }
+
+  .input-field[readonly]:focus {
+    border-color: var(--surface-border, rgba(255, 255, 255, 0.08));
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* Submit Button Styles */
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 2.5rem;
+    animation: fadeInUp 0.6s ease-out 0.3s both;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+  }
+
+  .submit-btn:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .submit-btn span {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .testing-form-card {
+      padding: 1.5rem;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .form-header p {
+      font-size: 0.9rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .testing-form-card {
+      padding: 1rem;
+      border-radius: var(--radius-md, 14px);
+    }
+
+    .input-field {
+      padding: 0.875rem 0.875rem 0.875rem 2.75rem;
+      font-size: 0.95rem;
+    }
+
+    .input-label {
+      font-size: 0.85rem;
+    }
+
+    .submit-btn {
+      padding: 0.875rem 2rem;
+      font-size: 0.9rem;
+    }
+  }
+
+  @media (min-width: 769px) {
+    .form-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
-  <h1>Testing</h1>
-  <p>Hello</p>
+<div class="testing-container">
+  <div class="page-heading">
+    <h1>Testing</h1>
+    <hr />
+  </div>
+  
+  <div class="testing-form-card">
+  
+
+    <form id="testingForm" class="testing-form">
+      <div class="form-grid">
+        <!-- Serial Number Input -->
+        <div class="input-group">
+          <label class="input-label" for="serialNumber">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            </svg>
+            Serial Number
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="serialNumber" 
+              name="serialNumber" 
+              class="input-field" 
+              placeholder="Enter 4-digit serial number"
+              required
+              autocomplete="off"
+              maxlength="4"
+              pattern="\d{4}"
+              inputmode="numeric"
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- USID Input -->
+        <div class="input-group">
+          <label class="input-label" for="usid">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+            </svg>
+            USID
+          </label>
+          <div class="input-field-wrapper">
+            <input 
+              type="text" 
+              id="usid" 
+              name="usid" 
+              class="input-field" 
+              placeholder="Enter USID"
+              required
+              autocomplete="off"
+            />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Button Section -->
+      <div class="submit-section">
+        <button type="submit" class="submit-btn">
+          <span>Submit</span>
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
+{% block extra_scripts %}
+<script>
+  // API endpoint for testing serial number search
+  const TESTING_SERIAL_SEARCH_URL = '/api/v2/testing-serial-number-search/';
+  
+  // Get part_no from window (set in base_section.html)
+  const PART_NO = window.PART_NO;
+  
+  // Serial number input field
+  const serialNumberInput = document.getElementById('serialNumber');
+  const usidInput = document.getElementById('usid');
+  
+  let lastCheckedValue = '';
+  
+  // Setup serial number search
+  if (serialNumberInput) {
+    // Restrict input to numbers only
+    serialNumberInput.addEventListener('input', function(e) {
+      // Remove any non-digit characters
+      this.value = this.value.replace(/\D/g, '');
+    });
+    
+    serialNumberInput.addEventListener('input', function(e) {
+      const serialNumber = this.value.trim();
+      
+      // Clear USID field when serial number changes
+      if (usidInput) {
+        usidInput.value = '';
+      }
+      
+      // Hide message if input is cleared
+      if (serialNumber.length === 0) {
+        lastCheckedValue = '';
+        return;
+      }
+      
+      // Only search when exactly 4 digits are entered
+      if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
+        lastCheckedValue = serialNumber;
+        // Search immediately when 4 digits are entered
+        searchSerialNumber(serialNumber);
+      } else if (serialNumber.length > 4) {
+        // If more than 4 digits, truncate to 4
+        this.value = serialNumber.substring(0, 4);
+        if (this.value !== lastCheckedValue && /^\d{4}$/.test(this.value)) {
+          lastCheckedValue = this.value;
+          searchSerialNumber(this.value);
+        }
+      }
+      // If less than 4 digits, do nothing - don't search
+    });
+    
+    // Also search on blur (when user leaves the field) if exactly 4 digits
+    serialNumberInput.addEventListener('blur', function(e) {
+      const serialNumber = this.value.trim();
+      if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
+        lastCheckedValue = serialNumber;
+        searchSerialNumber(serialNumber);
+      }
+    });
+  }
+  
+  /**
+   * Search for serial number and populate USID if found
+   */
+  async function searchSerialNumber(serialNumber) {
+    if (!PART_NO) {
+      console.error('Part number not available');
+      showMessage('Part number not available', 'error');
+      return;
+    }
+    
+    if (!serialNumber) {
+      return;
+    }
+    
+    try {
+      const params = new URLSearchParams({
+        part_no: PART_NO,
+        serial_number: serialNumber
+      });
+      
+      const response = await fetch(`${TESTING_SERIAL_SEARCH_URL}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin'
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Handle error response
+        const errorMessage = data.message || data.error || 'Failed to search serial number';
+        showMessage(errorMessage, 'error');
+        if (usidInput) {
+          usidInput.value = '';
+        }
+        return;
+      }
+      
+      // Success - populate USID field
+      if (data.usid && usidInput) {
+        usidInput.value = data.usid;
+        // Don't show success message on every keystroke, only log
+        console.log('USID found and populated:', data.usid);
+      } else {
+        showMessage('USID not found in response', 'error');
+      }
+      
+    } catch (error) {
+      console.error('Error searching serial number:', error);
+      showMessage('Error searching serial number. Please try again.', 'error');
+      if (usidInput) {
+        usidInput.value = '';
+      }
+    }
+  }
+  
+  /**
+   * Show message to user using toast system
+   */
+  function showMessage(message, type) {
+    // Check if toast system is available
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type === 'error' ? 'error' : 'success', { duration: 3000 });
+    } else {
+      // Fallback: log to console
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+  }
+  
+  // Form submission handler
+  document.getElementById('testingForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const serialNumber = document.getElementById('serialNumber').value;
+    const usid = document.getElementById('usid').value;
+    
+    // Add your form submission logic here
+    console.log('Serial Number:', serialNumber);
+    console.log('USID:', usid);
+    
+    // Example: You can add API call here
+    // fetch('/api/testing/', {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({ serialNumber, usid })
+    // });
+  });
+</script>
+{% endblock %}

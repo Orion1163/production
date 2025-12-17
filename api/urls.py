@@ -7,7 +7,7 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    USIDGenerateView, QCSubmitView
+    USIDGenerateView, QCSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView
 )
 
 urlpatterns = [
@@ -42,4 +42,6 @@ urlpatterns = [
     path('qc-procedure-config/<str:part_no>/', QCProcedureConfigView.as_view(), name='qc-procedure-config'),
     path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
     path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
+    path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
+    path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
 ]

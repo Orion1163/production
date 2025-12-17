@@ -9,6 +9,7 @@
     const API_BASE_URL = '/api/v2/qc-procedure-config/';
     const USID_API_URL = '/api/v2/usid-generate/';
     const QC_SUBMIT_URL = '/api/v2/qc-submit/';
+    const SERIAL_STATUS_URL = '/api/v2/serial-number-status/';
     const PART_NO = window.PART_NO || '';
 
     /**
@@ -373,6 +374,16 @@
 
         // Setup form submission handler
         setupFormSubmission();
+
+        // Setup serial number validation
+        setupSerialNumberValidation();
+
+        // Ensure submit button is enabled initially
+        const form = document.getElementById('qcForm');
+        const submitButton = form ? form.querySelector('button[type="submit"]') || form.querySelector('input[type="submit"]') : null;
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
     }
 
     /**
@@ -386,6 +397,148 @@
         }
 
         form.addEventListener('submit', handleFormSubmit);
+    }
+
+    /**
+     * Setup serial number validation
+     * Checks serial number status when 4 digits are entered
+     */
+    function setupSerialNumberValidation() {
+        const serialNumberInput = document.getElementById('serialNumber');
+        const statusMessage = document.getElementById('serialStatusMessage');
+        
+        if (!serialNumberInput || !statusMessage) {
+            return;
+        }
+
+        let debounceTimer = null;
+        let lastCheckedValue = '';
+
+        serialNumberInput.addEventListener('input', function() {
+            const value = this.value.trim();
+            
+            // Clear previous timer
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+
+            // Hide message if input is cleared
+            if (value.length === 0) {
+                statusMessage.classList.remove('show');
+                statusMessage.textContent = '';
+                lastCheckedValue = '';
+                // Re-enable submit button when input is cleared
+                const form = document.getElementById('qcForm');
+                const submitButton = form ? form.querySelector('button[type="submit"]') || form.querySelector('input[type="submit"]') : null;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+                return;
+            }
+
+            // Check if exactly 4 digits (numbers only)
+            if (/^\d{4}$/.test(value) && value !== lastCheckedValue) {
+                lastCheckedValue = value;
+                
+                // Show loading state
+                statusMessage.className = 'serial-status-message loading show';
+                statusMessage.textContent = 'Checking status...';
+
+                // Debounce API call by 500ms
+                debounceTimer = setTimeout(() => {
+                    checkSerialNumberStatus(value);
+                }, 500);
+            } else if (value.length < 4) {
+                // Hide message if less than 4 digits
+                statusMessage.classList.remove('show');
+                statusMessage.textContent = '';
+            } else if (value.length > 4) {
+                // If more than 4 digits, still check but update message
+                if (value !== lastCheckedValue) {
+                    lastCheckedValue = value;
+                    statusMessage.className = 'serial-status-message loading show';
+                    statusMessage.textContent = 'Checking status...';
+                    
+                    debounceTimer = setTimeout(() => {
+                        checkSerialNumberStatus(value);
+                    }, 500);
+                }
+            }
+        });
+    }
+
+    /**
+     * Check serial number status via API
+     */
+    async function checkSerialNumberStatus(serialNumber) {
+        const statusMessage = document.getElementById('serialStatusMessage');
+        const form = document.getElementById('qcForm');
+        const submitButton = form ? form.querySelector('button[type="submit"]') || form.querySelector('input[type="submit"]') : null;
+        
+        if (!PART_NO) {
+            statusMessage.className = 'serial-status-message error show';
+            statusMessage.textContent = 'Part number not available';
+            // Disable submit button on error
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams({
+                part_no: PART_NO,
+                serial_number: serialNumber
+            });
+
+            const response = await fetch(`${SERIAL_STATUS_URL}?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Update status message and submit button based on response
+            if (data.is_new_entry) {
+                statusMessage.className = 'serial-status-message new-entry show';
+                statusMessage.textContent = '✓ New entry';
+                // Enable submit button for new entry
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+            } else if (data.incomplete_sections && data.incomplete_sections.length > 0) {
+                statusMessage.className = 'serial-status-message incomplete show';
+                const sectionsText = data.incomplete_sections.join(', ');
+                statusMessage.textContent = `⚠ Stuck at: ${sectionsText}`;
+                // Disable submit button when stuck
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+            } else {
+                statusMessage.className = 'serial-status-message complete show';
+                statusMessage.textContent = '✓ All sections completed';
+                // Disable submit button if all sections completed (already processed)
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+            }
+
+        } catch (error) {
+            console.error('Error checking serial number status:', error);
+            statusMessage.className = 'serial-status-message error show';
+            statusMessage.textContent = 'Error checking status. Please try again.';
+            // Disable submit button on error
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+        }
     }
 
     /**
@@ -494,6 +647,18 @@
 
             // Reset form after successful submission
             form.reset();
+
+            // Clear status message
+            const statusMessage = document.getElementById('serialStatusMessage');
+            if (statusMessage) {
+                statusMessage.classList.remove('show');
+                statusMessage.textContent = '';
+            }
+
+            // Re-enable submit button after reset
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
 
             // Re-fetch USID for next entry
             await fetchAndPopulateUSID();
