@@ -3,7 +3,8 @@ from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
     ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
     DashboardStatsSerializer, DashboardChartDataSerializer, UserModelListSerializer,
-    ModelPartSerializer, KitVerificationSerializer, QCProcedureConfigSerializer
+    ModelPartSerializer, KitVerificationSerializer, QCProcedureConfigSerializer,
+    TestingProcedureConfigSerializer, QCSubmitSerializer, TestingSubmitSerializer
 )
 from django.db.models import Max, Count, Q
 from django.db import connection
@@ -4275,6 +4276,80 @@ class QCProcedureConfigView(APIView):
             )
 
 
+class TestingProcedureConfigView(APIView):
+    """
+    Get Testing procedure configuration for a specific part_no.
+    Returns mode, custom_fields and custom_checkboxes from the Testing section of procedure_config.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            # Get ModelPart by part_no
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure detail if it exists
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail exists, return empty config
+                return Response(
+                    {
+                        'part_no': part_no,
+                        'mode': 'Manual',
+                        'custom_fields': [],
+                        'custom_checkboxes': [],
+                        'enabled': False
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Extract Testing section from procedure_config
+            testing_config = procedure_config.get('testing', {})
+            
+            # Get mode (default to Manual if not specified)
+            mode = testing_config.get('mode', 'Manual')
+            # Normalize mode values
+            if mode.lower() in ['automatic', 'auto']:
+                mode = 'Automatic'
+            else:
+                mode = 'Manual'
+            
+            # Get custom fields and checkboxes (only used in manual mode)
+            custom_fields = testing_config.get('custom_fields', [])
+            custom_checkboxes = testing_config.get('custom_checkboxes', [])
+            enabled = testing_config.get('enabled', False)
+            
+            # Prepare response data
+            response_data = {
+                'part_no': part_no,
+                'mode': mode,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            
+            # Serialize and return
+            serializer = TestingProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class USIDGenerateView(APIView):
     """
     Generate a unique USID for QC page.
@@ -4473,29 +4548,6 @@ class QCSubmitView(APIView):
             # Get all field names from the completion model
             all_field_names = [f.name for f in completion_model._meta.fields]
             
-            # Try to find corresponding in_process entry by serial_number (optional)
-            in_process_entry = None
-            try:
-                in_process_model = get_or_create_part_data_model(
-                    part_no,
-                    table_type='in_process'
-                )
-                if in_process_model:
-                    # Try to find in_process entry by serial_number
-                    # Check common field names for serial number
-                    serial_field_names = ['serial_number', 'tag_no', 'in-process_tag_number']
-                    for field_name in serial_field_names:
-                        if hasattr(in_process_model, field_name):
-                            try:
-                                in_process_entry = in_process_model.objects.filter(**{field_name: serial_number}).first()
-                                if in_process_entry:
-                                    break
-                            except:
-                                pass
-            except Exception as e:
-                import sys
-                print(f"Warning: Could not find in_process entry: {str(e)}", file=sys.stderr)
-            
             # Prepare entry data
             entry_data = {
                 'usid': usid,
@@ -4528,10 +4580,6 @@ class QCSubmitView(APIView):
             
             if qc_done_by_field:
                 entry_data[qc_done_by_field] = qc_done_by
-            
-            # Add in_process_entry ForeignKey if found
-            if in_process_entry and 'in_process_entry' in all_field_names:
-                entry_data['in_process_entry'] = in_process_entry
             
             # Add custom fields from procedure_config
             # Get procedure config to know which fields are valid
@@ -4612,7 +4660,7 @@ class QCSubmitView(APIView):
                     'usid': usid,
                     'serial_number': serial_number,
                     'entry_id': entry.id,
-                    'in_process_entry_linked': in_process_entry is not None
+                    'in_process_entry_linked': False
                 }
                 
                 return Response(
@@ -4645,6 +4693,250 @@ class QCSubmitView(APIView):
                 {
                     'error': str(e),
                     'message': 'Failed to submit QC data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class TestingSubmitView(APIView):
+    """
+    PUT API endpoint for updating Testing data in completion table.
+    Updates an existing entry in the completion table with Testing data based on serial_number and usid.
+    Handles both Automatic mode (test_message) and Manual mode (custom_fields and custom_checkboxes).
+    """
+    
+    def put(self, request):
+        """
+        Update Testing data in completion table.
+        Finds existing entry by serial_number and usid, then updates Testing fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - usid: Unique Serial ID (required)
+        - serial_number: Serial Number/Tag No. (required)
+        - testing_done_by: Person who did the Testing (optional)
+        - mode: Testing mode - 'Automatic' or 'Manual' (required)
+        - test_message: Test message for automatic mode (optional, required if mode is Automatic)
+        - custom_fields: Dictionary of custom field values for manual mode (optional)
+        - custom_checkboxes: Dictionary of custom checkbox values for manual mode (optional)
+        """
+        try:
+            # Validate serializer
+            from .serializers import TestingSubmitSerializer
+            serializer = TestingSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            usid = validated_data['usid']
+            serial_number = validated_data['serial_number']
+            testing_done_by = validated_data.get('testing_done_by', '')
+            mode = validated_data.get('mode', 'Manual')
+            test_message = validated_data.get('test_message', '')
+            custom_fields = validated_data.get('custom_fields', {}) or {}
+            custom_checkboxes = validated_data.get('custom_checkboxes', {}) or {}
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Testing section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find existing entry by serial_number and usid
+            try:
+                entry = completion_model.objects.get(
+                    serial_number=serial_number,
+                    usid=usid
+                )
+            except completion_model.DoesNotExist:
+                return Response(
+                    {'error': f'Entry not found for serial number {serial_number} and USID {usid}. Please ensure the entry exists in the completion table.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except completion_model.MultipleObjectsReturned:
+                # If multiple entries exist, get the most recent one
+                entry = completion_model.objects.filter(
+                    serial_number=serial_number,
+                    usid=usid
+                ).order_by('-created_at').first()
+            
+            # Prepare update data
+            update_data = {}
+            
+            # Add testing_done_by if field exists in model
+            # Try both with and without testing_ prefix
+            testing_done_by_field = None
+            if 'testing_testing_done_by' in all_field_names:
+                testing_done_by_field = 'testing_testing_done_by'
+            elif 'testing_done_by' in all_field_names:
+                testing_done_by_field = 'testing_done_by'
+            
+            if testing_done_by_field:
+                update_data[testing_done_by_field] = testing_done_by
+            
+            # Handle mode-specific data
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+                testing_config = procedure_config.get('testing', {})
+                testing_custom_fields = testing_config.get('custom_fields', [])
+                testing_custom_checkboxes = testing_config.get('custom_checkboxes', [])
+                
+                if mode.lower() == 'automatic':
+                    # Automatic mode: store test_message
+                    # Try with testing_ prefix first
+                    test_message_field = None
+                    if 'testing_test_message' in all_field_names:
+                        test_message_field = 'testing_test_message'
+                    elif 'test_message' in all_field_names:
+                        test_message_field = 'test_message'
+                    
+                    if test_message_field:
+                        update_data[test_message_field] = test_message
+                    else:
+                        # If test_message field doesn't exist, try to find a suitable field
+                        # Look for any testing-related text field
+                        for field_name in all_field_names:
+                            if 'testing' in field_name.lower() and 'message' in field_name.lower():
+                                update_data[field_name] = test_message
+                                break
+                
+                else:
+                    # Manual mode: process custom fields and checkboxes
+                    # Process custom fields
+                    # Fields in the database have testing_ prefix, but frontend sends without prefix
+                    for field_config in testing_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            # Try with testing_ prefix first (standard format)
+                            prefixed_field_name = f"testing_{field_name}" if not field_name.startswith('testing_') else field_name
+                            # Also try without prefix as fallback
+                            if prefixed_field_name in all_field_names:
+                                # Get value from custom_fields dict or use empty string
+                                field_value = custom_fields.get(field_name, '')
+                                update_data[prefixed_field_name] = field_value
+                            elif field_name in all_field_names:
+                                # Fallback: use field name as-is if it exists
+                                field_value = custom_fields.get(field_name, '')
+                                update_data[field_name] = field_value
+                    
+                    # Process custom checkboxes
+                    # Checkboxes in the database have testing_ prefix, but frontend sends without prefix
+                    for checkbox_config in testing_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        # Skip 'testing' checkbox itself
+                        if checkbox_name and checkbox_name.lower() != 'testing':
+                            # Try with testing_ prefix first (standard format)
+                            prefixed_checkbox_name = f"testing_{checkbox_name}" if not checkbox_name.startswith('testing_') else checkbox_name
+                            # Also try without prefix as fallback
+                            if prefixed_checkbox_name in all_field_names:
+                                # Get value from custom_checkboxes dict or use False
+                                checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                                # Convert to boolean
+                                if isinstance(checkbox_value, str):
+                                    checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                                update_data[prefixed_checkbox_name] = bool(checkbox_value)
+                            elif checkbox_name in all_field_names:
+                                # Fallback: use checkbox name as-is if it exists
+                                checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(checkbox_value, str):
+                                    checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                                update_data[checkbox_name] = bool(checkbox_value)
+                            else:
+                                # Log warning if checkbox field not found but value was provided
+                                checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                                if checkbox_value:
+                                    import sys
+                                    print(f"Warning: Testing checkbox field '{checkbox_name}' (tried '{prefixed_checkbox_name}') not found in model. Available fields: {[f for f in all_field_names if 'testing' in f.lower()][:10]}...", file=sys.stderr)
+                
+                # Set testing boolean flag if field exists
+                if 'testing_testing' in all_field_names:
+                    update_data['testing_testing'] = True
+                elif 'testing' in all_field_names:
+                    update_data['testing'] = True
+                    
+            except PartProcedureDetail.DoesNotExist:
+                # No procedure detail, just use basic fields
+                pass
+            except Exception as e:
+                import sys
+                print(f"Warning: Could not process Testing custom fields: {str(e)}", file=sys.stderr)
+            
+            # Update the entry in completion table
+            try:
+                # Update all fields in update_data
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Testing data updated successfully for USID: {usid}',
+                    'part_no': part_no,
+                    'usid': usid,
+                    'serial_number': serial_number,
+                    'mode': mode,
+                    'entry_id': entry.id,
+                    'updated_fields': list(update_data.keys()),
+                    'testing': True
+                }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                import sys
+                error_details = traceback.format_exc()
+                print(f"Error updating Testing entry: {str(e)}", file=sys.stderr)
+                print(error_details, file=sys.stderr)
+                return Response(
+                    {
+                        'error': 'Failed to update Testing entry',
+                        'message': str(e),
+                        'details': error_details
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Testing Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Testing data',
                     'details': error_details
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

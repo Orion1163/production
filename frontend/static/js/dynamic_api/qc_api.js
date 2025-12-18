@@ -261,6 +261,18 @@
         checkboxWrapper.appendChild(label);
         checkboxGroup.appendChild(checkboxWrapper);
 
+        // Add click handler to wrapper to toggle checkbox
+        // This makes the entire wrapper clickable, not just the label
+        checkboxWrapper.addEventListener('click', function(e) {
+            // If clicking on the label, let it handle via 'for' attribute
+            // Otherwise, toggle the checkbox manually
+            if (e.target === checkboxWrapper || e.target === checkboxIndicator) {
+                e.preventDefault();
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
         // Add event listener to toggle checked class
         checkbox.addEventListener('change', function() {
             if (this.checked) {

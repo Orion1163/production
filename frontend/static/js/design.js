@@ -183,7 +183,7 @@
     if (!manualSection) {
       return;
     }
-    manualSection.style.display = select.value === 'manual' ? 'block' : 'none';
+    manualSection.style.display = select.value === 'Manual' ? 'block' : 'none';
   };
 
   const addInputField = (button) => {

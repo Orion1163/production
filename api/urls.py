@@ -7,7 +7,7 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    USIDGenerateView, QCSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView
+    TestingProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView
 )
 
 urlpatterns = [
@@ -40,8 +40,10 @@ urlpatterns = [
     path('accessories-packing-data-fetch/', AccessoriesPackingDataFetchView.as_view(), name='accessories-packing-data-fetch'),
     path('accessories-packing-update/', AccessoriesPackingUpdateView.as_view(), name='accessories-packing-update'),
     path('qc-procedure-config/<str:part_no>/', QCProcedureConfigView.as_view(), name='qc-procedure-config'),
+    path('testing-procedure-config/<str:part_no>/', TestingProcedureConfigView.as_view(), name='testing-procedure-config'),
     path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
     path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
+    path('testing-submit/', TestingSubmitView.as_view(), name='testing-submit'),
     path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
     path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
 ]

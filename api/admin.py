@@ -365,14 +365,19 @@ def register_dynamic_model_in_admin(model_class, part_name):
             from django.contrib.admin.widgets import RelatedFieldWidgetWrapper
             from django.urls.exceptions import NoReverseMatch
             
+            # Check if this is a completion model
+            is_completion_model = (
+                'completion' in model_class.__name__.lower() or 
+                'completion' in model_class._meta.db_table.lower()
+            )
+            
             # Get the field using default behavior first
             field = super().formfield_for_foreignkey(db_field, request, **kwargs)
             
-            # Check if this is the in_process_entry ForeignKey field or any ForeignKey to a dynamic model
-            is_dynamic_fk = (db_field.name == 'in_process_entry' or 
-                            (hasattr(db_field, 'remote_field') and db_field.remote_field and 
-                             ('inprocess' in str(db_field.remote_field.model).lower() or 
-                              'completion' in str(db_field.remote_field.model).lower())))
+            # Check if this is a ForeignKey to a dynamic model
+            is_dynamic_fk = (hasattr(db_field, 'remote_field') and db_field.remote_field and 
+                            ('inprocess' in str(db_field.remote_field.model).lower() or 
+                             'completion' in str(db_field.remote_field.model).lower()))
             
             # For all ForeignKey fields, especially dynamic model ForeignKeys, wrap widget methods
             if field and hasattr(field, 'widget'):
@@ -383,6 +388,8 @@ def register_dynamic_model_in_admin(model_class, part_name):
                     # First, ensure the related model is registered in admin
                     if hasattr(db_field, 'remote_field') and db_field.remote_field:
                         related_model = db_field.remote_field.model
+                        
+                        # Also try to register if not registered (for non-completion models too)
                         if related_model not in admin.site._registry:
                             # Try to register the related model
                             try:
@@ -401,12 +408,18 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                 print("Auto-registering related model %s for ForeignKey field %s" % (
                                     related_part_name, db_field.name
                                 ), file=sys.stderr)
-                                register_dynamic_model_in_admin(related_model, related_part_name)
+                                # Determine table type for registration
+                                if 'inprocess' in related_class_name or 'in_process' in related_class_name:
+                                    register_dynamic_model_in_admin(related_model, f"{related_part_name}_in_process")
+                                elif 'completion' in related_class_name:
+                                    register_dynamic_model_in_admin(related_model, f"{related_part_name}_completion")
+                                else:
+                                    register_dynamic_model_in_admin(related_model, related_part_name)
                             except Exception as e:
                                 import sys
                                 print("Warning: Could not auto-register related model: %s" % str(e), file=sys.stderr)
                     
-                    # Override get_related_url to prevent URL reversal errors
+                    # Override get_related_url to prevent URL reversal errors (general case)
                     if hasattr(widget, 'get_related_url'):
                         original_get_related_url = widget.get_related_url
                         def safe_get_related_url(info, action, *args, **kwargs):
@@ -420,11 +433,13 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                             related_class_name = related_model.__name__.lower()
                                             if 'inprocess' in related_class_name:
                                                 related_part_name = related_class_name.split('inprocess')[0].rstrip('_')
+                                                register_dynamic_model_in_admin(related_model, f"{related_part_name}_in_process")
                                             elif 'completion' in related_class_name:
                                                 related_part_name = related_class_name.split('completion')[0].rstrip('_')
+                                                register_dynamic_model_in_admin(related_model, f"{related_part_name}_completion")
                                             else:
                                                 related_part_name = related_class_name
-                                            register_dynamic_model_in_admin(related_model, related_part_name)
+                                                register_dynamic_model_in_admin(related_model, related_part_name)
                                         except Exception as reg_e:
                                             import sys
                                             print("Warning: Could not register related model before URL reversal: %s" % str(reg_e), file=sys.stderr)
@@ -449,7 +464,9 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                     action, str(e)
                                 ), file=sys.stderr)
                                 return None
-                        widget.get_related_url = safe_get_related_url
+                        # Only override if not already overridden for completion models
+                        if not (is_completion_model and db_field.name == 'in_process_entry'):
+                            widget.get_related_url = safe_get_related_url
                     
                     # Override get_context to catch any exceptions during template rendering
                     # This is the method that calls get_related_url and can fail with NoReverseMatch
@@ -596,40 +613,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
             except Exception as e:
                 import sys
                 print("Warning: Could not sync table for %s: %s" % (part_name, str(e)), file=sys.stderr)
-            
-            # CRITICAL: For completion models, ensure the related in_process model is registered
-            # BEFORE the form is rendered, to prevent NoReverseMatch errors in ForeignKey widgets
-            if 'completion' in model_class.__name__.lower() or 'completion' in model_class._meta.db_table.lower():
-                for field in model_class._meta.get_fields():
-                    if hasattr(field, 'remote_field') and field.remote_field:
-                        related_model = field.remote_field.model
-                        # Check if it's an in_process model
-                        is_related_in_process = (
-                            'inprocess' in related_model.__name__.lower() or 
-                            'in_process' in getattr(related_model._meta, 'db_table', '').lower()
-                        )
-                        if is_related_in_process and related_model not in admin.site._registry:
-                            # Extract part name from completion model
-                            completion_class_name = model_class.__name__.lower()
-                            if 'completion' in completion_class_name:
-                                related_part_name = completion_class_name.split('completion')[0].rstrip('_')
-                            else:
-                                # Fallback: try to extract from related model
-                                related_class_name = related_model.__name__.lower()
-                                if 'inprocess' in related_class_name:
-                                    related_part_name = related_class_name.split('inprocess')[0].rstrip('_')
-                                else:
-                                    related_part_name = related_class_name.replace('_in_process', '').replace('inprocess', '')
-                            
-                            import sys
-                            print("Pre-registering related in_process model %s for completion model %s" % (
-                                related_part_name, part_name
-                            ), file=sys.stderr)
-                            try:
-                                register_dynamic_model_in_admin(related_model, f"{related_part_name}_in_process")
-                            except Exception as e:
-                                import sys
-                                print("Warning: Could not pre-register related in_process model: %s" % str(e), file=sys.stderr)
             
             # Patch extra_context to fix URL reversing in templates
             if extra_context is None:
@@ -856,7 +839,388 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
         # If it fails, check if it's a dynamic model URL
         # Handle both 'admin:' prefix and direct view names
         is_admin_url = viewname.startswith('admin:')
-        if (is_admin_url or 'api_' in str(viewname)) and '_' in str(viewname):
+        viewname_str = str(viewname)
+        
+        # Early check for common dynamic model URL patterns
+        # e.g., "api_eics144_partinprocess_add" or "admin:api_eics144_partinprocess_add"
+        if 'partinprocess' in viewname_str.lower() or 'partcompletion' in viewname_str.lower() or 'part_inprocess' in viewname_str.lower() or 'part_completion' in viewname_str.lower():
+            # Extract the URL name (part after 'admin:' if present)
+            if is_admin_url:
+                parts = viewname_str.split(':')
+                if len(parts) == 2:
+                    url_name = parts[1]
+                else:
+                    url_name = viewname_str
+            else:
+                url_name = viewname_str
+            
+            # Check if it matches pattern: api_<model_name>_<action>
+            if url_name.startswith('api_') and url_name.count('_') >= 2:
+                url_parts = url_name.split('_')
+                if len(url_parts) >= 3:
+                    # Reconstruct model name (everything between 'api' and last part)
+                    model_name_from_url = '_'.join(url_parts[1:-1])
+                    action = url_parts[-1]
+                    
+                    # CRITICAL: First, try to find and register the model if it's not in admin registry
+                    # This ensures models are available even if they haven't been registered yet
+                    from .dynamic_models import DynamicModelRegistry
+                    all_dynamic_models = DynamicModelRegistry.get_all()
+                    
+                    # Try to find matching model in DynamicModelRegistry first
+                    # This catches models that exist but aren't registered in admin yet
+                    found_model = None
+                    found_model_name = None
+                    
+                    # Extract part name from URL (e.g., "eics112" from "eics112_partinprocess")
+                    url_lower_check = model_name_from_url.lower()
+                    part_name_candidate = None
+                    table_type_candidate = None
+                    
+                    # Try multiple patterns to extract part name
+                    if 'partinprocess' in url_lower_check or 'part_inprocess' in url_lower_check or ('inprocess' in url_lower_check and 'completion' not in url_lower_check):
+                        table_type_candidate = 'in_process'
+                        # Try different patterns in order of specificity
+                        for pattern in ['partinprocess', 'part_inprocess', 'inprocess', '_inprocess']:
+                            if pattern in url_lower_check:
+                                idx = url_lower_check.find(pattern)
+                                if idx > 0:
+                                    part_name_candidate = url_lower_check[:idx].rstrip('_')
+                                    # Remove 'api_' prefix if present
+                                    if part_name_candidate.startswith('api_'):
+                                        part_name_candidate = part_name_candidate[4:].rstrip('_')
+                                    break
+                        # If still not found, try to extract from the beginning
+                        if not part_name_candidate:
+                            # Remove common suffixes
+                            temp = url_lower_check
+                            for suffix in ['partinprocess', 'part_inprocess', 'inprocess', '_inprocess']:
+                                if temp.endswith(suffix):
+                                    temp = temp[:-len(suffix)].rstrip('_')
+                                    break
+                            if temp and temp != url_lower_check:
+                                part_name_candidate = temp
+                    elif 'partcompletion' in url_lower_check or 'part_completion' in url_lower_check or ('completion' in url_lower_check and 'inprocess' not in url_lower_check):
+                        table_type_candidate = 'completion'
+                        # Try different patterns in order of specificity
+                        for pattern in ['partcompletion', 'part_completion', 'completion']:
+                            if pattern in url_lower_check:
+                                idx = url_lower_check.find(pattern)
+                                if idx > 0:
+                                    part_name_candidate = url_lower_check[:idx].rstrip('_')
+                                    # Remove 'api_' prefix if present
+                                    if part_name_candidate.startswith('api_'):
+                                        part_name_candidate = part_name_candidate[4:].rstrip('_')
+                                    break
+                        # If still not found, try to extract from the beginning
+                        if not part_name_candidate:
+                            # Remove common suffixes
+                            temp = url_lower_check
+                            for suffix in ['partcompletion', 'part_completion', 'completion']:
+                                if temp.endswith(suffix):
+                                    temp = temp[:-len(suffix)].rstrip('_')
+                                    break
+                            if temp and temp != url_lower_check:
+                                part_name_candidate = temp
+                    
+                    # Search DynamicModelRegistry for matching model
+                    if part_name_candidate and table_type_candidate:
+                        # Normalize candidate for comparison
+                        candidate_normalized = part_name_candidate.replace('_', '').replace('-', '').lower()
+                        
+                        for part_name, models_dict in all_dynamic_models.items():
+                            # Normalize part names for comparison - try multiple strategies
+                            part_normalized = part_name.lower().replace('_', '').replace('-', '')
+                            
+                            # Also check if part_name contains the candidate or vice versa
+                            # e.g., "EICS112_Part" should match "eics112"
+                            part_base = part_name.lower().split('_')[0] if '_' in part_name.lower() else part_name.lower()
+                            
+                            # Check multiple matching strategies
+                            if (part_normalized == candidate_normalized or 
+                                candidate_normalized in part_normalized or 
+                                part_normalized in candidate_normalized or
+                                part_base == candidate_normalized or
+                                candidate_normalized in part_base):
+                                if table_type_candidate in models_dict and models_dict[table_type_candidate]:
+                                    found_model = models_dict[table_type_candidate]
+                                    found_model_name = getattr(found_model._meta, 'model_name', found_model.__name__.lower())
+                                    # Ensure it's registered in admin
+                                    if found_model not in admin.site._registry:
+                                        try:
+                                            import sys
+                                            print("Auto-registering model %s from DynamicModelRegistry for URL reverse" % found_model_name, file=sys.stderr)
+                                            register_dynamic_model_in_admin(found_model, f"{part_name}_{table_type_candidate}")
+                                        except Exception as e:
+                                            import sys
+                                            print("Warning: Could not auto-register model: %s" % str(e), file=sys.stderr)
+                                    break
+                    
+                    # If we found a model in DynamicModelRegistry, use it
+                    if found_model and found_model_name:
+                        # Build URL using the found model
+                        if action == 'changelist':
+                            return '/admin/api/%s/' % found_model_name
+                        elif action == 'add':
+                            return '/admin/api/%s/add/' % found_model_name
+                        elif action == 'change':
+                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                            if object_id:
+                                return '/admin/api/%s/%s/' % (found_model_name, object_id)
+                            return '/admin/api/%s/' % found_model_name
+                        elif action == 'delete':
+                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                            if object_id:
+                                return '/admin/api/%s/%s/delete/' % (found_model_name, object_id)
+                            return '/admin/api/%s/' % found_model_name
+                        else:
+                            return '/admin/api/%s/' % found_model_name
+                    
+                    # Now try to find matching model in admin registry (fastest for already registered models)
+                    for registered_model in admin.site._registry.keys():
+                        if registered_model._meta.app_label != 'api':
+                            continue
+                        
+                        registered_class_name = registered_model.__name__.lower()
+                        registered_model_name = getattr(registered_model._meta, 'model_name', registered_class_name)
+                        
+                        # Normalize both names for comparison
+                        normalized_url = model_name_from_url.lower().replace('_', '')
+                        normalized_registered = registered_model_name.replace('_', '').lower()
+                        normalized_class = registered_class_name.replace('_', '').lower()
+                        
+                        # Check if this is an in_process model
+                        # Handle patterns like: api_eics120_partinprocess_add, api_eics120_part_inprocess_add
+                        url_lower = url_name.lower()
+                        is_inprocess_url = ('partinprocess' in url_lower or 'part_inprocess' in url_lower or 
+                                           ('inprocess' in url_lower and 'completion' not in url_lower))
+                        is_inprocess_model = ('inprocess' in normalized_registered or 'in_process' in registered_model_name.lower() or
+                                            'inprocess' in registered_class_name or 'in_process' in registered_class_name)
+                        
+                        if is_inprocess_url and is_inprocess_model:
+                            # Extract part names - try multiple strategies
+                            # Strategy 1: Remove "partinprocess" or "part_inprocess" from URL
+                            url_part = None
+                            for pattern in ['partinprocess', 'part_inprocess', 'inprocess', '_inprocess']:
+                                if pattern in normalized_url:
+                                    url_part = normalized_url.split(pattern)[0].rstrip('_')
+                                    break
+                            if not url_part:
+                                url_part = normalized_url
+                            
+                            # Strategy 2: Extract from registered model name
+                            reg_part = None
+                            for pattern in ['partinprocess', 'part_inprocess', 'inprocess', '_inprocess']:
+                                if pattern in normalized_registered:
+                                    reg_part = normalized_registered.split(pattern)[0].rstrip('_')
+                                    break
+                            if not reg_part:
+                                reg_part = normalized_registered.split('part')[0].rstrip('_') if 'part' in normalized_registered else normalized_registered
+                            
+                            # Match if parts are similar (handle underscore variations)
+                            if url_part and reg_part:
+                                # Normalize for comparison (remove all underscores)
+                                url_part_clean = url_part.replace('_', '').lower()
+                                reg_part_clean = reg_part.replace('_', '').lower()
+                                
+                                # Also check if one contains the other (for cases like eics120 vs eics120_part)
+                                if (url_part_clean == reg_part_clean or 
+                                    url_part_clean in reg_part_clean or 
+                                    reg_part_clean in url_part_clean):
+                                    # Found match, build URL
+                                    if action == 'changelist':
+                                        return '/admin/api/%s/' % registered_model_name
+                                    elif action == 'add':
+                                        return '/admin/api/%s/add/' % registered_model_name
+                                    elif action == 'change':
+                                        object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                        if object_id:
+                                            return '/admin/api/%s/%s/' % (registered_model_name, object_id)
+                                        return '/admin/api/%s/' % registered_model_name
+                                    elif action == 'delete':
+                                        object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                        if object_id:
+                                            return '/admin/api/%s/%s/delete/' % (registered_model_name, object_id)
+                                        return '/admin/api/%s/' % registered_model_name
+                                    else:
+                                        return '/admin/api/%s/' % registered_model_name
+                        
+                        # Check if this is a completion model
+                        # Handle patterns like: api_eics120_partcompletion_add, api_eics120_part_completion_add
+                        url_lower = url_name.lower()
+                        is_completion_url = ('partcompletion' in url_lower or 'part_completion' in url_lower or 
+                                            ('completion' in url_lower and 'inprocess' not in url_lower))
+                        is_completion_model = ('completion' in normalized_registered and 'inprocess' not in normalized_registered and
+                                             'completion' in registered_class_name and 'inprocess' not in registered_class_name)
+                        
+                        if is_completion_url and is_completion_model:
+                            # Extract part names - try multiple strategies
+                            # Strategy 1: Remove "partcompletion" or "part_completion" from URL
+                            url_part = None
+                            for pattern in ['partcompletion', 'part_completion', 'completion']:
+                                if pattern in normalized_url:
+                                    url_part = normalized_url.split(pattern)[0].rstrip('_')
+                                    break
+                            if not url_part:
+                                url_part = normalized_url
+                            
+                            # Strategy 2: Extract from registered model name
+                            reg_part = None
+                            for pattern in ['partcompletion', 'part_completion', 'completion']:
+                                if pattern in normalized_registered:
+                                    reg_part = normalized_registered.split(pattern)[0].rstrip('_')
+                                    break
+                            if not reg_part:
+                                reg_part = normalized_registered.split('part')[0].rstrip('_') if 'part' in normalized_registered else normalized_registered
+                            
+                            # Match if parts are similar (handle underscore variations)
+                            if url_part and reg_part:
+                                # Normalize for comparison (remove all underscores)
+                                url_part_clean = url_part.replace('_', '').lower()
+                                reg_part_clean = reg_part.replace('_', '').lower()
+                                
+                                # Also check if one contains the other (for cases like eics120 vs eics120_part)
+                                if (url_part_clean == reg_part_clean or 
+                                    url_part_clean in reg_part_clean or 
+                                    reg_part_clean in url_part_clean):
+                                    # Found match, build URL
+                                    if action == 'changelist':
+                                        return '/admin/api/%s/' % registered_model_name
+                                    elif action == 'add':
+                                        return '/admin/api/%s/add/' % registered_model_name
+                                    elif action == 'change':
+                                        object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                        if object_id:
+                                            return '/admin/api/%s/%s/' % (registered_model_name, object_id)
+                                        return '/admin/api/%s/' % registered_model_name
+                                    elif action == 'delete':
+                                        object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                        if object_id:
+                                            return '/admin/api/%s/%s/delete/' % (registered_model_name, object_id)
+                                        return '/admin/api/%s/' % registered_model_name
+                                    else:
+                                        return '/admin/api/%s/' % registered_model_name
+                
+                # Aggressive fallback: If we haven't found a match yet, search all registered models
+                # This handles cases where the URL pattern doesn't exactly match but the model exists
+                if 'partinprocess' in url_name.lower() or 'part_inprocess' in url_name.lower():
+                    # Extract part name from URL (e.g., "eics120" from "api_eics120_partinprocess_add")
+                    url_lower = url_name.lower()
+                    part_name_candidate = None
+                    for pattern in ['partinprocess', 'part_inprocess']:
+                        if pattern in url_lower:
+                            # Extract everything before the pattern
+                            idx = url_lower.find(pattern)
+                            if idx > 0:
+                                # Get the part after 'api_' and before the pattern
+                                prefix = url_lower[:idx].rstrip('_')
+                                if prefix.startswith('api_'):
+                                    part_name_candidate = prefix[4:].rstrip('_')
+                                else:
+                                    part_name_candidate = prefix
+                            break
+                    
+                    # Search all registered models for matching inprocess model
+                    if part_name_candidate:
+                        for registered_model in admin.site._registry.keys():
+                            if registered_model._meta.app_label != 'api':
+                                continue
+                            
+                            registered_class_name = registered_model.__name__.lower()
+                            registered_model_name = getattr(registered_model._meta, 'model_name', registered_class_name)
+                            
+                            # Check if this is an inprocess model
+                            if ('inprocess' in registered_class_name or 'in_process' in registered_class_name) and 'completion' not in registered_class_name:
+                                # Extract part name from registered model
+                                registered_part = None
+                                for pattern in ['partinprocess', 'part_inprocess', 'inprocess', '_inprocess']:
+                                    if pattern in registered_class_name:
+                                        registered_part = registered_class_name.split(pattern)[0].rstrip('_')
+                                        break
+                                
+                                if registered_part:
+                                    # Normalize for comparison
+                                    url_part_clean = part_name_candidate.replace('_', '').lower()
+                                    reg_part_clean = registered_part.replace('_', '').lower()
+                                    
+                                    if url_part_clean == reg_part_clean or url_part_clean in reg_part_clean or reg_part_clean in url_part_clean:
+                                        # Found match!
+                                        if action == 'changelist':
+                                            return '/admin/api/%s/' % registered_model_name
+                                        elif action == 'add':
+                                            return '/admin/api/%s/add/' % registered_model_name
+                                        elif action == 'change':
+                                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                            if object_id:
+                                                return '/admin/api/%s/%s/' % (registered_model_name, object_id)
+                                            return '/admin/api/%s/' % registered_model_name
+                                        elif action == 'delete':
+                                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                            if object_id:
+                                                return '/admin/api/%s/%s/delete/' % (registered_model_name, object_id)
+                                            return '/admin/api/%s/' % registered_model_name
+                                        else:
+                                            return '/admin/api/%s/' % registered_model_name
+                
+                # Similar aggressive fallback for completion models
+                if 'partcompletion' in url_name.lower() or 'part_completion' in url_name.lower():
+                    # Extract part name from URL
+                    url_lower = url_name.lower()
+                    part_name_candidate = None
+                    for pattern in ['partcompletion', 'part_completion']:
+                        if pattern in url_lower:
+                            idx = url_lower.find(pattern)
+                            if idx > 0:
+                                prefix = url_lower[:idx].rstrip('_')
+                                if prefix.startswith('api_'):
+                                    part_name_candidate = prefix[4:].rstrip('_')
+                                else:
+                                    part_name_candidate = prefix
+                            break
+                    
+                    # Search all registered models for matching completion model
+                    if part_name_candidate:
+                        for registered_model in admin.site._registry.keys():
+                            if registered_model._meta.app_label != 'api':
+                                continue
+                            
+                            registered_class_name = registered_model.__name__.lower()
+                            registered_model_name = getattr(registered_model._meta, 'model_name', registered_class_name)
+                            
+                            # Check if this is a completion model
+                            if 'completion' in registered_class_name and 'inprocess' not in registered_class_name:
+                                # Extract part name from registered model
+                                registered_part = None
+                                for pattern in ['partcompletion', 'part_completion', 'completion']:
+                                    if pattern in registered_class_name:
+                                        registered_part = registered_class_name.split(pattern)[0].rstrip('_')
+                                        break
+                                
+                                if registered_part:
+                                    # Normalize for comparison
+                                    url_part_clean = part_name_candidate.replace('_', '').lower()
+                                    reg_part_clean = registered_part.replace('_', '').lower()
+                                    
+                                    if url_part_clean == reg_part_clean or url_part_clean in reg_part_clean or reg_part_clean in url_part_clean:
+                                        # Found match!
+                                        if action == 'changelist':
+                                            return '/admin/api/%s/' % registered_model_name
+                                        elif action == 'add':
+                                            return '/admin/api/%s/add/' % registered_model_name
+                                        elif action == 'change':
+                                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                            if object_id:
+                                                return '/admin/api/%s/%s/' % (registered_model_name, object_id)
+                                            return '/admin/api/%s/' % registered_model_name
+                                        elif action == 'delete':
+                                            object_id = args[0] if args and len(args) > 0 else (kwargs.get('object_id') if kwargs else None)
+                                            if object_id:
+                                                return '/admin/api/%s/%s/delete/' % (registered_model_name, object_id)
+                                            return '/admin/api/%s/' % registered_model_name
+                                        else:
+                                            return '/admin/api/%s/' % registered_model_name
+        
+        if (is_admin_url or 'api_' in viewname_str) and '_' in viewname_str:
             # Extract the URL name (part after 'admin:' if present)
             if is_admin_url:
                 parts = str(viewname).split(':')
@@ -874,6 +1238,38 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                         # Reconstruct model name (everything between 'api' and last part)
                         model_name_from_url = '_'.join(url_parts[1:-1])
                         action = url_parts[-1]
+                        
+                        # Handle special cases: partinprocess, partcompletion patterns
+                        # e.g., "api_eics144_partinprocess_add" -> model_name: "eics144_partinprocess"
+                        # But we need to find the actual model which might be "eics144partinprocess" or "eics144_partinprocess"
+                        # First, try to normalize the model name
+                        if 'partinprocess' in model_name_from_url.lower() or 'part_inprocess' in model_name_from_url.lower():
+                            # Extract part name and normalize
+                            normalized = model_name_from_url.lower().replace('_', '')
+                            # Try to find matching in_process model
+                            from django.apps import apps as django_apps
+                            if 'api' in django_apps.all_models:
+                                for registered_key, registered_model in django_apps.all_models['api'].items():
+                                    registered_normalized = registered_key.replace('_', '').lower()
+                                    if ('inprocess' in registered_normalized or 'in_process' in registered_key.lower()) and normalized.startswith(registered_normalized.split('inprocess')[0].split('in_process')[0]):
+                                        # Found matching model, use its actual model_name
+                                        actual_model_name = getattr(registered_model._meta, 'model_name', registered_key)
+                                        model_name_from_url = actual_model_name
+                                        break
+                        
+                        if 'partcompletion' in model_name_from_url.lower() or 'part_completion' in model_name_from_url.lower():
+                            # Extract part name and normalize
+                            normalized = model_name_from_url.lower().replace('_', '')
+                            # Try to find matching completion model
+                            from django.apps import apps as django_apps
+                            if 'api' in django_apps.all_models:
+                                for registered_key, registered_model in django_apps.all_models['api'].items():
+                                    registered_normalized = registered_key.replace('_', '').lower()
+                                    if 'completion' in registered_normalized and normalized.startswith(registered_normalized.split('completion')[0]):
+                                        # Found matching model, use its actual model_name
+                                        actual_model_name = getattr(registered_model._meta, 'model_name', registered_key)
+                                        model_name_from_url = actual_model_name
+                                        break
                         
                         # Try to find the actual model by searching through registered models
                         # This handles variations in model names (with/without underscores)

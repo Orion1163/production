@@ -369,6 +369,23 @@ class QCProcedureConfigSerializer(serializers.Serializer):
     enabled = serializers.BooleanField(read_only=True, help_text='Whether QC section is enabled')
 
 
+class TestingProcedureConfigSerializer(serializers.Serializer):
+    """Serializer for Testing procedure configuration - extracts mode, custom fields and checkboxes"""
+    part_no = serializers.CharField(read_only=True)
+    mode = serializers.CharField(read_only=True, help_text='Testing mode: Automatic or Manual')
+    custom_fields = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom input fields for Testing section (manual mode only)'
+    )
+    custom_checkboxes = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom checkboxes for Testing section (manual mode only)'
+    )
+    enabled = serializers.BooleanField(read_only=True, help_text='Whether Testing section is enabled')
+
+
 class QCSubmitSerializer(serializers.Serializer):
     """Serializer for submitting QC data to completion table"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
@@ -386,4 +403,26 @@ class QCSubmitSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         help_text='Dictionary of custom checkbox values (checkbox_name: true/false)'
+    )
+
+
+class TestingSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Testing data to completion table"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    testing_done_by = serializers.CharField(required=False, allow_blank=True, help_text='Person who did the Testing')
+    mode = serializers.CharField(required=True, help_text='Testing mode: Automatic or Manual')
+    # For automatic mode
+    test_message = serializers.CharField(required=False, allow_blank=True, help_text='Test message (for automatic mode)')
+    # For manual mode - Dynamic fields
+    custom_fields = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom field values (field_name: value) - for manual mode'
+    )
+    custom_checkboxes = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom checkbox values (checkbox_name: true/false) - for manual mode'
     )

@@ -218,7 +218,7 @@ def split_sections_by_qc(enabled_sections, procedure_config):
     return pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config
 
 
-def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, table_type, related_model_class=None):
+def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, table_type):
     """
     Internal function to create a single dynamic model (either in_process or completion).
     
@@ -227,7 +227,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
         enabled_sections: List of enabled sections for this model
         procedure_config: Procedure configuration for this model
         table_type: 'in_process' or 'completion'
-        related_model_class: For completion model, the in_process model class to link to
     
     Returns:
         Model class: The dynamically created model class
@@ -255,17 +254,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
     fields = {
         'id': models.BigAutoField(primary_key=True),
     }
-    
-    # For completion model, add ForeignKey to in_process model
-    if table_type == 'completion' and related_model_class:
-        fields['in_process_entry'] = models.ForeignKey(
-            related_model_class,
-            on_delete=models.CASCADE,
-            related_name='completion_entries',
-            blank=True,
-            null=True,
-            help_text='Link to the corresponding in-process entry'
-        )
     
     # Store field metadata
     field_metadata = {}
@@ -364,6 +352,22 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             # Add default fields (text fields) with section prefix
             # These are fallback fields or fields from token-list
             default_fields = section_data.get('default_fields', [])
+            
+            # Special handling for testing section: exclude test_message in manual mode
+            if section_name == 'testing':
+                mode = section_data.get('mode', 'manual')
+                if mode.lower() == 'manual':
+                    # Remove test_message from default_fields for manual mode
+                    default_fields = [f for f in default_fields if f != 'test_message']
+                    import sys
+                    print("    ⚠ Testing section in manual mode - excluded 'test_message' from default_fields", file=sys.stderr)
+                elif mode.lower() == 'automatic':
+                    # Ensure test_message is included for automatic mode
+                    if 'test_message' not in default_fields:
+                        default_fields.append('test_message')
+                        import sys
+                        print("    ✓ Testing section in automatic mode - added 'test_message' to default_fields", file=sys.stderr)
+            
             for field_name in default_fields:
                 # Skip if already added as custom field
                 if field_name in added_field_names:
@@ -579,12 +583,11 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
         # Register in_process model
         DynamicModelRegistry.register(part_name, in_process_model, 'in_process')
     
-    # Create completion model with ForeignKey to in_process
+    # Create completion model
     completion_model = None
     if post_qc_sections or post_qc_config:
         completion_model = _create_single_dynamic_model(
-            part_name, post_qc_sections, post_qc_config, 'completion', 
-            related_model_class=in_process_model
+            part_name, post_qc_sections, post_qc_config, 'completion'
         )
         # Register completion model
         DynamicModelRegistry.register(part_name, completion_model, 'completion')

@@ -344,8 +344,14 @@
   .custom-checkbox {
     position: absolute;
     opacity: 0;
-    width: 0;
-    height: 0;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    cursor: pointer;
+    z-index: 2;
+    left: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   .custom-checkbox-indicator {
@@ -362,6 +368,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    pointer-events: none;
   }
 
   .custom-checkbox-indicator::after {

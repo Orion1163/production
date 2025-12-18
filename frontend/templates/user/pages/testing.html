@@ -170,6 +170,185 @@
     transform: none;
   }
 
+  /* Textarea Styles */
+  textarea.input-field {
+    min-height: 120px;
+    resize: vertical;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  textarea.input-field ~ .input-field-icon {
+    top: 1rem;
+    transform: translateY(0);
+  }
+
+  /* Checkboxes Section Styles */
+  .checkboxes-section {
+    animation: fadeInUp 0.6s ease-out 0.3s both;
+  }
+
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+    margin: 2rem 0;
+  }
+
+  .checkboxes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* Checkbox Styles */
+  .checkbox-group {
+    position: relative;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+  }
+
+  .checkbox-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg, var(--surface, #2a2b38) 0%, #252632 100%);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-sm, 12px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .checkbox-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+    transition: left 0.5s ease;
+  }
+
+  .checkbox-wrapper:hover::before {
+    left: 100%;
+  }
+
+  .checkbox-wrapper:hover {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(139, 92, 246, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .custom-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    cursor: pointer;
+    z-index: 2;
+    left: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .custom-checkbox-indicator {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    background: var(--surface, #2a2b38);
+    border: 2.5px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .custom-checkbox-indicator::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 12px;
+    border: solid var(--primary, #8b5cf6);
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: -2px;
+  }
+
+  .custom-checkbox:checked + .custom-checkbox-indicator {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2), 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+
+  .custom-checkbox:checked + .custom-checkbox-indicator::after {
+    transform: rotate(45deg) scale(1);
+    border-color: #ffffff;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--primary-strong, #f5f7fb);
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
+    transition: color 0.3s ease;
+  }
+
+  .checkbox-wrapper.checked {
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 6px 20px rgba(139, 92, 246, 0.25);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+    transform: translateY(-2px);
+  }
+
+  .checkbox-wrapper.checked .checkbox-label {
+    color: var(--primary, #8b5cf6);
+  }
+
+  /* Mode-specific containers */
+  .automatic-mode-container,
+  .manual-mode-container {
+    display: none;
+  }
+
+  .automatic-mode-container.active,
+  .manual-mode-container.active {
+    display: block;
+  }
+
+  /* Loading indicator */
+  .loading-indicator {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-muted, rgba(229, 231, 235, 0.8));
+    padding: 2rem;
+    font-size: 0.95rem;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
   /* Submit Button Styles */
   .submit-section {
     display: flex;
@@ -343,6 +522,47 @@
         </div>
       </div>
 
+      <!-- Automatic Mode Container - Test Message Textarea -->
+      <div class="automatic-mode-container" id="automaticModeContainer">
+        <div class="input-group">
+          <label class="input-label" for="testMessage">
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Test Message
+          </label>
+          <div class="input-field-wrapper">
+            <textarea 
+              id="testMessage" 
+              name="testMessage" 
+              class="input-field" 
+              placeholder="Enter test message"
+              required
+              autocomplete="off"
+            ></textarea>
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Mode Container - Custom Fields and Checkboxes -->
+      <div class="manual-mode-container" id="manualModeContainer">
+        <!-- Dynamic custom fields will be inserted here -->
+        <div class="form-grid" id="manualFieldsGrid">
+          <!-- Dynamic input fields will be inserted here -->
+        </div>
+
+        <!-- Dynamic Checkboxes Section -->
+        <div class="checkboxes-section" id="checkboxesSection" style="display: none;">
+          <div class="section-divider"></div>
+          <div class="checkboxes-grid" id="checkboxesGrid">
+            <!-- Dynamic checkboxes will be inserted here -->
+          </div>
+        </div>
+      </div>
+
       <!-- Submit Button Section -->
       <div class="submit-section">
         <button type="submit" class="submit-btn">
@@ -355,157 +575,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-  // API endpoint for testing serial number search
-  const TESTING_SERIAL_SEARCH_URL = '/api/v2/testing-serial-number-search/';
-  
-  // Get part_no from window (set in base_section.html)
-  const PART_NO = window.PART_NO;
-  
-  // Serial number input field
-  const serialNumberInput = document.getElementById('serialNumber');
-  const usidInput = document.getElementById('usid');
-  
-  let lastCheckedValue = '';
-  
-  // Setup serial number search
-  if (serialNumberInput) {
-    // Restrict input to numbers only
-    serialNumberInput.addEventListener('input', function(e) {
-      // Remove any non-digit characters
-      this.value = this.value.replace(/\D/g, '');
-    });
-    
-    serialNumberInput.addEventListener('input', function(e) {
-      const serialNumber = this.value.trim();
-      
-      // Clear USID field when serial number changes
-      if (usidInput) {
-        usidInput.value = '';
-      }
-      
-      // Hide message if input is cleared
-      if (serialNumber.length === 0) {
-        lastCheckedValue = '';
-        return;
-      }
-      
-      // Only search when exactly 4 digits are entered
-      if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
-        lastCheckedValue = serialNumber;
-        // Search immediately when 4 digits are entered
-        searchSerialNumber(serialNumber);
-      } else if (serialNumber.length > 4) {
-        // If more than 4 digits, truncate to 4
-        this.value = serialNumber.substring(0, 4);
-        if (this.value !== lastCheckedValue && /^\d{4}$/.test(this.value)) {
-          lastCheckedValue = this.value;
-          searchSerialNumber(this.value);
-        }
-      }
-      // If less than 4 digits, do nothing - don't search
-    });
-    
-    // Also search on blur (when user leaves the field) if exactly 4 digits
-    serialNumberInput.addEventListener('blur', function(e) {
-      const serialNumber = this.value.trim();
-      if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
-        lastCheckedValue = serialNumber;
-        searchSerialNumber(serialNumber);
-      }
-    });
-  }
-  
-  /**
-   * Search for serial number and populate USID if found
-   */
-  async function searchSerialNumber(serialNumber) {
-    if (!PART_NO) {
-      console.error('Part number not available');
-      showMessage('Part number not available', 'error');
-      return;
-    }
-    
-    if (!serialNumber) {
-      return;
-    }
-    
-    try {
-      const params = new URLSearchParams({
-        part_no: PART_NO,
-        serial_number: serialNumber
-      });
-      
-      const response = await fetch(`${TESTING_SERIAL_SEARCH_URL}?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin'
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        // Handle error response
-        const errorMessage = data.message || data.error || 'Failed to search serial number';
-        showMessage(errorMessage, 'error');
-        if (usidInput) {
-          usidInput.value = '';
-        }
-        return;
-      }
-      
-      // Success - populate USID field
-      if (data.usid && usidInput) {
-        usidInput.value = data.usid;
-        // Don't show success message on every keystroke, only log
-        console.log('USID found and populated:', data.usid);
-      } else {
-        showMessage('USID not found in response', 'error');
-      }
-      
-    } catch (error) {
-      console.error('Error searching serial number:', error);
-      showMessage('Error searching serial number. Please try again.', 'error');
-      if (usidInput) {
-        usidInput.value = '';
-      }
-    }
-  }
-  
-  /**
-   * Show message to user using toast system
-   */
-  function showMessage(message, type) {
-    // Check if toast system is available
-    if (typeof window.showToast === 'function') {
-      window.showToast(message, type === 'error' ? 'error' : 'success', { duration: 3000 });
-    } else {
-      // Fallback: log to console
-      console.log(`[${type.toUpperCase()}] ${message}`);
-    }
-  }
-  
-  // Form submission handler
-  document.getElementById('testingForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const serialNumber = document.getElementById('serialNumber').value;
-    const usid = document.getElementById('usid').value;
-    
-    // Add your form submission logic here
-    console.log('Serial Number:', serialNumber);
-    console.log('USID:', usid);
-    
-    // Example: You can add API call here
-    // fetch('/api/testing/', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({ serialNumber, usid })
-    // });
-  });
-</script>
+<script src="{% static 'js/dynamic_api/testing_api.js' %}"></script>
 {% endblock %}

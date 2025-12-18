@@ -323,17 +323,113 @@
         sectionConfig.custom_checkboxes = customCheckboxes;
       }
 
-      // Special handling for testing section
+      // Special handling for testing section - extract testing mode (manual/automatic)
       if (section === 'testing') {
-        const modeSelect = panel.querySelector('select[onchange*="toggleTestingMode"]');
-        if (modeSelect && modeSelect.value) {
-          sectionConfig.mode = modeSelect.value;
-          
-          // For automatic mode, don't include custom checkboxes
-          if (modeSelect.value === 'automatic') {
-            delete sectionConfig.custom_checkboxes;
+        // Find the mode select dropdown - try multiple methods
+        let modeSelect = null;
+        
+        // Method 1: Find select by looking for one with options containing "Automatic" and "Manual"
+        // This is the most reliable method as it doesn't depend on attributes
+        const allSelects = panel.querySelectorAll('select');
+        for (const sel of allSelects) {
+          const options = Array.from(sel.options).map(opt => opt.value);
+          if (options.includes('Automatic') && options.includes('Manual')) {
+            modeSelect = sel;
+            break;
           }
-          // For manual mode, custom checkboxes are already extracted above
+        }
+        
+        // Method 2: Fallback - find select within form-row
+        if (!modeSelect) {
+          const formRow = panel.querySelector('.form-row');
+          if (formRow) {
+            modeSelect = formRow.querySelector('select');
+          }
+        }
+        
+        // Method 3: Last resort - find any select in panel
+        if (!modeSelect) {
+          modeSelect = panel.querySelector('select');
+        }
+        
+        // Method 4: Final fallback - search within entire part entry
+        if (!modeSelect) {
+          const partEntrySelects = partEntry.querySelectorAll('select');
+          for (const sel of partEntrySelects) {
+            const options = Array.from(sel.options).map(opt => opt.value);
+            if (options.includes('Automatic') && options.includes('Manual')) {
+              modeSelect = sel;
+              break;
+            }
+          }
+        }
+        
+        if (modeSelect) {
+          const selectedValue = modeSelect.value ? modeSelect.value.trim() : '';
+          
+          if (selectedValue !== '') {
+            // Normalize mode value to lowercase (form has "Automatic"/"Manual", but config expects "automatic"/"manual")
+            const modeValue = selectedValue.toLowerCase();
+            sectionConfig.mode = modeValue;
+            console.log(`✅ Testing mode stored: ${modeValue} (from value: ${selectedValue})`);
+            
+            // For automatic mode, keep only the "testing" checkbox, remove user-added custom checkboxes
+            // Also ensure test_message is in default_fields for automatic mode
+            if (modeValue === 'automatic') {
+              // Preserve the "testing" checkbox (automatically added section checkbox)
+              // Filter to keep only checkboxes with name "testing"
+              if (sectionConfig.custom_checkboxes && Array.isArray(sectionConfig.custom_checkboxes)) {
+                const testingCheckbox = sectionConfig.custom_checkboxes.find(cb => cb.name === 'testing');
+                if (testingCheckbox) {
+                  sectionConfig.custom_checkboxes = [testingCheckbox];
+                  console.log(`✅ Automatic mode detected - kept "testing" checkbox, removed user-added checkboxes`);
+                } else {
+                  // If "testing" checkbox not found, add it explicitly
+                  sectionConfig.custom_checkboxes = [{
+                    name: 'testing',
+                    label: 'Testing'
+                  }];
+                  console.log(`✅ Automatic mode detected - added "testing" checkbox explicitly`);
+                }
+              } else {
+                // If custom_checkboxes doesn't exist, add the "testing" checkbox
+                sectionConfig.custom_checkboxes = [{
+                  name: 'testing',
+                  label: 'Testing'
+                }];
+                console.log(`✅ Automatic mode detected - added "testing" checkbox`);
+              }
+              
+              // Ensure test_message is in default_fields for automatic mode
+              if (sectionConfig.default_fields && Array.isArray(sectionConfig.default_fields)) {
+                if (!sectionConfig.default_fields.includes('test_message')) {
+                  sectionConfig.default_fields.push('test_message');
+                  console.log(`✅ Automatic mode detected - added "test_message" to default_fields`);
+                }
+              } else {
+                sectionConfig.default_fields = ['test_message'];
+                console.log(`✅ Automatic mode detected - created default_fields with "test_message"`);
+              }
+            } else {
+              // For manual mode, remove test_message from default_fields if it exists
+              if (sectionConfig.default_fields && Array.isArray(sectionConfig.default_fields)) {
+                const testMessageIndex = sectionConfig.default_fields.indexOf('test_message');
+                if (testMessageIndex !== -1) {
+                  sectionConfig.default_fields.splice(testMessageIndex, 1);
+                  console.log(`✅ Manual mode detected - removed "test_message" from default_fields`);
+                }
+              }
+            }
+            // For manual mode, custom checkboxes are already extracted above and will remain
+          } else {
+            console.warn(`⚠️ Testing section enabled but no mode selected (select value is empty)`);
+            console.log(`   Select element found but value is: "${modeSelect.value}"`);
+            console.log(`   Available options:`, Array.from(modeSelect.options).map(opt => ({value: opt.value, text: opt.text})));
+          }
+        } else {
+          console.error(`❌ Testing mode select element not found`);
+          console.log(`   Searched in panel:`, panel);
+          console.log(`   Panel has ${panel.querySelectorAll('select').length} select elements`);
         }
       }
 
