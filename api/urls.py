@@ -7,7 +7,8 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    TestingProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView
+    TestingProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
+    HeatRunSerialNumberSearchView
 )
 
 urlpatterns = [
@@ -46,4 +47,5 @@ urlpatterns = [
     path('testing-submit/', TestingSubmitView.as_view(), name='testing-submit'),
     path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
     path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
+    path('heat-run-serial-number-search/', HeatRunSerialNumberSearchView.as_view(), name='heat-run-serial-number-search'),
 ]

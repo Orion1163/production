@@ -426,3 +426,11 @@ class TestingSubmitSerializer(serializers.Serializer):
         allow_null=True,
         help_text='Dictionary of custom checkbox values (checkbox_name: true/false) - for manual mode'
     )
+
+
+class HeatRunSerialNumberSearchSerializer(serializers.Serializer):
+    """Serializer for Heat Run serial number search response"""
+    usid = serializers.CharField(read_only=True, help_text='Unique Serial ID')
+    serial_number = serializers.CharField(read_only=True, help_text='Serial Number')
+    part_no = serializers.CharField(read_only=True, help_text='Part number')
+    message = serializers.CharField(read_only=True, help_text='Response message')
