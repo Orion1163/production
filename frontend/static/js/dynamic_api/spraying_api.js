@@ -1,5 +1,5 @@
 /**
- * Heat Run Dynamic Fields Handler
+ * Spraying Dynamic Fields Handler
  * Manages dynamic addition and removal of Serial Number and USID input fields
  * Handles serial number search and USID population
  */
@@ -7,8 +7,8 @@
 (() => {
   'use strict';
 
-  const HEAT_RUN_SERIAL_SEARCH_URL = '/api/v2/heat-run-serial-number-search/';
-  const HEAT_RUN_SUBMIT_URL = '/api/v2/heat-run-submit/';
+  const SPRAYING_SERIAL_SEARCH_URL = '/api/v2/spraying-serial-number-search/';
+  const SPRAYING_SUBMIT_URL = '/api/v2/spraying-submit/';
   
   // Get part_no from window (set in base_section.html)
   const PART_NO = window.PART_NO;
@@ -101,7 +101,7 @@
         serial_number: serialNumber.trim()
       });
       
-      const response = await fetch(`${HEAT_RUN_SERIAL_SEARCH_URL}?${params.toString()}`, {
+      const response = await fetch(`${SPRAYING_SERIAL_SEARCH_URL}?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +152,7 @@
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       `;
-      btn.setAttribute('onclick', 'window.heatRunAPI.removeFieldRow(this)');
+      btn.setAttribute('onclick', 'window.sprayingAPI.removeFieldRow(this)');
       btn.setAttribute('title', 'Remove this row');
     });
 
@@ -204,7 +204,7 @@
           <span class="input-underline"></span>
         </div>
       </div>
-      <button type="button" class="add-btn" id="addBtn_${rowIndex}" onclick="window.heatRunAPI.addFieldRow()" title="Add another row">
+      <button type="button" class="add-btn" id="addBtn_${rowIndex}" onclick="window.sprayingAPI.addFieldRow()" title="Add another row">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -272,7 +272,7 @@
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
             `;
-            lastRowButton.setAttribute('onclick', 'window.heatRunAPI.addFieldRow()');
+            lastRowButton.setAttribute('onclick', 'window.sprayingAPI.addFieldRow()');
             lastRowButton.setAttribute('title', 'Add another row');
           }
         }
@@ -362,7 +362,7 @@
   }
 
   /**
-   * Initialize Heat Run form handler
+   * Initialize Spraying form handler
    */
   function init() {
     // Wait for DOM to be ready
@@ -402,7 +402,7 @@
     });
 
     // Initialize checkbox handler
-    const checkbox = document.getElementById('heatRunCheckbox');
+    const checkbox = document.getElementById('sprayingCheckbox');
     const checkboxCard = document.getElementById('checkboxCard');
     
     if (checkbox && checkboxCard) {
@@ -431,12 +431,12 @@
     }
 
     // Initialize form submission handler
-    const form = document.getElementById('heatRunForm');
+    const form = document.getElementById('sprayingForm');
     if (form) {
       form.addEventListener('submit', handleFormSubmit);
     }
 
-    console.log('Heat Run API handler initialized');
+    console.log('Spraying API handler initialized');
   }
 
   /**
@@ -456,10 +456,10 @@
         submitButton.textContent = 'Submitting...';
       }
 
-      // Check if Heat Run checkbox is checked
-      const checkbox = document.getElementById('heatRunCheckbox');
+      // Check if Spraying checkbox is checked
+      const checkbox = document.getElementById('sprayingCheckbox');
       if (!checkbox || !checkbox.checked) {
-        throw new Error('Please check the Heat Run checkbox to submit data');
+        throw new Error('Please check the Spraying checkbox to submit data');
       }
 
       if (!PART_NO) {
@@ -499,16 +499,16 @@
       const payload = {
         part_no: PART_NO,
         entries: entries,
-        heat_run: true
+        spraying: true
       };
 
-      console.log('Heat Run Payload:', payload);
+      console.log('Spraying Payload:', payload);
 
       // Get CSRF token
       const csrfToken = getCookie('csrftoken');
 
       // Submit to API (PUT request to update existing entries)
-      const response = await fetch(HEAT_RUN_SUBMIT_URL, {
+      const response = await fetch(SPRAYING_SUBMIT_URL, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -521,13 +521,13 @@
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || 'Failed to submit Heat Run data');
+        throw new Error(errorData.error || errorData.message || 'Failed to submit Spraying data');
       }
 
       const result = await response.json();
       
       // Show success message
-      let successMessage = result.message || 'Heat Run data submitted successfully!';
+      let successMessage = result.message || 'Spraying data submitted successfully!';
       if (result.failed_count && result.failed_count > 0) {
         successMessage += ` (${result.failed_count} entry/entries failed)`;
       }
@@ -538,7 +538,7 @@
       form.reset();
       
       // Reset checkbox
-      const checkboxReset = document.getElementById('heatRunCheckbox');
+      const checkboxReset = document.getElementById('sprayingCheckbox');
       const checkboxCard = document.getElementById('checkboxCard');
       if (checkboxReset) {
         checkboxReset.checked = false;
@@ -574,7 +574,7 @@
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
             `;
-            firstButton.setAttribute('onclick', 'window.heatRunAPI.addFieldRow()');
+            firstButton.setAttribute('onclick', 'window.sprayingAPI.addFieldRow()');
             firstButton.setAttribute('title', 'Add another row');
           }
         }
@@ -584,8 +584,8 @@
       rowIndex = 0;
 
     } catch (error) {
-      console.error('Heat Run form submission failed:', error);
-      showToast(error.message || 'Unable to submit Heat Run data. Please try again.', 'error');
+      console.error('Spraying form submission failed:', error);
+      showToast(error.message || 'Unable to submit Spraying data. Please try again.', 'error');
     } finally {
       // Re-enable submit button
       if (submitButton) {
@@ -596,7 +596,7 @@
   }
 
   // Expose functions to global scope
-  window.heatRunAPI = {
+  window.sprayingAPI = {
     addFieldRow,
     removeFieldRow,
     handleFormSubmit,

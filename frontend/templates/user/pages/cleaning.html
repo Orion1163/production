@@ -5,10 +5,568 @@
 
 {% block page_title %}Cleaning{% endblock %}
 
+{% block extra_head %}
+<style>
+  .cleaning-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .cleaning-form-card {
+    width: 100%;
+    height: 100%;
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Creative Checkbox Card Design */
+  .checkbox-section {
+    margin-bottom: 3rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .checkbox-card {
+    background: var(--surface, #2a2b38);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 1.25rem 1.75rem;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: fit-content;
+  }
+
+  .checkbox-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+    transition: left 0.6s ease;
+  }
+
+  .checkbox-card:hover::before {
+    left: 100%;
+  }
+
+  .checkbox-card:hover {
+    border-color: var(--primary, #8b5cf6);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
+  }
+
+  .checkbox-card.checked {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 8px 25px rgba(139, 92, 246, 0.3);
+  }
+
+  .checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    z-index: 3;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: auto;
+  }
+
+  .custom-checkbox {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid var(--primary-muted, #a5adcb);
+    border-radius: 6px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: transparent;
+    flex-shrink: 0;
+    z-index: 1;
+    cursor: pointer;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .custom-checkbox::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0;
+    margin-top: -1px;
+  }
+
+  .checkbox-card.checked .custom-checkbox {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  }
+
+  .checkbox-card.checked .custom-checkbox::after {
+    transform: rotate(45deg) scale(1);
+    opacity: 1;
+  }
+
+  .checkbox-card:hover .custom-checkbox {
+    border-color: var(--primary, #8b5cf6);
+    transform: scale(1.1);
+  }
+
+  .checkbox-card.checked:hover .custom-checkbox {
+    transform: scale(1.15);
+  }
+
+  .checkbox-wrapper label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-strong, #f5f7fb);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    z-index: 1;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+    text-transform: uppercase;
+  }
+
+  .checkbox-card.checked label {
+    color: var(--primary, #8b5cf6);
+  }
+
+  /* Fields Container */
+  .fields-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 1.5rem;
+    align-items: end;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .field-row:first-child {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Input Group with Underline Design */
+  .input-group {
+    position: relative;
+  }
+
+  .input-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .label-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-muted, #a5adcb);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: color 0.3s ease;
+  }
+
+  .input-group.focused .label-text {
+    color: var(--primary, #8b5cf6);
+  }
+
+  .input-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 0.875rem 0;
+    background: transparent;
+    border: none;
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.4));
+    transition: opacity 0.3s ease;
+  }
+
+  .input-field:focus::placeholder {
+    opacity: 0.3;
+  }
+
+  .input-underline {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--surface-border, rgba(255, 255, 255, 0.08));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .input-underline::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(-50%);
+  }
+
+  .input-underline.active::after {
+    width: 100%;
+  }
+
+  .input-group.focused .input-underline {
+    background: rgba(139, 92, 246, 0.2);
+  }
+
+  .input-group.has-value .input-underline {
+    background: var(--surface-border, rgba(255, 255, 255, 0.15));
+  }
+
+  .input-field[readonly] {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .input-field[readonly]:focus {
+    opacity: 1;
+  }
+
+  /* Submit Button */
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 2.5rem;
+    animation: fadeInUp 0.6s ease-out 0.5s both;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  .submit-btn:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .submit-btn span {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Add Button */
+  .add-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 0;
+    min-width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .add-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  .add-btn:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  .add-btn:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+  }
+
+  .add-btn:active {
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  .add-btn svg {
+    position: relative;
+    z-index: 1;
+    transition: transform 0.3s ease;
+  }
+
+  .add-btn:hover svg {
+    transform: rotate(90deg);
+  }
+
+  /* Remove Button */
+  .remove-btn {
+    background: transparent;
+    color: #ef4444;
+    border: 2px solid #ef4444;
+    padding: 0;
+    min-width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .remove-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: #ef4444;
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+  }
+
+  .remove-btn:hover::before {
+    width: 100%;
+    height: 100%;
+  }
+
+  .remove-btn:hover {
+    color: white;
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+  }
+
+  .remove-btn:active {
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  .remove-btn svg {
+    position: relative;
+    z-index: 1;
+    width: 24px;
+    height: 24px;
+    stroke-width: 3;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .cleaning-form-card {
+      padding: 1.5rem;
+    }
+
+    .field-row {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .add-btn,
+    .remove-btn {
+      width: 50px;
+      margin: 0 auto;
+    }
+
+    .checkbox-wrapper {
+      padding: 0.75rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .cleaning-form-card {
+      padding: 1rem;
+    }
+
+    .fields-container {
+      gap: 1.5rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
-  <h1>Cleaning</h1>
-  <p>Hello</p>
+<div class="cleaning-container">
+  <div class="page-heading">
+    <h1>Cleaning</h1>
+    <hr />
+  </div>
+  
+  <div class="cleaning-form-card">
+    <form id="cleaningForm">
+      <!-- Checkbox Section -->
+      <div class="checkbox-section">
+        <div class="checkbox-card" id="checkboxCard">
+          <div class="checkbox-wrapper">
+            <input type="checkbox" id="cleaningCheckbox" name="cleaning" />
+            <span class="custom-checkbox"></span>
+            <label for="cleaningCheckbox">Cleaning</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Fields Container -->
+      <div class="fields-container" id="fieldsContainer">
+        <!-- Initial Field Row -->
+        <div class="field-row" data-row-index="0">
+          <div class="input-group">
+            <label class="input-label" for="serialNumber_0">
+              <span class="label-text">Serial Number</span>
+            </label>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="serialNumber_0" 
+                name="serialNumber[]" 
+                class="input-field serial-number-input" 
+                placeholder="Enter Serial Number"
+                autocomplete="off"
+                data-row-index="0"
+              />
+              <span class="input-underline"></span>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="usid_0">
+              <span class="label-text">USID</span>
+            </label>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="usid_0" 
+                name="usid[]" 
+                class="input-field usid-input" 
+                placeholder="Enter USID"
+                autocomplete="off"
+                readonly
+                data-row-index="0"
+              />
+              <span class="input-underline"></span>
+            </div>
+          </div>
+          <button type="button" class="add-btn" id="addBtn_0" onclick="window.cleaningAPI.addFieldRow()" title="Add another row">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Submit Section -->
+      <div class="submit-section">
+        <button type="submit" class="submit-btn">
+          <span>Submit Data</span>
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
+{% block extra_scripts %}
+<script src="{% static 'js/dynamic_api/cleaning_api.js' %}" defer></script>
+{% endblock %}

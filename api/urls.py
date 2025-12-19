@@ -8,7 +8,8 @@ from .views import (
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
     TestingProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
-    HeatRunSerialNumberSearchView
+    HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
+    GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView
 )
 
 urlpatterns = [
@@ -45,7 +46,14 @@ urlpatterns = [
     path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
     path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
     path('testing-submit/', TestingSubmitView.as_view(), name='testing-submit'),
+    path('heat-run-submit/', HeatRunSubmitView.as_view(), name='heat-run-submit'),
+    path('cleaning-submit/', CleaningSubmitView.as_view(), name='cleaning-submit'),
+    path('glueing-submit/', GlueingSubmitView.as_view(), name='glueing-submit'),
+    path('spraying-submit/', SprayingSubmitView.as_view(), name='spraying-submit'),
     path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
     path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
     path('heat-run-serial-number-search/', HeatRunSerialNumberSearchView.as_view(), name='heat-run-serial-number-search'),
+    path('cleaning-serial-number-search/', CleaningSerialNumberSearchView.as_view(), name='cleaning-serial-number-search'),
+    path('glueing-serial-number-search/', GlueingSerialNumberSearchView.as_view(), name='glueing-serial-number-search'),
+    path('spraying-serial-number-search/', SprayingSerialNumberSearchView.as_view(), name='spraying-serial-number-search'),
 ]

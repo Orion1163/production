@@ -4943,6 +4943,696 @@ class TestingSubmitView(APIView):
             )
 
 
+class HeatRunSubmitView(APIView):
+    """
+    PUT API endpoint for updating Heat Run data in completion table.
+    Updates multiple existing entries in the completion table with Heat Run data based on serial_number and usid.
+    Sets heat_run to True and heat_run_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Heat Run data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Heat Run fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - heat_run: Boolean indicating if heat run checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import HeatRunSubmitSerializer
+            serializer = HeatRunSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            heat_run = validated_data['heat_run']
+            
+            # Only proceed if heat_run is True
+            if not heat_run:
+                return Response(
+                    {'error': 'Heat Run checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            heat_run_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Heat Run section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find heat_run and heat_run_done_by field names
+            heat_run_field = None
+            heat_run_done_by_field = None
+            
+            # Try different possible field name patterns
+            heat_run_patterns = [
+                'heat_run_heat_run',
+                'heat_run',
+                'qc_heat_run',
+                'heat_run_done',
+                'heat_run_completed',
+                'heat_run_status'
+            ]
+            
+            for pattern in heat_run_patterns:
+                if pattern in all_field_names:
+                    heat_run_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            heat_run_done_by_patterns = [
+                'heat_run_heat_run_done_by',
+                'heat_run_done_by',
+                'heat_run_heat_run_done_by',
+                'qc_heat_run_done_by'
+            ]
+            
+            for pattern in heat_run_done_by_patterns:
+                if pattern in all_field_names:
+                    heat_run_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set heat_run field if it exists
+                    if heat_run_field:
+                        update_data[heat_run_field] = True
+                    
+                    # Set heat_run_done_by field if it exists
+                    if heat_run_done_by_field:
+                        update_data[heat_run_done_by_field] = heat_run_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        print(f"Warning: No heat_run fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'heat' in f.lower()][:10]}...", file=sys.stderr)
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Heat Run fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    print(f"Error updating Heat Run entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Heat Run data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'heat_run': True,
+                'heat_run_done_by': heat_run_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Heat Run Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Heat Run data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CleaningSubmitView(APIView):
+    """
+    PUT API endpoint for updating Cleaning data in completion table.
+    Updates multiple existing entries in the completion table with Cleaning data based on serial_number and usid.
+    Sets cleaning to True and cleaning_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Cleaning data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Cleaning fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - cleaning: Boolean indicating if cleaning checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import CleaningSubmitSerializer
+            serializer = CleaningSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            cleaning = validated_data['cleaning']
+            
+            # Only proceed if cleaning is True
+            if not cleaning:
+                return Response(
+                    {'error': 'Cleaning checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            cleaning_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Cleaning section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find cleaning and cleaning_done_by field names
+            cleaning_field = None
+            cleaning_done_by_field = None
+            
+            # Try different possible field name patterns
+            cleaning_patterns = [
+                'cleaning_cleaning',
+                'cleaning',
+                'qc_cleaning',
+                'cleaning_done',
+                'cleaning_completed',
+                'cleaning_status'
+            ]
+            
+            for pattern in cleaning_patterns:
+                if pattern in all_field_names:
+                    cleaning_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            cleaning_done_by_patterns = [
+                'cleaning_cleaning_done_by',
+                'cleaning_done_by',
+                'cleaning_cleaning_done_by',
+                'qc_cleaning_done_by'
+            ]
+            
+            for pattern in cleaning_done_by_patterns:
+                if pattern in all_field_names:
+                    cleaning_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set cleaning field if it exists
+                    if cleaning_field:
+                        update_data[cleaning_field] = True
+                    
+                    # Set cleaning_done_by field if it exists
+                    if cleaning_done_by_field:
+                        update_data[cleaning_done_by_field] = cleaning_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        print(f"Warning: No cleaning fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'clean' in f.lower()][:10]}...", file=sys.stderr)
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Cleaning fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    print(f"Error updating Cleaning entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Cleaning data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'cleaning': True,
+                'cleaning_done_by': cleaning_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Cleaning Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Cleaning data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SprayingSubmitView(APIView):
+    """
+    PUT API endpoint for updating Spraying data in completion table.
+    Updates multiple existing entries in the completion table with Spraying data based on serial_number and usid.
+    Sets spraying to True and spraying_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Spraying data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Spraying fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - spraying: Boolean indicating if spraying checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import SprayingSubmitSerializer
+            serializer = SprayingSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            spraying = validated_data['spraying']
+            
+            # Only proceed if spraying is True
+            if not spraying:
+                return Response(
+                    {'error': 'Spraying checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            spraying_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Spraying section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find spraying and spraying_done_by field names
+            spraying_field = None
+            spraying_done_by_field = None
+            
+            # Try different possible field name patterns
+            spraying_patterns = [
+                'spraying_spraying',
+                'spraying',
+                'qc_spraying',
+                'spraying_done',
+                'spraying_completed',
+                'spraying_status'
+            ]
+            
+            for pattern in spraying_patterns:
+                if pattern in all_field_names:
+                    spraying_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            spraying_done_by_patterns = [
+                'spraying_spraying_done_by',
+                'spraying_done_by',
+                'spraying_spraying_done_by',
+                'qc_spraying_done_by'
+            ]
+            
+            for pattern in spraying_done_by_patterns:
+                if pattern in all_field_names:
+                    spraying_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set spraying field if it exists
+                    if spraying_field:
+                        update_data[spraying_field] = True
+                    
+                    # Set spraying_done_by field if it exists
+                    if spraying_done_by_field:
+                        update_data[spraying_done_by_field] = spraying_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        print(f"Warning: No spraying fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'spray' in f.lower()][:10]}...", file=sys.stderr)
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Spraying fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    print(f"Error updating Spraying entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Spraying data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'spraying': True,
+                'spraying_done_by': spraying_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Spraying Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Spraying data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class SerialNumberStatusView(APIView):
     """
     GET API endpoint to check serial number status in completion table.
@@ -5653,6 +6343,950 @@ class HeatRunSerialNumberSearchView(APIView):
             import sys
             error_details = traceback.format_exc()
             print(f"Heat Run Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GlueingSubmitView(APIView):
+    """
+    PUT API endpoint for updating Glueing data in completion table.
+    Updates multiple existing entries in the completion table with Glueing data based on serial_number and usid.
+    Sets glueing to True and glueing_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Glueing data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Glueing fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - glueing: Boolean indicating if glueing checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import GlueingSubmitSerializer
+            serializer = GlueingSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            glueing = validated_data['glueing']
+            
+            # Only proceed if glueing is True
+            if not glueing:
+                return Response(
+                    {'error': 'Glueing checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            glueing_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Glueing section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find glueing and glueing_done_by field names
+            glueing_field = None
+            glueing_done_by_field = None
+            
+            # Try different possible field name patterns
+            glueing_patterns = [
+                'glueing_glueing',
+                'glueing',
+                'qc_glueing',
+                'glueing_done',
+                'glueing_completed',
+                'glueing_status'
+            ]
+            
+            for pattern in glueing_patterns:
+                if pattern in all_field_names:
+                    glueing_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            glueing_done_by_patterns = [
+                'glueing_glueing_done_by',
+                'glueing_done_by',
+                'glueing_glueing_done_by',
+                'qc_glueing_done_by'
+            ]
+            
+            for pattern in glueing_done_by_patterns:
+                if pattern in all_field_names:
+                    glueing_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set glueing field if it exists
+                    if glueing_field:
+                        update_data[glueing_field] = True
+                    
+                    # Set glueing_done_by field if it exists
+                    if glueing_done_by_field:
+                        update_data[glueing_done_by_field] = glueing_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        print(f"Warning: No glueing fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'glue' in f.lower()][:10]}...", file=sys.stderr)
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Glueing fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    print(f"Error updating Glueing entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Glueing data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'glueing': True,
+                'glueing_done_by': glueing_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Glueing Submission Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Glueing data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CleaningSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all previous enabled sections (before cleaning, including heat_run) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Define sections before cleaning (in order, including heat_run)
+            sections_before_cleaning = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+            ]
+            
+            # Check that all enabled sections before cleaning have their checkboxes set to true
+            for section in sections_before_cleaning:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing, qc_qc, heat_run_heat_run
+                    f'{section}',  # e.g., testing, qc, heat_run
+                    f'qc_{section}',  # e.g., qc_testing, qc_heat_run
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Cleaning. Please complete all previous sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check that cleaning section itself is not already completed
+            cleaning_patterns = [
+                'cleaning_cleaning',
+                'cleaning',
+                'qc_cleaning',
+                'cleaning_done',
+                'cleaning_completed',
+                'cleaning_status'
+            ]
+            
+            for pattern in cleaning_patterns:
+                if pattern in all_field_names:
+                    try:
+                        cleaning_value = getattr(entry, pattern, None)
+                        cleaning_completed = False
+                        if isinstance(cleaning_value, bool):
+                            cleaning_completed = cleaning_value
+                        elif isinstance(cleaning_value, str):
+                            cleaning_completed = cleaning_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(cleaning_value, (int, float)):
+                            cleaning_completed = bool(cleaning_value)
+                        
+                        if cleaning_completed:
+                            return Response(
+                                {
+                                    'error': 'Cleaning already completed',
+                                    'message': f'Cleaning has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Cleaning'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Cleaning Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GlueingSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all previous enabled sections (before glueing, including heat_run) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Define sections before glueing (in order, including heat_run but not cleaning)
+            sections_before_glueing = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+            ]
+            
+            # Check that all enabled sections before glueing have their checkboxes set to true
+            for section in sections_before_glueing:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing, qc_qc, heat_run_heat_run
+                    f'{section}',  # e.g., testing, qc, heat_run
+                    f'qc_{section}',  # e.g., qc_testing, qc_heat_run
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Glueing. Please complete all previous sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check that glueing section itself is not already completed
+            glueing_patterns = [
+                'glueing_glueing',
+                'glueing',
+                'qc_glueing',
+                'glueing_done',
+                'glueing_completed',
+                'glueing_status'
+            ]
+            
+            for pattern in glueing_patterns:
+                if pattern in all_field_names:
+                    try:
+                        glueing_value = getattr(entry, pattern, None)
+                        glueing_completed = False
+                        if isinstance(glueing_value, bool):
+                            glueing_completed = glueing_value
+                        elif isinstance(glueing_value, str):
+                            glueing_completed = glueing_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(glueing_value, (int, float)):
+                            glueing_completed = bool(glueing_value)
+                        
+                        if glueing_completed:
+                            return Response(
+                                {
+                                    'error': 'Glueing already completed',
+                                    'message': f'Glueing has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Glueing'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Glueing Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SprayingSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all previous enabled sections (before spraying, including cleaning) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Define sections before spraying (in order, including cleaning)
+            sections_before_spraying = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning'
+            ]
+            
+            # Check that all enabled sections before spraying have their checkboxes set to true
+            for section in sections_before_spraying:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing, qc_qc, cleaning_cleaning
+                    f'{section}',  # e.g., testing, qc, cleaning
+                    f'qc_{section}',  # e.g., qc_testing, qc_cleaning
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Spraying. Please complete all previous sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check that spraying section itself is not already completed
+            spraying_patterns = [
+                'spraying_spraying',
+                'spraying',
+                'qc_spraying',
+                'spraying_done',
+                'spraying_completed',
+                'spraying_status'
+            ]
+            
+            for pattern in spraying_patterns:
+                if pattern in all_field_names:
+                    try:
+                        spraying_value = getattr(entry, pattern, None)
+                        spraying_completed = False
+                        if isinstance(spraying_value, bool):
+                            spraying_completed = spraying_value
+                        elif isinstance(spraying_value, str):
+                            spraying_completed = spraying_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(spraying_value, (int, float)):
+                            spraying_completed = bool(spraying_value)
+                        
+                        if spraying_completed:
+                            return Response(
+                                {
+                                    'error': 'Spraying already completed',
+                                    'message': f'Spraying has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Spraying'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Spraying Serial Number Search Error: {str(e)}", file=sys.stderr)
             print(error_details, file=sys.stderr)
             return Response(
                 {

@@ -117,7 +117,7 @@ class PartProcedureDetail(models.Model):
         sections = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
             'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
-            'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+            'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
         ]
         
         for section in sections:

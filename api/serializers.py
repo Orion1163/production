@@ -434,3 +434,55 @@ class HeatRunSerialNumberSearchSerializer(serializers.Serializer):
     serial_number = serializers.CharField(read_only=True, help_text='Serial Number')
     part_no = serializers.CharField(read_only=True, help_text='Part number')
     message = serializers.CharField(read_only=True, help_text='Response message')
+
+
+class HeatRunEntrySerializer(serializers.Serializer):
+    """Serializer for a single Heat Run entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class HeatRunSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Heat Run data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = HeatRunEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    heat_run = serializers.BooleanField(required=True, help_text='Heat Run checkbox value')
+
+
+class CleaningEntrySerializer(serializers.Serializer):
+    """Serializer for a single Cleaning entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class CleaningSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Cleaning data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = CleaningEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    cleaning = serializers.BooleanField(required=True, help_text='Cleaning checkbox value')
+
+
+class GlueingEntrySerializer(serializers.Serializer):
+    """Serializer for a single Glueing entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class GlueingSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Glueing data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = GlueingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    glueing = serializers.BooleanField(required=True, help_text='Glueing checkbox value')
+
+
+class SprayingEntrySerializer(serializers.Serializer):
+    """Serializer for a single Spraying entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class SprayingSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Spraying data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = SprayingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    spraying = serializers.BooleanField(required=True, help_text='Spraying checkbox value')

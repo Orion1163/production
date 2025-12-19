@@ -24,77 +24,86 @@
     overflow: hidden;
   }
 
-  /* Creative Checkbox Design - Centered */
+  /* Creative Checkbox Card Design */
   .checkbox-section {
     margin-bottom: 3rem;
-    padding: 2rem 0;
     display: flex;
     justify-content: center;
     align-items: center;
-    border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  }
+
+  .checkbox-card {
+    background: var(--surface, #2a2b38);
+    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 1.25rem 1.75rem;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: fit-content;
+  }
+
+  .checkbox-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+    transition: left 0.6s ease;
+  }
+
+  .checkbox-card:hover::before {
+    left: 100%;
+  }
+
+  .checkbox-card:hover {
+    border-color: var(--primary, #8b5cf6);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
+  }
+
+  .checkbox-card.checked {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border-color: var(--primary, #8b5cf6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 8px 25px rgba(139, 92, 246, 0.3);
   }
 
   .checkbox-wrapper {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 1.25rem;
-    cursor: pointer;
-    padding: 2rem 3rem;
-    border-radius: var(--radius-lg, 18px);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 1rem;
     position: relative;
-    overflow: hidden;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
-    border: 2px solid transparent;
-    min-width: 280px;
-  }
-
-  .checkbox-wrapper::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s ease, height 0.6s ease;
-    z-index: 0;
-  }
-
-  .checkbox-wrapper:hover::before {
-    width: 400px;
-    height: 400px;
-  }
-
-  .checkbox-wrapper.checked {
-    border-color: rgba(139, 92, 246, 0.3);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
-    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2), inset 0 0 20px rgba(139, 92, 246, 0.1);
+    z-index: 1;
   }
 
   .checkbox-wrapper input[type="checkbox"] {
     position: absolute;
     opacity: 0;
     cursor: pointer;
-    width: 100%;
-    height: 100%;
+    width: 24px;
+    height: 24px;
     margin: 0;
     z-index: 3;
-    top: 0;
     left: 0;
+    top: 50%;
+    transform: translateY(-50%);
     pointer-events: auto;
   }
 
   .custom-checkbox {
     position: relative;
-    width: 48px;
-    height: 48px;
-    border: 3px solid var(--primary-muted, #a5adcb);
-    border-radius: 12px;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid var(--primary-muted, #a5adcb);
+    border-radius: 6px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: transparent;
     flex-shrink: 0;
     z-index: 1;
@@ -103,84 +112,56 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .custom-checkbox::before {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 8px;
-    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
-    opacity: 0;
-    transform: scale(0);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .custom-checkbox::after {
     content: '';
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 8px;
-    height: 16px;
+    width: 5px;
+    height: 10px;
     border: solid white;
-    border-width: 0 4px 4px 0;
-    transform: translate(-50%, -60%) rotate(45deg) scale(0);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     opacity: 0;
-    z-index: 2;
+    margin-top: -1px;
   }
 
-  .checkbox-wrapper input[type="checkbox"]:checked ~ .custom-checkbox::before {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  .checkbox-wrapper input[type="checkbox"]:checked ~ .custom-checkbox {
+  .checkbox-card.checked .custom-checkbox {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
     border-color: var(--primary, #8b5cf6);
-    box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.2), 0 8px 24px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  }
+
+  .checkbox-card.checked .custom-checkbox::after {
+    transform: rotate(45deg) scale(1);
+    opacity: 1;
+  }
+
+  .checkbox-card:hover .custom-checkbox {
+    border-color: var(--primary, #8b5cf6);
     transform: scale(1.1);
   }
 
-  .checkbox-wrapper input[type="checkbox"]:checked ~ .custom-checkbox::after {
-    transform: translate(-50%, -60%) rotate(45deg) scale(1);
-    opacity: 1;
-  }
-
-  .checkbox-wrapper:hover .custom-checkbox {
-    border-color: var(--primary, #8b5cf6);
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
-  }
-
-  .checkbox-wrapper.checked:hover .custom-checkbox {
+  .checkbox-card.checked:hover .custom-checkbox {
     transform: scale(1.15);
   }
 
   .checkbox-wrapper label {
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--primary-strong, #f5f7fb);
     cursor: pointer;
     user-select: none;
     position: relative;
     z-index: 1;
-    letter-spacing: 1px;
-    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
     text-transform: uppercase;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  .checkbox-wrapper.checked label {
+  .checkbox-card.checked label {
     color: var(--primary, #8b5cf6);
-    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
-    transform: scale(1.05);
-  }
-
-  .checkbox-wrapper:hover label {
-    transform: scale(1.02);
   }
 
   /* Fields Container */
@@ -299,6 +280,70 @@
     opacity: 1;
   }
 
+  /* Submit Button */
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 2.5rem;
+    animation: fadeInUp 0.6s ease-out 0.5s both;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  .submit-btn:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .submit-btn span {
+    position: relative;
+    z-index: 1;
+  }
+
   /* Add Button */
   .add-btn {
     background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
@@ -409,82 +454,6 @@
     stroke-width: 3;
   }
 
-  /* Submit Button */
-  .submit-section {
-    display: flex;
-    justify-content: center;
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
-    animation: fadeInUp 0.6s ease-out 0.3s both;
-  }
-
-  .submit-btn {
-    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
-    color: white;
-    border: none;
-    padding: 1.25rem 4rem;
-    font-size: 1.1rem;
-    font-weight: 700;
-    border-radius: var(--radius-sm, 10px);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    position: relative;
-    overflow: hidden;
-    min-width: 200px;
-  }
-
-  .submit-btn::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s ease, height 0.6s ease;
-  }
-
-  .submit-btn:hover::before {
-    width: 400px;
-    height: 400px;
-  }
-
-  .submit-btn:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
-  }
-
-  .submit-btn:active {
-    transform: translateY(-2px) scale(1);
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-  }
-
-  .submit-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .submit-btn span {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .submit-btn svg {
-    width: 20px;
-    height: 20px;
-  }
-
   /* Responsive Design */
   @media (max-width: 768px) {
     .heat-run-form-card {
@@ -503,23 +472,7 @@
     }
 
     .checkbox-wrapper {
-      padding: 1.5rem 2rem;
-      min-width: 240px;
-    }
-
-    .checkbox-wrapper label {
-      font-size: 1.2rem;
-    }
-
-    .custom-checkbox {
-      width: 40px;
-      height: 40px;
-    }
-
-    .submit-btn {
-      padding: 1rem 3rem;
-      font-size: 1rem;
-      min-width: 180px;
+      padding: 0.75rem;
     }
   }
 
@@ -530,26 +483,6 @@
 
     .fields-container {
       gap: 1.5rem;
-    }
-
-    .checkbox-wrapper {
-      padding: 1.25rem 1.5rem;
-      min-width: 200px;
-    }
-
-    .checkbox-wrapper label {
-      font-size: 1rem;
-    }
-
-    .custom-checkbox {
-      width: 36px;
-      height: 36px;
-    }
-
-    .submit-btn {
-      padding: 0.875rem 2rem;
-      font-size: 0.95rem;
-      min-width: 160px;
     }
   }
 </style>
@@ -566,10 +499,12 @@
     <form id="heatRunForm">
       <!-- Checkbox Section -->
       <div class="checkbox-section">
-        <div class="checkbox-wrapper">
-          <input type="checkbox" id="heatRunCheckbox" name="heatRun" />
-          <span class="custom-checkbox"></span>
-          <label for="heatRunCheckbox">Heat Run</label>
+        <div class="checkbox-card" id="checkboxCard">
+          <div class="checkbox-wrapper">
+            <input type="checkbox" id="heatRunCheckbox" name="heatRun" />
+            <span class="custom-checkbox"></span>
+            <label for="heatRunCheckbox">Heat Run</label>
+          </div>
         </div>
       </div>
 
@@ -623,13 +558,8 @@
 
       <!-- Submit Section -->
       <div class="submit-section">
-        <button type="submit" class="submit-btn" id="heatRunSubmitBtn">
-          <span>
-            <!-- <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg> -->
-            Submit Data
-          </span>
+        <button type="submit" class="submit-btn">
+          <span>Submit Data</span>
         </button>
       </div>
     </form>
