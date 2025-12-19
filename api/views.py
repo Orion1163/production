@@ -5299,46 +5299,100 @@ class TestingSerialNumberSearchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check all other section checkboxes are false
-            # Exclude QC section from check
-            other_sections = [s for s in all_sections if s != 'qc']
+            # Define section order - sections before testing
+            sections_before_testing = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images'
+            ]
             
-            for section in other_sections:
-                # Try different field name patterns for this section
+            # Check that all enabled sections before testing have their checkboxes set to true
+            # Only check sections that are enabled in the procedure config
+            for section in sections_before_testing:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
                 section_patterns = [
-                    f'{section}_{section}',  # e.g., testing_testing
-                    f'{section}',  # e.g., testing
-                    f'qc_{section}',  # e.g., qc_testing
+                    f'{section}_{section}',  # e.g., qc_images_qc_images, qc_qc
+                    f'{section}',  # e.g., qc_images, qc
+                    f'qc_{section}',  # e.g., qc_qc_images
                     f'{section}_done',
                     f'{section}_completed',
                     f'{section}_status'
                 ]
                 
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
                 for pattern in section_patterns:
                     if pattern in all_field_names:
                         try:
                             section_value = getattr(entry, pattern, None)
-                            # Check if it's a boolean True or string 'true' or '1'
-                            section_completed = False
-                            if isinstance(section_value, bool):
-                                section_completed = section_value
-                            elif isinstance(section_value, str):
-                                section_completed = section_value.lower() in ('true', '1', 'yes', 'on')
-                            elif isinstance(section_value, (int, float)):
-                                section_completed = bool(section_value)
+                            section_checkbox_found = True
                             
-                            if section_completed:
-                                return Response(
-                                    {
-                                        'error': 'Other sections completed',
-                                        'message': f'Section {section} is already completed. Only QC should be completed.',
-                                        'completed_section': section
-                                    },
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
                             break  # Found the field, no need to check other patterns
                         except Exception:
                             continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" checkbox is not checked. All enabled sections before Testing must be completed.',
+                            'incomplete_section': section
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # If checkbox field not found for an enabled section, log warning but continue
+                # (some sections might not have checkboxes in the database)
+                if not section_checkbox_found:
+                    import sys
+                    print(f"Warning: Checkbox field not found for enabled section '{section}'", file=sys.stderr)
+            
+            # Check that testing section itself is not already completed
+            testing_patterns = [
+                'testing_testing',
+                'testing',
+                'qc_testing',
+                'testing_done',
+                'testing_completed',
+                'testing_status'
+            ]
+            
+            for pattern in testing_patterns:
+                if pattern in all_field_names:
+                    try:
+                        testing_value = getattr(entry, pattern, None)
+                        testing_completed = False
+                        if isinstance(testing_value, bool):
+                            testing_completed = testing_value
+                        elif isinstance(testing_value, str):
+                            testing_completed = testing_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(testing_value, (int, float)):
+                            testing_completed = bool(testing_value)
+                        
+                        if testing_completed:
+                            return Response(
+                                {
+                                    'error': 'Testing already completed',
+                                    'message': 'Testing section is already completed for this serial number'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break  # Found the field, no need to check other patterns
+                    except Exception:
+                        continue
             
             # All conditions met - return USID
             usid = getattr(entry, 'usid', None)
@@ -5356,7 +5410,7 @@ class TestingSerialNumberSearchView(APIView):
                     'usid': usid,
                     'serial_number': serial_number,
                     'part_no': part_no,
-                    'message': 'Serial number found and QC completed'
+                    'message': 'Serial number found and all required sections completed'
                 },
                 status=status.HTTP_200_OK
             )

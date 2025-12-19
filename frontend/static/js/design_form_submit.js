@@ -276,22 +276,15 @@
           'dispatch': 'Dispatch'
         };
         
-        // Special handling for qc_images section - use "qc_image" as checkbox name
-        if (section === 'qc_images') {
-          customCheckboxes.push({
-            name: 'qc_image',
-            label: 'QC Image'
-          });
-        } else {
-          // Use section name as label (capitalized)
-          const checkboxLabel = sectionLabelMap[section] || section.charAt(0).toUpperCase() + section.slice(1);
-          
-          // Automatically add section checkbox to custom checkboxes (will be created as BooleanField in dynamic table)
-          customCheckboxes.push({
-            name: section.toLowerCase().replace(/\s+/g, '_'),
-            label: checkboxLabel
-          });
-        }
+        // Use section name as checkbox name for consistency
+        // This creates a checkbox field like: qc_images_qc_images, testing_testing, etc.
+        const checkboxLabel = sectionLabelMap[section] || section.charAt(0).toUpperCase() + section.slice(1);
+        
+        // Automatically add section checkbox to custom checkboxes (will be created as BooleanField in dynamic table)
+        customCheckboxes.push({
+          name: section.toLowerCase().replace(/\s+/g, '_'),
+          label: checkboxLabel
+        });
       }
 
       // Get checkbox fields from the accent panel (custom checkboxes added by user)

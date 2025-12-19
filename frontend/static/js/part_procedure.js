@@ -52,11 +52,11 @@
         'heat_run': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M480-120q-134 0-227-93t-93-227q0-60 20-115t58-103l182-182 182 182q38 45 58 103t20 115q0 134-93 227t-227 93Zm0-80q83 0 141.5-58.5T680-440q0-42-16-80.5T624-584L480-728 336-584q-24 28-40 66.5T280-440q0 83 58.5 141.5T480-240Zm-40-280h80v-80h-80v80Zm0-120h80v-80h-80v80Z"/>
         </svg>`,
-        'glueing': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
-            <path d="M280-200v-280h400v280H280Zm80-200h240v120H360v-120Zm-80-200v-80h400v80H280Zm0-120v-80h400v80H280Z"/>
-        </svg>`,
         'cleaning': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M480-120 200-400v-280h80v-200h400v200h80v280L480-120Zm-40-200 120-120v-200h-120v200l-120 120 120 120Zm40 100 200-200v-200H280v200l200 200Zm0-340h80v-40h-80v40Zm-160 80h40v-80h-40v80Zm400 0h40v-80h-40v80ZM280-480h400v-120H280v120Zm200 280v-200h-40v200h40Z"/>
+        </svg>`,
+        'glueing': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
+            <path d="M280-200v-280h400v280H280Zm80-200h240v120H360v-120Zm-80-200v-80h400v80H280Zm0-120v-80h400v80H280Z"/>
         </svg>`,
         'spraying': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M480-120q-134 0-227-93t-93-227q0-60 20-115t58-103l182-182 182 182q38 45 58 103t20 115q0 134-93 227t-227 93Zm0-80q83 0 141.5-58.5T680-440q0-42-16-80.5T624-584L480-728 336-584q-24 28-40 66.5T280-440q0 83 58.5 141.5T480-240Zm-40-280h80v-80h-80v80Zm0-120h80v-80h-80v80Z"/>

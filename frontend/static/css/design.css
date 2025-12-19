@@ -184,20 +184,39 @@ form {
     /* padding-inline: clamp(0.75rem, 4vw, 1.5rem); */
     max-width: 640px;
     margin-inline: auto;
+    overflow: visible !important;
   }
 
   .user-form-shell {
     max-width: 640px;
     margin-inline: auto;
     padding-bottom: calc(180px + clamp(0.75rem, 4vw, 1.5rem));
+    overflow: visible !important;
   }
 
   .form-section {
     padding: clamp(1rem, 4vw, 1.5rem);
+    overflow: visible !important;
   }
 
   .form-row {
     gap: 20px;
+    overflow: visible !important;
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr; /* Force single column on mobile */
+    transform: none;
+    -webkit-transform: none;
+  }
+
+  .form-row > div {
+    overflow: visible !important;
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    transform: none;
+    -webkit-transform: none;
+    isolation: isolate;
   }
 
   .form-intro {
@@ -226,6 +245,32 @@ form {
     background: var(--surface);
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
     z-index: 30;
+  }
+
+  /* Select dropdown fixes for tablet and mobile */
+  .form-row select {
+    z-index: 999;
+    position: relative;
+  }
+
+  .form-row select:focus {
+    z-index: 1000;
+  }
+
+  .procedure-form,
+  .card.procedure-form,
+  form {
+    overflow: visible !important;
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+    isolation: isolate;
+  }
+
+  .card {
+    overflow: visible !important;
+    position: relative;
+    transform: none;
   }
 }
 
@@ -831,6 +876,83 @@ form {
   gap: 16px;
 }
 
+/* Responsive styles for dual-panel */
+@media (max-width: 768px) {
+  .dual-panel {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dual-panel {
+    gap: 10px;
+  }
+  
+  .panel-card {
+    padding: 12px;
+  }
+  
+  .panel-card h4 {
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  
+  .pill-input-row {
+    padding: 8px 10px;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .pill-input-row span {
+    font-size: 0.85rem;
+  }
+  
+  .dynamic-field {
+    padding: 6px 8px;
+    gap: 8px;
+  }
+  
+  .dynamic-field input {
+    font-size: 0.85rem;
+  }
+
+  /* Additional select fixes for very small screens */
+  .form-row select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 14px 40px 14px 14px;
+    min-height: 48px; /* Better touch target */
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    margin: 0;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .part-entry select {
+    font-size: 16px;
+    padding: 14px 40px 14px 14px;
+    min-height: 48px;
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    margin: 0;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
 .panel-card {
   border-radius: var(--radius-lg);
   border: 1px solid var(--surface-border);
@@ -927,6 +1049,116 @@ form {
   .submit-row .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  /* Mobile fixes for select dropdowns */
+  /* Ensure all parent containers allow overflow for dropdowns */
+  .form-row {
+    position: relative;
+    isolation: isolate; /* Create new stacking context */
+  }
+
+  .form-row > div {
+    overflow: visible !important;
+    position: relative;
+    z-index: auto;
+    isolation: isolate;
+    transform: none; /* Prevent transform from affecting dropdown positioning */
+    will-change: auto;
+  }
+
+  .form-row select {
+    position: relative;
+    z-index: 999;
+    width: 100%;
+    max-width: 100%;
+    transform: none; /* Prevent transform issues */
+    -webkit-transform: none;
+    left: 0;
+    right: 0;
+    margin: 0;
+  }
+
+  .form-row select:focus,
+  .form-row select:active {
+    z-index: 1000;
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+  }
+
+  /* Ensure form containers don't clip dropdowns on mobile */
+  .procedure-form,
+  .card.procedure-form,
+  form,
+  .page-shell,
+  .page-shell > * {
+    overflow: visible !important;
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+    isolation: isolate;
+  }
+
+  /* iOS Safari specific fixes */
+  @supports (-webkit-touch-callout: none) {
+    .form-row select {
+      -webkit-appearance: menulist-button;
+      appearance: menulist-button;
+    }
+
+    .form-row > div {
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+  }
+
+  /* Part entry specific fixes */
+  .part-entry {
+    overflow: visible !important;
+    position: relative;
+    isolation: isolate;
+    transform: none;
+  }
+
+  .part-entry .form-row {
+    overflow: visible !important;
+    position: relative;
+    isolation: isolate;
+    transform: none;
+  }
+
+  .part-entry .form-row > div {
+    overflow: visible !important;
+    position: relative;
+    z-index: auto;
+    isolation: isolate;
+    transform: none;
+    will-change: auto;
+  }
+
+  .part-entry select {
+    z-index: 999;
+    position: relative;
+    transform: none;
+    -webkit-transform: none;
+    left: 0;
+    right: 0;
+    margin: 0;
+  }
+
+  .part-entry select:focus,
+  .part-entry select:active {
+    z-index: 1000;
+    transform: none;
+    -webkit-transform: none;
+  }
+
+  /* Workflow builder container fixes */
+  .workflow-builder,
+  .workflow-card,
+  .detail-panel {
+    overflow: visible !important;
   }
 }
 

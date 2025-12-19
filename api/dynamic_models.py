@@ -198,7 +198,7 @@ def split_sections_by_qc(enabled_sections, procedure_config):
         'leaded_qc', 'prod_qc'
     ]
     post_qc_sections_list = [
-        'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+        'qc', 'qc_images', 'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
     ]
     
     pre_qc_sections = [s for s in enabled_sections if s in pre_qc_sections_list]
@@ -291,6 +291,9 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
         for section_name, section_data in procedure_config.items():
             if not section_data.get('enabled', False):
                 continue
+            
+            import sys
+            print("  Processing enabled section: %s in %s table" % (section_name, table_type), file=sys.stderr)
             
             section_fields[section_name] = {}
             
@@ -400,6 +403,11 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             
             # Add custom checkboxes (boolean fields) with section prefix
             custom_checkboxes = section_data.get('custom_checkboxes', [])
+            if custom_checkboxes:
+                import sys
+                print("  Processing %d custom_checkboxes for section %s in %s table" % (
+                    len(custom_checkboxes), section_name, table_type
+                ), file=sys.stderr)
             for checkbox in custom_checkboxes:
                 field_name = checkbox.get('name')
                 field_label = checkbox.get('label', field_name)
@@ -417,6 +425,10 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                         'section': section_name,
                         'is_common': False
                     }
+                    import sys
+                    print("    ✓ Created custom checkbox field: %s (label: %s)" % (
+                        prefixed_name, field_label
+                    ), file=sys.stderr)
         
         # Create fields for each section's fields
         # Track custom fields across all sections for summary logging
@@ -440,6 +452,14 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                             section_custom_fields.add(field_name_base)
                         else:
                             section_custom_fields.add(f"{section_name}_{field_name_base}")
+            
+            # Log if section has fields to process
+            section_field_count = len(section_fields[section_name])
+            if section_field_count > 0:
+                import sys
+                print("  Creating %d field(s) for section %s in %s table" % (
+                    section_field_count, section_name, table_type
+                ), file=sys.stderr)
             
             for field_name, field_info in sorted(section_fields[section_name].items()):
                 meta = field_metadata.get(field_name, {})

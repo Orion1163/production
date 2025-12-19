@@ -2,7 +2,7 @@ import re
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.contrib.admin.apps import AdminConfig
-from django.http import Http404
+from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse, NoReverseMatch
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -235,7 +235,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         # Use production workflow order
         section_order = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-            'leaded_qc', 'prod_qc', 'qc', 'testing',
+            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
             'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
         ]
         sorted_sections = sorted(section_order, key=len, reverse=True)
@@ -276,12 +276,13 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'leaded_qc': 'Leaded QC',
         'prod_qc': 'Production QC',
         'qc': 'QC',
+        'qc_images': 'QC Images',
         'testing': 'Testing',
         'heat_run': 'Heat Run',
-        'glueing': 'Glueing',
         'cleaning': 'Cleaning',
+        'glueing': 'Glueing',
         'spraying': 'Spraying',
-        'dispatch': 'Dispatch'
+        'dispatch': 'Dispatch',
     }
     
     # Add fieldsets for each section - process in order, longer names first to avoid conflicts
@@ -295,10 +296,11 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'leaded_qc',              # 6. Leaded QC
         'prod_qc',                # 7. Production QC
         'qc',                     # 8. QC
+        'qc_images',              # 8. QC Images
         'testing',                # 9. Testing
         'heat_run',               # 10. Heat Run
-        'glueing',                # 11. Glueing
-        'cleaning',               # 12. Cleaning
+         'cleaning',               # 11. Cleaning
+        'glueing',                # 12. Glueing   
         'spraying',               # 13. Spraying
         'dispatch'                # 14. Dispatch
     ]
@@ -558,11 +560,12 @@ def register_dynamic_model_in_admin(model_class, part_name):
             """
             response = super().response_post_save_add(request, obj)
             # Fix the redirect URL to use our catch-all pattern
-            if hasattr(response, 'url') and response.url:
+            if isinstance(response, HttpResponseRedirect) and hasattr(response, 'url') and response.url:
                 model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
                 # Replace any reversed URLs with direct paths
                 if 'api_' + model_name in response.url or 'admin/api/' + model_name in response.url:
-                    response.url = '/admin/api/%s/' % model_name
+                    # Create a new HttpResponseRedirect with the corrected URL
+                    return HttpResponseRedirect('/admin/api/%s/' % model_name)
             return response
         
         def response_post_save_change(self, request, obj):
@@ -571,11 +574,12 @@ def register_dynamic_model_in_admin(model_class, part_name):
             """
             response = super().response_post_save_change(request, obj)
             # Fix the redirect URL to use our catch-all pattern
-            if hasattr(response, 'url') and response.url:
+            if isinstance(response, HttpResponseRedirect) and hasattr(response, 'url') and response.url:
                 model_name = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
                 # Replace any reversed URLs with direct paths
                 if 'api_' + model_name in response.url or 'admin/api/' + model_name in response.url:
-                    response.url = '/admin/api/%s/' % model_name
+                    # Create a new HttpResponseRedirect with the corrected URL
+                    return HttpResponseRedirect('/admin/api/%s/' % model_name)
             return response
         
         def changelist_view(self, request, extra_context=None):
