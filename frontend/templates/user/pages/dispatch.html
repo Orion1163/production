@@ -5,10 +5,586 @@
 
 {% block page_title %}Dispatch{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* 🚚 Dispatch Container Styles */
+  .dispatch-container {
+    width: 100%;
+    /* padding: 2rem; */
+  }
+
+  .page-heading {
+    margin-bottom: 2rem;
+  }
+
+  .page-heading h1 {
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .page-heading hr {
+    border: none;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary, #8b5cf6), transparent);
+    margin: 0;
+  }
+
+  /* 🎪 Dispatch Card Styles */
+  .dispatch-card {
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  }
+
+  .card-title {
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* 🎯 Part Sections */
+  .part-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.05));
+  }
+
+  .part-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .section-header {
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    color: var(--primary, #8b5cf6);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .primary-section .section-title {
+    color: var(--primary, #8b5cf6);
+  }
+
+  .additional-section .section-title {
+    color: var(--text-muted, rgba(229, 231, 235, 0.7));
+    font-size: 0.9rem;
+  }
+
+  /* 🎯 Outgoing Fields Section */
+  .outgoing-fields-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.05));
+  }
+
+  /* 📝 Form Styles */
+  .dispatch-form {
+    width: 100%;
+  }
+
+  /* 🎯 Fields Container for Serial Number and USID */
+  .fields-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 1rem;
+    align-items: end;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .field-row:first-child {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* 🎨 Input Wrapper with Underline Design */
+  .input-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .input-underline {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--surface-border, rgba(255, 255, 255, 0.08));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .input-underline::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(-50%);
+  }
+
+  .input-underline.active::after {
+    width: 100%;
+  }
+
+  .input-group.focused .input-underline {
+    background: rgba(139, 92, 246, 0.2);
+  }
+
+  .input-group.has-value .input-underline {
+    background: var(--surface-border, rgba(255, 255, 255, 0.15));
+  }
+
+  .serial-number-input,
+  .usid-input {
+    width: 200px;
+    padding: 0.5rem 0;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .serial-number-input::placeholder,
+  .usid-input::placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.4));
+    transition: opacity 0.3s ease;
+  }
+
+  .serial-number-input:focus::placeholder,
+  .usid-input:focus::placeholder {
+    opacity: 0.3;
+  }
+
+  .serial-number-input:focus,
+  .usid-input:focus {
+    border-bottom-color: var(--primary, #8b5cf6);
+  }
+
+  .serial-number-input:hover:not(:focus),
+  .usid-input:hover:not(:focus) {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .serial-number-input[readonly],
+  .usid-input[readonly] {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .serial-number-input[readonly]:focus,
+  .usid-input[readonly]:focus {
+    opacity: 1;
+    border-bottom-color: var(--primary, #8b5cf6);
+  }
+
+  /* ➕ Add Button */
+  .add-btn {
+    background: var(--primary, #8b5cf6);
+    color: white;
+    border: none;
+    padding: 0;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    align-self: end;
+    margin-bottom: 0.75rem;
+  }
+
+  .add-btn:hover {
+    background: #7c3aed;
+    transform: scale(1.05);
+  }
+
+  .add-btn:active {
+    transform: scale(0.95);
+  }
+
+  .add-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* ➖ Remove Button */
+  .remove-btn {
+    background: transparent;
+    color: #ef4444;
+    border: 2px solid #ef4444;
+    padding: 0;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    align-self: end;
+    margin-bottom: 0.75rem;
+  }
+
+  .remove-btn:hover {
+    color: white;
+    background: #ef4444;
+    transform: scale(1.05);
+  }
+
+  .remove-btn:active {
+    transform: scale(0.95);
+  }
+
+  .remove-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .input-group {
+    margin-bottom: 0.5rem;
+  }
+
+  .input-group {
+    position: relative;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .input-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-muted, #a5adcb);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .field-row .input-label {
+    font-size: 0.7rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .input-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    transition: transform 0.3s ease;
+  }
+
+  .input-group:hover .input-icon {
+    transform: scale(1.1) rotate(5deg);
+  }
+
+  .input-field-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 0.75rem 0;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, rgba(229, 231, 255, 0.4));
+  }
+
+  .input-field:focus {
+    border-bottom-color: var(--primary, #8b5cf6);
+    background: transparent;
+  }
+
+  .input-field:hover:not(:focus) {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .input-field-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--primary, #8b5cf6);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ☑️ Checkboxes Section */
+  .checkboxes-section {
+    animation: fadeInUp 0.6s ease-out 0.3s both;
+  }
+
+  .checkboxes-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .checkbox-group {
+    position: relative;
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+  }
+
+  .checkbox-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 8px);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .checkbox-wrapper:hover {
+    background: rgba(139, 92, 246, 0.1);
+  }
+
+  .custom-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .custom-checkbox-indicator {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .custom-checkbox-indicator::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 12px;
+    border: solid var(--primary, #8b5cf6);
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: -2px;
+  }
+
+  .custom-checkbox:checked + .custom-checkbox-indicator {
+    background: var(--primary, #8b5cf6);
+    border-color: var(--primary, #8b5cf6);
+  }
+
+  .custom-checkbox:checked + .custom-checkbox-indicator::after {
+    transform: rotate(45deg) scale(1);
+    border-color: #ffffff;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--primary-strong, #f5f7fb);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .checkbox-wrapper.checked {
+    background: rgba(139, 92, 246, 0.15);
+  }
+
+  .checkbox-wrapper.checked .checkbox-label {
+    color: var(--primary, #8b5cf6);
+  }
+
+  /* 🎯 Submit Button */
+  .submit-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm, 10px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* 📭 No Parts Message */
+  .no-parts-message {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted, rgba(229, 231, 235, 0.8));
+    font-size: 1.1rem;
+    background: var(--card-bg, #1f202b);
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-lg, 18px);
+  }
+
+  /* 📱 Responsive Design */
+  @media (max-width: 768px) {
+
+    .dispatch-card {
+      padding: 1rem;
+    }
+
+    .outgoing-fields-section {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .field-row {
+      grid-template-columns: auto auto;
+      gap: 0.75rem;
+    }
+
+    .serial-number-input,
+    .usid-input {
+      width: 150px;
+      font-size: 0.85rem;
+    }
+
+    .add-btn,
+    .remove-btn {
+      width: 50px;
+      margin: 0 auto;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
-  <h1>Dispatch</h1>
-  <p>Hello</p>
+<div class="dispatch-container">
+  <div class="page-heading">
+    <h1>Dispatch</h1>
+    <hr />
+  </div>
+  
+  <!-- 🚚 Dispatch Container - Will be populated by JavaScript -->
+  <div id="dispatchContainer">
+    <!-- Loading or content will be inserted here -->
+  </div>
 </div>
 {% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dynamic_api/dispatch_api.js' %}" defer></script>
+{% endblock %}
+
 

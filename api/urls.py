@@ -7,9 +7,10 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    TestingProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
+    TestingProcedureConfigView, DispatchProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
     HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
-    GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView
+    GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView,
+    DispatchSerialNumberSearchView
 )
 
 urlpatterns = [
@@ -43,6 +44,7 @@ urlpatterns = [
     path('accessories-packing-update/', AccessoriesPackingUpdateView.as_view(), name='accessories-packing-update'),
     path('qc-procedure-config/<str:part_no>/', QCProcedureConfigView.as_view(), name='qc-procedure-config'),
     path('testing-procedure-config/<str:part_no>/', TestingProcedureConfigView.as_view(), name='testing-procedure-config'),
+    path('dispatch-procedure-config/<str:part_no>/', DispatchProcedureConfigView.as_view(), name='dispatch-procedure-config'),
     path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
     path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
     path('testing-submit/', TestingSubmitView.as_view(), name='testing-submit'),
@@ -56,4 +58,5 @@ urlpatterns = [
     path('cleaning-serial-number-search/', CleaningSerialNumberSearchView.as_view(), name='cleaning-serial-number-search'),
     path('glueing-serial-number-search/', GlueingSerialNumberSearchView.as_view(), name='glueing-serial-number-search'),
     path('spraying-serial-number-search/', SprayingSerialNumberSearchView.as_view(), name='spraying-serial-number-search'),
+    path('dispatch-serial-number-search/', DispatchSerialNumberSearchView.as_view(), name='dispatch-serial-number-search'),
 ]

@@ -54,30 +54,30 @@
     list.appendChild(wrapper);
   };
 
-  const updateDispatchAvailability = () => {
-    if (!partEntries) {
-      return;
-    }
-    const entries = Array.from(partEntries.querySelectorAll('.part-entry'));
-    entries.forEach((entry, index) => {
-      const dispatchItem = entry.querySelector('[data-dispatch-item]');
-      const dispatchPanel = entry.querySelector('[data-dispatch-panel]');
-      if (!dispatchItem || !dispatchPanel) {
-        return;
-      }
-      const dispatchCheckbox = dispatchItem.querySelector('input[type="checkbox"]');
-      const isPrimary = index === 0;
-      dispatchItem.style.display = isPrimary ? '' : 'none';
-      if (dispatchCheckbox) {
-        dispatchCheckbox.disabled = !isPrimary;
-        if (!isPrimary && dispatchCheckbox.checked) {
-          dispatchCheckbox.checked = false;
-        }
-      }
-      dispatchPanel.style.display =
-        isPrimary && dispatchCheckbox && dispatchCheckbox.checked ? 'block' : 'none';
-    });
-  };
+  // const updateDispatchAvailability = () => {
+  //   if (!partEntries) {
+  //     return;
+  //   }
+  //   const entries = Array.from(partEntries.querySelectorAll('.part-entry'));
+  //   entries.forEach((entry, index) => {
+  //     const dispatchItem = entry.querySelector('[data-dispatch-item]');
+  //     const dispatchPanel = entry.querySelector('[data-dispatch-panel]');
+  //     if (!dispatchItem || !dispatchPanel) {
+  //       return;
+  //     }
+  //     const dispatchCheckbox = dispatchItem.querySelector('input[type="checkbox"]');
+  //     const isPrimary = index === 0;
+  //     dispatchItem.style.display = isPrimary ? '' : 'none';
+  //     if (dispatchCheckbox) {
+  //       dispatchCheckbox.disabled = !isPrimary;
+  //       if (!isPrimary && dispatchCheckbox.checked) {
+  //         dispatchCheckbox.checked = false;
+  //       }
+  //     }
+  //     dispatchPanel.style.display =
+  //       isPrimary && dispatchCheckbox && dispatchCheckbox.checked ? 'block' : 'none';
+  //   });
+  // };
 
   const addPartEntry = () => {
     if (!template || !partEntries) {
@@ -151,7 +151,7 @@
       }
     }
     
-    updateDispatchAvailability();
+    // updateDispatchAvailability();
   };
 
   const removePart = (button) => {
@@ -357,7 +357,7 @@
     if (partEntries && !partEntries.children.length) {
       addPartEntry();
     }
-    updateDispatchAvailability();
+    // updateDispatchAvailability();
   });
 })();
 

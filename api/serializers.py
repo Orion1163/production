@@ -386,6 +386,24 @@ class TestingProcedureConfigSerializer(serializers.Serializer):
     enabled = serializers.BooleanField(read_only=True, help_text='Whether Testing section is enabled')
 
 
+class DispatchProcedureConfigSerializer(serializers.Serializer):
+    """Serializer for Dispatch procedure configuration - extracts custom fields and checkboxes"""
+    part_no = serializers.CharField(read_only=True)
+    model_no = serializers.CharField(read_only=True)
+    custom_fields = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom input fields for Dispatch section'
+    )
+    custom_checkboxes = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True,
+        help_text='List of custom checkboxes for Dispatch section'
+    )
+    enabled = serializers.BooleanField(read_only=True, help_text='Whether Dispatch section is enabled')
+    is_primary = serializers.BooleanField(read_only=True, help_text='Whether this is the primary part (matching current part_no)')
+
+
 class QCSubmitSerializer(serializers.Serializer):
     """Serializer for submitting QC data to completion table"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')

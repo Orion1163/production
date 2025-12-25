@@ -4350,6 +4350,100 @@ class TestingProcedureConfigView(APIView):
             )
 
 
+class DispatchProcedureConfigView(APIView):
+    """
+    🚚 Get Dispatch procedure configuration for all parts with dispatch enabled in a model.
+    Returns parts with dispatch enabled, with primary part (matching part_no) first.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            # 🎯 Get ModelPart by part_no to find model_no
+            try:
+                current_model_part = ModelPart.objects.get(part_no=part_no)
+                model_no = current_model_part.model_no
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 🔍 Get all ModelParts for this model_no
+            all_model_parts = ModelPart.objects.filter(model_no=model_no).order_by('-created_at')
+            
+            # 📦 Collect parts with dispatch enabled
+            parts_with_dispatch = []
+            primary_part_data = None
+            
+            for model_part in all_model_parts:
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                except PartProcedureDetail.DoesNotExist:
+                    # ⚠️ No procedure detail exists, skip this part
+                    continue
+                
+                # 🎨 Extract Dispatch section from procedure_config
+                dispatch_config = procedure_config.get('dispatch', {})
+                enabled = dispatch_config.get('enabled', False)
+                
+                # ✅ Only include parts with dispatch enabled
+                if enabled:
+                    custom_fields = dispatch_config.get('custom_fields', [])
+                    custom_checkboxes = dispatch_config.get('custom_checkboxes', [])
+                    is_primary = (model_part.part_no == part_no)
+                    
+                    part_data = {
+                        'part_no': model_part.part_no,
+                        'model_no': model_no,
+                        'custom_fields': custom_fields,
+                        'custom_checkboxes': custom_checkboxes,
+                        'enabled': enabled,
+                        'is_primary': is_primary
+                    }
+                    
+                    # 🎯 Store primary part separately
+                    if is_primary:
+                        primary_part_data = part_data
+                    else:
+                        parts_with_dispatch.append(part_data)
+            
+            # 🎪 Build response: primary part first, then others
+            response_parts = []
+            if primary_part_data:
+                response_parts.append(primary_part_data)
+            response_parts.extend(parts_with_dispatch)
+            
+            # 📊 Prepare response data
+            response_data = {
+                'model_no': model_no,
+                'current_part_no': part_no,
+                'parts': response_parts,
+                'count': len(response_parts)
+            }
+            
+            # 🎭 Serialize and return
+            from .serializers import DispatchProcedureConfigSerializer
+            serialized_parts = [DispatchProcedureConfigSerializer(part).data for part in response_parts]
+            
+            return Response({
+                'model_no': model_no,
+                'current_part_no': part_no,
+                'parts': serialized_parts,
+                'count': len(serialized_parts)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class USIDGenerateView(APIView):
     """
     Generate a unique USID for QC page.
@@ -7287,6 +7381,244 @@ class SprayingSerialNumberSearchView(APIView):
             import sys
             error_details = traceback.format_exc()
             print(f"Spraying Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DispatchSerialNumberSearchView(APIView):
+    """
+    🚚 GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all enabled sections (except dispatch) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        🔍 Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # ✅ Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 🎯 Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 📋 Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # 🔍 Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"⚠️ Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # ❌ If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 📝 Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 🎯 Define sections before dispatch (all sections except dispatch itself)
+            sections_before_dispatch = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying'
+            ]
+            
+            # ✅ Check that all enabled sections before dispatch have their checkboxes set to true
+            for section in sections_before_dispatch:
+                # ⏭️ Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # 🔍 Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing, qc_qc, spraying_spraying
+                    f'{section}',  # e.g., testing, qc, spraying
+                    f'qc_{section}',  # e.g., qc_testing, qc_spraying
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # ✅ Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # ❌ If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Dispatch. Please complete all enabled sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # 🔍 Check that dispatch section itself is not already completed
+            dispatch_patterns = [
+                'dispatch_dispatch',
+                'dispatch',
+                'qc_dispatch',
+                'dispatch_done',
+                'dispatch_completed',
+                'dispatch_status'
+            ]
+            
+            for pattern in dispatch_patterns:
+                if pattern in all_field_names:
+                    try:
+                        dispatch_value = getattr(entry, pattern, None)
+                        dispatch_completed = False
+                        if isinstance(dispatch_value, bool):
+                            dispatch_completed = dispatch_value
+                        elif isinstance(dispatch_value, str):
+                            dispatch_completed = dispatch_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(dispatch_value, (int, float)):
+                            dispatch_completed = bool(dispatch_value)
+                        
+                        if dispatch_completed:
+                            return Response(
+                                {
+                                    'error': 'Dispatch already completed',
+                                    'message': f'Dispatch has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # 🎯 Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ✅ Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Dispatch'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"🚚 Dispatch Serial Number Search Error: {str(e)}", file=sys.stderr)
             print(error_details, file=sys.stderr)
             return Response(
                 {
