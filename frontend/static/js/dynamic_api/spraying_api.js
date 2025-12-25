@@ -401,35 +401,6 @@
       }
     });
 
-    // Initialize checkbox handler
-    const checkbox = document.getElementById('sprayingCheckbox');
-    const checkboxCard = document.getElementById('checkboxCard');
-    
-    if (checkbox && checkboxCard) {
-      // Handle checkbox change event
-      checkbox.addEventListener('change', function() {
-        if (this.checked) {
-          checkboxCard.classList.add('checked');
-        } else {
-          checkboxCard.classList.remove('checked');
-        }
-      });
-      
-      // Make the entire card clickable
-      checkboxCard.addEventListener('click', function(e) {
-        // If clicking directly on the checkbox input, let it handle naturally
-        if (e.target === checkbox) {
-          return;
-        }
-        // For clicks anywhere else on the card (label, custom checkbox, wrapper, card itself)
-        // Toggle the checkbox and trigger change event
-        e.preventDefault();
-        e.stopPropagation();
-        checkbox.checked = !checkbox.checked;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-    }
-
     // Initialize form submission handler
     const form = document.getElementById('sprayingForm');
     if (form) {
@@ -454,12 +425,6 @@
       if (submitButton) {
         submitButton.disabled = true;
         submitButton.textContent = 'Submitting...';
-      }
-
-      // Check if Spraying checkbox is checked
-      const checkbox = document.getElementById('sprayingCheckbox');
-      if (!checkbox || !checkbox.checked) {
-        throw new Error('Please check the Spraying checkbox to submit data');
       }
 
       if (!PART_NO) {
@@ -536,16 +501,6 @@
 
       // Reset form after successful submission
       form.reset();
-      
-      // Reset checkbox
-      const checkboxReset = document.getElementById('sprayingCheckbox');
-      const checkboxCard = document.getElementById('checkboxCard');
-      if (checkboxReset) {
-        checkboxReset.checked = false;
-      }
-      if (checkboxCard) {
-        checkboxCard.classList.remove('checked');
-      }
 
       // Reset all field rows to initial state (keep only first row)
       const fieldsContainer = document.getElementById('fieldsContainer');
