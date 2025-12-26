@@ -7,7 +7,7 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    TestingProcedureConfigView, DispatchProcedureConfigView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
+    TestingProcedureConfigView, DispatchProcedureConfigView, DispatchSONumbersView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
     HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
     GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView,
     DispatchSerialNumberSearchView
@@ -45,6 +45,7 @@ urlpatterns = [
     path('qc-procedure-config/<str:part_no>/', QCProcedureConfigView.as_view(), name='qc-procedure-config'),
     path('testing-procedure-config/<str:part_no>/', TestingProcedureConfigView.as_view(), name='testing-procedure-config'),
     path('dispatch-procedure-config/<str:part_no>/', DispatchProcedureConfigView.as_view(), name='dispatch-procedure-config'),
+    path('dispatch-so-numbers/<str:part_no>/', DispatchSONumbersView.as_view(), name='dispatch-so-numbers'),
     path('usid-generate/', USIDGenerateView.as_view(), name='usid-generate'),
     path('qc-submit/', QCSubmitView.as_view(), name='qc-submit'),
     path('testing-submit/', TestingSubmitView.as_view(), name='testing-submit'),

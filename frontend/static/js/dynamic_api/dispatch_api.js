@@ -10,6 +10,7 @@
     const API_BASE_URL = '/api/v2/dispatch-procedure-config/';
     const DISPATCH_SERIAL_SEARCH_URL = '/api/v2/dispatch-serial-number-search/';
     const DISPATCH_SUBMIT_URL = '/api/v2/dispatch-submit/';
+    const DISPATCH_SO_NUMBERS_URL = '/api/v2/dispatch-so-numbers/';
     const PART_NO = window.PART_NO || '';
     
     // 🎯 Track row indices per part
@@ -428,13 +429,49 @@
     }
 
     /**
+     * 🔍 Fetch SO numbers from API for the primary part
+     */
+    async function fetchSONumbers(partNo) {
+        if (!partNo) {
+            console.error('Part number not available');
+            return [];
+        }
+        
+        try {
+            const response = await fetch(`${DISPATCH_SO_NUMBERS_URL}${partNo}/`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                const errorMessage = data.message || data.error || 'Failed to fetch SO numbers';
+                console.error('Error fetching SO numbers:', errorMessage);
+                showToast(errorMessage, 'error');
+                return [];
+            }
+            
+            return data.so_numbers || [];
+            
+        } catch (error) {
+            console.error('Error fetching SO numbers:', error);
+            showToast('Error fetching SO numbers. Please try again.', 'error');
+            return [];
+        }
+    }
+
+    /**
      * 🎨 Create outgoing batch and serial number fields (only for primary part)
      */
-    function createOutgoingFields(partNo) {
+    async function createOutgoingFields(partNo) {
         const outgoingSection = document.createElement('div');
         outgoingSection.className = 'outgoing-fields-section';
 
-        // Outgoing Batch No
+        // Outgoing Batch No (Dropdown)
         const batchGroup = document.createElement('div');
         batchGroup.className = 'input-group';
         const batchLabel = document.createElement('label');
@@ -443,14 +480,30 @@
         batchLabel.textContent = 'Outgoing Batch No';
         const batchWrapper = document.createElement('div');
         batchWrapper.className = 'input-field-wrapper';
-        const batchInput = document.createElement('input');
-        batchInput.type = 'text';
-        batchInput.id = `outgoingBatchNo_${partNo}`;
-        batchInput.name = 'outgoingBatchNo';
-        batchInput.className = 'input-field';
-        batchInput.placeholder = 'Enter Outgoing Batch No';
-        batchInput.setAttribute('data-part-no', partNo);
-        batchWrapper.appendChild(batchInput);
+        const batchSelect = document.createElement('select');
+        batchSelect.id = `outgoingBatchNo_${partNo}`;
+        batchSelect.name = 'outgoingBatchNo';
+        batchSelect.className = 'input-field select-field';
+        batchSelect.setAttribute('data-part-no', partNo);
+        
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select SO Number';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        batchSelect.appendChild(defaultOption);
+        
+        // Fetch and populate SO numbers
+        const soNumbers = await fetchSONumbers(partNo);
+        soNumbers.forEach(soNo => {
+            const option = document.createElement('option');
+            option.value = soNo;
+            option.textContent = soNo;
+            batchSelect.appendChild(option);
+        });
+        
+        batchWrapper.appendChild(batchSelect);
         batchGroup.appendChild(batchLabel);
         batchGroup.appendChild(batchWrapper);
 
@@ -483,7 +536,7 @@
     /**
      * 🎨 Render primary part section (first section in the card)
      */
-    function renderPrimaryPart(partData, cardElement) {
+    async function renderPrimaryPart(partData, cardElement) {
         // 🎯 Initialize row index for this part
         rowIndices[partData.part_no] = 0;
 
@@ -507,7 +560,7 @@
         form.setAttribute('data-part-no', partData.part_no);
 
         // 🎯 Outgoing Batch No and Outgoing Serial No (only for primary)
-        const outgoingFields = createOutgoingFields(partData.part_no);
+        const outgoingFields = await createOutgoingFields(partData.part_no);
         form.appendChild(outgoingFields);
 
         // 🎯 Serial Number and USID Fields Container
@@ -783,7 +836,7 @@
     /**
      * 🎨 Render all dispatch parts in one card
      */
-    function renderDispatchParts(data) {
+    async function renderDispatchParts(data) {
         const container = document.getElementById('dispatchContainer');
         if (!container) {
             console.error('Dispatch container not found');
@@ -816,7 +869,7 @@
         // 🎯 Render primary part first
         const primaryPart = data.parts.find(p => p.is_primary);
         if (primaryPart) {
-            renderPrimaryPart(primaryPart, dispatchCard);
+            await renderPrimaryPart(primaryPart, dispatchCard);
         }
 
         // 🎪 Render additional parts
@@ -857,7 +910,7 @@
         // 🎭 Fetch and render dispatch config
         const data = await fetchDispatchConfig();
         if (data) {
-            renderDispatchParts(data);
+            await renderDispatchParts(data);
         }
 
         console.log('Dispatch API handler initialized');

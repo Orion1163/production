@@ -370,6 +370,99 @@
     border-bottom-color: rgba(255, 255, 255, 0.15);
   }
 
+  /* 🎯 Select Dropdown Styles */
+  .input-field-wrapper {
+    position: relative;
+  }
+
+  .select-field {
+    width: 100%;
+    padding: 0.75rem 0;
+    padding-right: 2.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    color: var(--primary-strong, #f5f7fb);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    outline: none;
+    box-sizing: border-box;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%238b5cf6' d='M7 10L2 5h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.25rem center;
+    background-size: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .select-field:focus {
+    border-bottom-color: var(--primary, #8b5cf6);
+    background-color: rgba(139, 92, 246, 0.05);
+  }
+
+  .select-field:hover:not(:focus) {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+
+  /* 🎯 Select dropdown options styling */
+  .select-field option {
+    background: var(--card-bg, #1f202b);
+    color: var(--primary-strong, #f5f7fb);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    border: none;
+    min-height: 2.5rem;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+
+  .select-field option:hover,
+  .select-field option:focus {
+    background: rgba(139, 92, 246, 0.2);
+    color: var(--primary, #8b5cf6);
+  }
+
+  .select-field option:checked {
+    background: var(--primary, #8b5cf6);
+    color: white;
+    font-weight: 600;
+  }
+
+  .select-field option:disabled {
+    color: var(--text-muted, rgba(229, 231, 235, 0.5));
+    font-style: italic;
+    cursor: not-allowed;
+  }
+
+  .select-field:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* 🎯 Ensure dropdown appears properly */
+  .input-group {
+    position: relative;
+    z-index: 1;
+  }
+
+  .input-group:has(.select-field:focus) {
+    z-index: 10;
+  }
+
+  /* 🎯 Better dropdown appearance on different browsers */
+  @supports (-webkit-appearance: none) {
+    .select-field {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%238b5cf6' d='M7 10L2 5h10z'/%3E%3C/svg%3E");
+    }
+  }
+
   .input-field-icon {
     position: absolute;
     left: 1rem;
@@ -553,6 +646,16 @@
     .usid-input {
       width: 150px;
       font-size: 0.85rem;
+    }
+
+    .select-field {
+      font-size: 0.95rem;
+      padding-right: 2rem;
+    }
+
+    .select-field option {
+      font-size: 0.95rem;
+      padding: 0.6rem 0.75rem;
     }
 
     .add-btn,

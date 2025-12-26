@@ -4444,6 +4444,112 @@ class DispatchProcedureConfigView(APIView):
             )
 
 
+class DispatchSONumbersView(APIView):
+    """
+    🚚 Get distinct SO numbers from inprocess table for a part.
+    Returns all unique SO numbers for the primary part that are inprocess.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            # 🎯 Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 🎯 Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name (try exact match, then variations, then partial match)
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        # Remove underscores and compare
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        # Check if field contains the name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find SO No field
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            if not so_no_field:
+                return Response(
+                    {'error': 'SO No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for distinct SO numbers
+            try:
+                # Get distinct SO numbers, excluding None and empty strings
+                distinct_so_nos = in_process_model.objects.filter(
+                    **{f'{so_no_field}__isnull': False}
+                ).exclude(
+                    **{f'{so_no_field}': ''}
+                ).values_list(so_no_field, flat=True).distinct().order_by(so_no_field)
+                
+                # Convert to list and filter out None/empty values
+                so_numbers = [str(so_no) for so_no in distinct_so_nos if so_no is not None and str(so_no).strip()]
+                
+                return Response({
+                    'so_numbers': so_numbers,
+                    'count': len(so_numbers)
+                }, status=status.HTTP_200_OK)
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class USIDGenerateView(APIView):
     """
     Generate a unique USID for QC page.
