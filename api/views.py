@@ -7734,3 +7734,422 @@ class DispatchSerialNumberSearchView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class DispatchSubmitView(APIView):
+    """
+    🚚 PUT API endpoint for submitting Dispatch data.
+    Links entries to in_process table (partnoinprocess) using outgoing serial number.
+    Updates completion table for all parts with dispatch data.
+    Links all part numbers together via outgoing serial number as common field.
+    """
+    
+    def put(self, request):
+        """
+        Submit Dispatch data and link entries across all parts.
+        
+        Expected data:
+        - primary_part: Dict with part_no, entries (list of {serial_number, usid}), custom_fields, custom_checkboxes
+        - outgoing_batch_no: Outgoing Batch Number (SO Number) - required
+        - outgoing_serial_no: Outgoing Serial Number (common linking field) - required
+        - additional_parts: List of part data (same structure as primary_part) - optional
+        - dispatch: Boolean flag for dispatch completion - required
+        """
+        try:
+            # Validate serializer
+            from .serializers import DispatchSubmitSerializer
+            serializer = DispatchSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            primary_part_data = validated_data['primary_part']
+            outgoing_batch_no = validated_data['outgoing_batch_no']
+            outgoing_serial_no = validated_data['outgoing_serial_no']
+            dispatch_done_by = validated_data.get('dispatch_done_by', '')
+            additional_parts_data = validated_data.get('additional_parts', [])
+            dispatch_flag = validated_data['dispatch']
+            
+            # Combine all parts (primary + additional)
+            all_parts_data = [primary_part_data] + additional_parts_data
+            
+            # Track results
+            results = {
+                'primary_part': {},
+                'additional_parts': [],
+                'outgoing_serial_no': outgoing_serial_no,
+                'outgoing_batch_no': outgoing_batch_no,
+                'linked_entries': []
+            }
+            
+            # Process each part
+            for part_idx, part_data in enumerate(all_parts_data):
+                part_no = part_data['part_no']
+                entries = part_data['entries']
+                custom_fields = part_data.get('custom_fields', {}) or {}
+                custom_checkboxes = part_data.get('custom_checkboxes', {}) or {}
+                
+                is_primary = (part_idx == 0)
+                
+                # Verify that the part exists
+                try:
+                    model_part = ModelPart.objects.get(part_no=part_no)
+                except ModelPart.DoesNotExist:
+                    error_msg = f'Part {part_no} not found'
+                    if is_primary:
+                        return Response(
+                            {'error': error_msg},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                    else:
+                        results['additional_parts'].append({
+                            'part_no': part_no,
+                            'error': error_msg
+                        })
+                        continue
+                
+                # Get or create the dynamic models for this part
+                from .dynamic_model_utils import get_or_create_part_data_model
+                
+                in_process_model = get_or_create_part_data_model(
+                    part_no,
+                    table_type='in_process'
+                )
+                
+                completion_model = get_or_create_part_data_model(
+                    part_no,
+                    table_type='completion'
+                )
+                
+                if in_process_model is None:
+                    error_msg = f'In-process model not found for part {part_no}'
+                    if is_primary:
+                        return Response(
+                            {'error': error_msg},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                    else:
+                        results['additional_parts'].append({
+                            'part_no': part_no,
+                            'error': error_msg
+                        })
+                        continue
+                
+                if completion_model is None:
+                    error_msg = f'Completion model not found for part {part_no}'
+                    if is_primary:
+                        return Response(
+                            {'error': error_msg},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                    else:
+                        results['additional_parts'].append({
+                            'part_no': part_no,
+                            'error': error_msg
+                        })
+                        continue
+                
+                # Get all field names from both models
+                in_process_field_names = [f.name for f in in_process_model._meta.fields]
+                completion_field_names = [f.name for f in completion_model._meta.fields]
+                
+                # Helper function to find field name with variations
+                def find_field_name(field_names, patterns):
+                    """Find field name matching any of the patterns"""
+                    for pattern in patterns:
+                        if pattern in field_names:
+                            return pattern
+                    return None
+                
+                # Find outgoing serial number field in in_process table
+                outgoing_serial_patterns = [
+                    'outgoing_serial_no', 'outgoing_serial_number', 'dispatch_outgoing_serial_no',
+                    'dispatch_outgoing_serial_number', 'outgoing_serial'
+                ]
+                outgoing_serial_field = find_field_name(in_process_field_names, outgoing_serial_patterns)
+                
+                # Find outgoing batch number field in in_process table
+                outgoing_batch_patterns = [
+                    'outgoing_batch_no', 'outgoing_batch_number', 'dispatch_outgoing_batch_no',
+                    'dispatch_outgoing_batch_number', 'outgoing_batch'
+                ]
+                outgoing_batch_field = find_field_name(in_process_field_names, outgoing_batch_patterns)
+                
+                # Find dispatch field in completion table
+                dispatch_patterns = [
+                    'dispatch_dispatch', 'dispatch', 'dispatch_completed'
+                ]
+                dispatch_field = find_field_name(completion_field_names, dispatch_patterns)
+                
+                # Find dispatch_done_by field in completion table
+                dispatch_done_by_patterns = [
+                    'dispatch_dispatch_done_by', 'dispatch_done_by', 'dispatch_dispatch_done_by_field'
+                ]
+                dispatch_done_by_field = find_field_name(completion_field_names, dispatch_done_by_patterns)
+                
+                # Find outgoing serial number field in completion table
+                outgoing_serial_completion_patterns = [
+                    'dispatch_outgoing_serial_no', 'outgoing_serial_no', 'dispatch_outgoing_serial_number',
+                    'outgoing_serial_number', 'outgoing_serial'
+                ]
+                outgoing_serial_completion_field = find_field_name(completion_field_names, outgoing_serial_completion_patterns)
+                
+                # Find outgoing batch number field in completion table
+                outgoing_batch_completion_patterns = [
+                    'dispatch_outgoing_batch_no', 'outgoing_batch_no', 'dispatch_outgoing_batch_number',
+                    'outgoing_batch_number', 'outgoing_batch', 'dispatch_so_no', 'so_no'
+                ]
+                outgoing_batch_completion_field = find_field_name(completion_field_names, outgoing_batch_completion_patterns)
+                
+                # Process each entry for this part
+                part_results = {
+                    'part_no': part_no,
+                    'updated_entries': [],
+                    'linked_in_process_entries': [],
+                    'errors': []
+                }
+                
+                for entry_data in entries:
+                    serial_number = entry_data['serial_number']
+                    usid = entry_data['usid']
+                    
+                    try:
+                        # Find entry in completion table
+                        try:
+                            completion_entry = completion_model.objects.get(
+                                serial_number=serial_number,
+                                usid=usid
+                            )
+                        except completion_model.DoesNotExist:
+                            part_results['errors'].append({
+                                'serial_number': serial_number,
+                                'usid': usid,
+                                'error': f'Entry not found in completion table'
+                            })
+                            continue
+                        except completion_model.MultipleObjectsReturned:
+                            # If multiple entries exist, get the most recent one
+                            completion_entry = completion_model.objects.filter(
+                                serial_number=serial_number,
+                                usid=usid
+                            ).order_by('-created_at').first()
+                        
+                        # Update completion entry with dispatch data
+                        update_data = {}
+                        
+                        # Set dispatch flag
+                        if dispatch_field:
+                            update_data[dispatch_field] = True
+                        
+                        # Set dispatch_done_by if field exists
+                        if dispatch_done_by_field and dispatch_done_by:
+                            update_data[dispatch_done_by_field] = dispatch_done_by
+                        
+                        # Set outgoing_serial_no in completion table for each part
+                        if outgoing_serial_completion_field:
+                            update_data[outgoing_serial_completion_field] = outgoing_serial_no
+                        
+                        # Set outgoing_batch_no (SO number) in completion table for each part
+                        if outgoing_batch_completion_field:
+                            update_data[outgoing_batch_completion_field] = outgoing_batch_no
+                        
+                        # Store part_no in completion entry for reference (to identify which part this entry belongs to)
+                        part_no_completion_patterns = ['part_no', 'part_number', 'dispatch_part_no', 'completion_part_no']
+                        part_no_completion_field = find_field_name(completion_field_names, part_no_completion_patterns)
+                        if part_no_completion_field:
+                            update_data[part_no_completion_field] = part_no
+                        
+                        # Store in_process_entry_id in completion entry for reverse lookup
+                        in_process_entry_id_patterns = [
+                            'in_process_entry_id', 'inprocess_entry_id', 'in_process_id',
+                            'linked_in_process_id', 'inprocess_ref_id'
+                        ]
+                        in_process_entry_id_field = find_field_name(completion_field_names, in_process_entry_id_patterns)
+                        
+                        # Add custom fields from procedure_config
+                        try:
+                            procedure_detail = model_part.procedure_detail
+                            procedure_config = procedure_detail.procedure_config
+                            dispatch_config = procedure_config.get('dispatch', {})
+                            dispatch_custom_fields = dispatch_config.get('custom_fields', [])
+                            dispatch_custom_checkboxes = dispatch_config.get('custom_checkboxes', [])
+                            
+                            # Process custom fields
+                            for field_config in dispatch_custom_fields:
+                                field_name = field_config.get('name')
+                                if field_name:
+                                    # Try with dispatch_ prefix first
+                                    prefixed_field_name = f"dispatch_{field_name}" if not field_name.startswith('dispatch_') else field_name
+                                    if prefixed_field_name in completion_field_names:
+                                        field_value = custom_fields.get(field_name, '')
+                                        update_data[prefixed_field_name] = field_value
+                                    elif field_name in completion_field_names:
+                                        field_value = custom_fields.get(field_name, '')
+                                        update_data[field_name] = field_value
+                            
+                            # Process custom checkboxes
+                            for checkbox_config in dispatch_custom_checkboxes:
+                                checkbox_name = checkbox_config.get('name')
+                                if checkbox_name and checkbox_name.lower() != 'dispatch':
+                                    prefixed_checkbox_name = f"dispatch_{checkbox_name}" if not checkbox_name.startswith('dispatch_') else checkbox_name
+                                    if prefixed_checkbox_name in completion_field_names:
+                                        checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                                        if isinstance(checkbox_value, str):
+                                            checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                                        update_data[prefixed_checkbox_name] = bool(checkbox_value)
+                                    elif checkbox_name in completion_field_names:
+                                        checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                                        if isinstance(checkbox_value, str):
+                                            checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                                        update_data[checkbox_name] = bool(checkbox_value)
+                        
+                        except PartProcedureDetail.DoesNotExist:
+                            pass
+                        except Exception as e:
+                            import sys
+                            print(f"Warning: Could not process dispatch custom fields for {part_no}: {str(e)}", file=sys.stderr)
+                        
+                        # Link to in_process table using outgoing serial number
+                        # Find entry in in_process table by serial number or USID
+                        # Common field names in in_process table
+                        serial_field_patterns = ['serial_number', 'tag_no', 'in-process_tag_number']
+                        usid_field_patterns = ['usid', 'unique_serial_id']
+                        
+                        serial_field = find_field_name(in_process_field_names, serial_field_patterns)
+                        usid_field = find_field_name(in_process_field_names, usid_field_patterns)
+                        
+                        in_process_entry = None
+                        
+                        # Try to find by serial number first
+                        if serial_field:
+                            try:
+                                in_process_entry = in_process_model.objects.filter(**{serial_field: serial_number}).first()
+                            except Exception:
+                                pass
+                        
+                        # If not found, try by USID
+                        if not in_process_entry and usid_field:
+                            try:
+                                in_process_entry = in_process_model.objects.filter(**{usid_field: usid}).first()
+                            except Exception:
+                                pass
+                        
+                        # Store in_process_entry_id in completion entry if found
+                        if in_process_entry and in_process_entry_id_field:
+                            update_data[in_process_entry_id_field] = in_process_entry.id
+                        
+                        # Update completion entry
+                        for field_name, value in update_data.items():
+                            setattr(completion_entry, field_name, value)
+                        completion_entry.save()
+                        
+                        part_results['updated_entries'].append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'completion_entry_id': completion_entry.id
+                        })
+                        
+                        if in_process_entry:
+                            # Update in_process entry with outgoing serial number and batch number
+                            if outgoing_serial_field:
+                                setattr(in_process_entry, outgoing_serial_field, outgoing_serial_no)
+                            if outgoing_batch_field and is_primary:  # Only primary part has batch number
+                                setattr(in_process_entry, outgoing_batch_field, outgoing_batch_no)
+                            
+                            # Link in_process entry to completion entry by storing completion_entry_id
+                            # Find field for completion_entry_id in in_process table
+                            completion_entry_id_patterns = [
+                                'completion_entry_id', 'completion_id', 'dispatch_completion_entry_id',
+                                'linked_completion_id', 'completion_ref_id'
+                            ]
+                            completion_entry_id_field = find_field_name(in_process_field_names, completion_entry_id_patterns)
+                            
+                            if completion_entry_id_field:
+                                setattr(in_process_entry, completion_entry_id_field, completion_entry.id)
+                            
+                            # Also store part_no in in_process entry for reference
+                            part_no_patterns = ['part_no', 'part_number', 'dispatch_part_no']
+                            part_no_field = find_field_name(in_process_field_names, part_no_patterns)
+                            if part_no_field:
+                                setattr(in_process_entry, part_no_field, part_no)
+                            
+                            in_process_entry.save()
+                            
+                            part_results['linked_in_process_entries'].append({
+                                'serial_number': serial_number,
+                                'usid': usid,
+                                'in_process_entry_id': in_process_entry.id,
+                                'completion_entry_id': completion_entry.id,
+                                'outgoing_serial_no': outgoing_serial_no
+                            })
+                            
+                            # Add to global linked entries
+                            results['linked_entries'].append({
+                                'part_no': part_no,
+                                'serial_number': serial_number,
+                                'usid': usid,
+                                'outgoing_serial_no': outgoing_serial_no,
+                                'in_process_entry_id': in_process_entry.id,
+                                'completion_entry_id': completion_entry.id
+                            })
+                        else:
+                            part_results['errors'].append({
+                                'serial_number': serial_number,
+                                'usid': usid,
+                                'error': f'Entry not found in in_process table for linking'
+                            })
+                    
+                    except Exception as e:
+                        import traceback
+                        import sys
+                        error_details = traceback.format_exc()
+                        print(f"Error processing entry {serial_number}/{usid} for part {part_no}: {str(e)}", file=sys.stderr)
+                        print(error_details, file=sys.stderr)
+                        part_results['errors'].append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': str(e)
+                        })
+                
+                # Store results
+                if is_primary:
+                    results['primary_part'] = part_results
+                else:
+                    results['additional_parts'].append(part_results)
+            
+            # Prepare response
+            response_data = {
+                'message': 'Dispatch data submitted successfully',
+                'outgoing_serial_no': outgoing_serial_no,
+                'outgoing_batch_no': outgoing_batch_no,
+                'results': results,
+                'summary': {
+                    'total_parts_processed': len(all_parts_data),
+                    'total_entries_linked': len(results['linked_entries']),
+                    'primary_part_entries': len(results['primary_part'].get('updated_entries', [])),
+                    'additional_parts_count': len(results['additional_parts'])
+                }
+            }
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"🚚 Dispatch Submit Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to submit dispatch data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

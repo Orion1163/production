@@ -89,26 +89,30 @@
 
     mapPanels(entry, entryId);
     partEntries.appendChild(fragment);
-    
+
     // Initialize part image handler for the new entry
     const newEntry = partEntries.lastElementChild;
-    
+
     // Update part dropdown if model is selected
     if (typeof window.updatePartDropdown === 'function') {
       const partSelect = newEntry?.querySelector('select[name="part_no[]"]');
       if (partSelect) {
         window.updatePartDropdown(partSelect);
+        // Initialize custom select
+        if (typeof window.initCustomSelect === 'function') {
+          window.initCustomSelect(partSelect);
+        }
       }
     }
-    
-    
+
+
     const partImageInput = newEntry?.querySelector('[data-part-image-input]');
     if (partImageInput) {
       const dropzone = partImageInput.closest('[data-dropzone]');
       if (dropzone) {
         const label = dropzone.querySelector('[data-dropzone-label]');
         const defaultLabel = label?.textContent ?? '';
-        
+
         const activate = (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -150,7 +154,7 @@
         });
       }
     }
-    
+
     // updateDispatchAvailability();
   };
 
@@ -224,13 +228,13 @@
   const handlePartImageChange = (input) => {
     const entry = input.closest('.part-entry');
     if (!entry) return;
-    
+
     const preview = entry.querySelector('[data-part-image-preview]');
     const fileName = entry.querySelector('[data-part-image-name]');
     const label = entry.querySelector('[data-dropzone-label]');
-    
+
     if (!preview || !fileName) return;
-    
+
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
       fileName.textContent = file.name;
@@ -247,11 +251,11 @@
   const cancelPartImage = (button) => {
     const entry = button.closest('.part-entry');
     if (!entry) return;
-    
+
     const input = entry.querySelector('[data-part-image-input]');
     const preview = entry.querySelector('[data-part-image-preview]');
     const fileName = entry.querySelector('[data-part-image-name]');
-    
+
     if (input) {
       input.value = '';
       if (preview) {
@@ -345,19 +349,215 @@
 
   window.addPartEntry = addPartEntry;
   window.removePart = removePart;
-  window.togglePanel = togglePanel;
-  window.toggleTestingMode = toggleTestingMode;
-  window.addInputField = addInputField;
-  window.addCheckboxField = addCheckboxField;
-  window.handlePartSelection = handlePartSelection;
-  window.cancelPartImage = cancelPartImage;
+  /* 🎨 Custom Dropdown Logic with MutationObserver for Dynamic updates */
+  class CustomSelect {
+    constructor(nativeSelect) {
+      if (nativeSelect.dataset.customized === 'true') return;
+
+      this.nativeSelect = nativeSelect;
+      this.nativeSelect.dataset.customized = 'true';
+      this.wrapper = null;
+      this.customSelect = null;
+      this.trigger = null;
+      this.optionsContainer = null;
+
+      this.init();
+    }
+
+    init() {
+      // 1. Create UI Structure
+      this.createStructure();
+
+      // 2. Initial sync
+      this.syncOptions();
+      this.syncSelection();
+
+      // 3. Setup Listeners
+      this.setupListeners();
+
+      // 4. Setup Observer for dynamic option changes (e.g. from API)
+      this.setupObserver();
+    }
+
+    createStructure() {
+      // Create wrapper
+      this.wrapper = document.createElement('div');
+      this.wrapper.className = 'custom-select-wrapper';
+
+      // Insert wrapper before select
+      this.nativeSelect.parentNode.insertBefore(this.wrapper, this.nativeSelect);
+      this.wrapper.appendChild(this.nativeSelect); // Move native select inside wrapper
+
+      // Create Interface
+      this.customSelect = document.createElement('div');
+      this.customSelect.className = 'custom-select';
+
+      this.trigger = document.createElement('div');
+      this.trigger.className = 'custom-select-trigger';
+      const span = document.createElement('span');
+      this.trigger.appendChild(span);
+
+      this.optionsContainer = document.createElement('div');
+      this.optionsContainer.className = 'custom-options';
+
+      this.customSelect.appendChild(this.trigger);
+      this.customSelect.appendChild(this.optionsContainer);
+      this.wrapper.appendChild(this.customSelect);
+    }
+
+    syncOptions() {
+      this.optionsContainer.innerHTML = '';
+      const options = Array.from(this.nativeSelect.options);
+
+      options.forEach(opt => {
+        // Skip hidden placeholders if desired, or style them
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'custom-option';
+        optionDiv.textContent = opt.textContent;
+        optionDiv.dataset.value = opt.value;
+
+        if (opt.selected) optionDiv.classList.add('selected');
+        if (opt.disabled) optionDiv.classList.add('disabled');
+
+        if (!opt.disabled) {
+          optionDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleOptionClick(opt.value);
+          });
+        }
+
+        this.optionsContainer.appendChild(optionDiv);
+      });
+    }
+
+    syncSelection() {
+      if (this.nativeSelect.options.length === 0) return;
+
+      const selectedIndex = this.nativeSelect.selectedIndex;
+      const selectedOption = this.nativeSelect.options[selectedIndex];
+
+      if (selectedOption) {
+        const span = this.trigger.querySelector('span');
+        span.textContent = selectedOption.textContent;
+
+        if (selectedOption.value === '') {
+          this.trigger.classList.add('placeholder');
+        } else {
+          this.trigger.classList.remove('placeholder');
+        }
+
+        // Update visual selection in list
+        const customOptions = this.optionsContainer.querySelectorAll('.custom-option');
+        customOptions.forEach(el => el.classList.remove('selected'));
+        if (customOptions[selectedIndex]) {
+          customOptions[selectedIndex].classList.add('selected');
+        }
+      }
+    }
+
+    handleOptionClick(value) {
+      this.nativeSelect.value = value;
+      this.nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      this.syncSelection();
+      this.close();
+    }
+
+    open() {
+      // Close all others
+      document.querySelectorAll('.custom-select.open').forEach((el) => {
+        if (el !== this.customSelect) el.classList.remove('open');
+      });
+      this.customSelect.classList.add('open');
+    }
+
+    close() {
+      this.customSelect.classList.remove('open');
+    }
+
+    toggle() {
+      if (this.customSelect.classList.contains('open')) {
+        this.close();
+      } else {
+        this.open();
+      }
+    }
+
+    setupListeners() {
+      // Toggle dropdown
+      this.trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!this.nativeSelect.disabled) {
+          this.toggle();
+        }
+      });
+
+      // Listen for external changes to the native select (e.g. set by script)
+      this.nativeSelect.addEventListener('change', () => {
+        this.syncSelection();
+      });
+
+      // Close on outside click is handled globally
+    }
+
+    setupObserver() {
+      // Watch for changes in childList (options added/removed) and attributes
+      const observer = new MutationObserver((mutations) => {
+        let optionsChanged = false;
+        mutations.forEach(mutation => {
+          if (mutation.type === 'childList') {
+            optionsChanged = true;
+          }
+          if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
+            if (this.nativeSelect.disabled) {
+              this.wrapper.style.opacity = '0.6';
+              this.trigger.style.cursor = 'not-allowed';
+            } else {
+              this.wrapper.style.opacity = '1';
+              this.trigger.style.cursor = 'pointer';
+            }
+          }
+        });
+
+        if (optionsChanged) {
+          this.syncOptions();
+          this.syncSelection();
+        }
+      });
+
+      observer.observe(this.nativeSelect, {
+        childList: true,
+        attributes: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+  }
+
+  // 🌍 Global Click Listener to close dropdowns
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-select-wrapper')) {
+      document.querySelectorAll('.custom-select.open').forEach(el => el.classList.remove('open'));
+    }
+  });
+
+  // 🚀 Initialize function exposed
+  window.initCustomSelect = (element) => {
+    if (element && element.tagName === 'SELECT') {
+      new CustomSelect(element);
+    }
+  };
 
   document.addEventListener('DOMContentLoaded', () => {
     initDropzones();
     if (partEntries && !partEntries.children.length) {
       addPartEntry();
     }
-    // updateDispatchAvailability();
+
+    // Initialize ModelDropdown
+    const modelSelect = document.getElementById('modelNo');
+    if (modelSelect) {
+      new CustomSelect(modelSelect);
+    }
   });
 })();
 

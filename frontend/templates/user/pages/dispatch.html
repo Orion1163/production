@@ -306,6 +306,7 @@
       opacity: 0;
       transform: translateY(20px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -446,14 +447,160 @@
     cursor: not-allowed;
   }
 
+  /* � Custom Select Styles */
+  .custom-select-wrapper {
+    position: relative;
+    user-select: none;
+    width: 100%;
+  }
+
+  .custom-select {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .custom-select-trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--primary-strong, #f5f7fb);
+    background: transparent;
+    border-bottom: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-height: 45px;
+    min-width: 300px;
+    width: 100%;
+  }
+
+  .custom-select-trigger span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 20px;
+  }
+
+  .custom-select-trigger.placeholder {
+    color: var(--text-muted, rgba(229, 231, 235, 0.4));
+  }
+
+  .custom-select-trigger::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%238b5cf6' d='M7 10L2 5h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    transition: transform 0.3s ease;
+  }
+
+  .custom-select.open .custom-select-trigger::after {
+    transform: translateY(-50%) rotate(180deg);
+  }
+
+  .custom-select.open .custom-select-trigger {
+    border-bottom-color: var(--primary, #8b5cf6);
+  }
+
+  .custom-options {
+    position: absolute;
+    display: block;
+    top: 100%;
+    left: 0;
+    right: 0;
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.15));
+    border-top: none;
+    background: #252733;
+    /* Slightly lighter than card bg */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 100;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    max-height: 250px;
+    overflow-y: auto;
+    transform: translateY(-10px);
+    margin-top: 1px;
+  }
+
+  /* Scrollbar styles for custom options */
+  .custom-options::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-options::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .custom-options::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .custom-select.open .custom-options {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+    transform: translateY(0);
+  }
+
+  .custom-option {
+    position: relative;
+    display: block;
+    padding: 0.85rem 1rem;
+    font-size: 0.95rem;
+    color: var(--primary-strong, #f5f7fb);
+    /* Proper contrast */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+  }
+
+  .custom-option:hover {
+    background: rgba(139, 92, 246, 0.15);
+    color: white;
+    padding-left: 1.25rem;
+    border-left-color: var(--primary, #8b5cf6);
+  }
+
+  .custom-option.selected {
+    color: var(--primary, #8b5cf6);
+    background: rgba(139, 92, 246, 0.1);
+    font-weight: 600;
+    border-left-color: var(--primary, #8b5cf6);
+  }
+
+  .custom-option.disabled {
+    opacity: 0.5;
+    cursor: default;
+    background: transparent;
+    color: var(--text-muted);
+  }
+
   /* 🎯 Ensure dropdown appears properly */
   .input-group {
     position: relative;
     z-index: 1;
   }
 
-  .input-group:has(.select-field:focus) {
-    z-index: 10;
+  .input-group:has(.custom-select.open) {
+    z-index: 20;
   }
 
   /* 🎯 Better dropdown appearance on different browsers */
@@ -548,12 +695,12 @@
     margin-top: -2px;
   }
 
-  .custom-checkbox:checked + .custom-checkbox-indicator {
+  .custom-checkbox:checked+.custom-checkbox-indicator {
     background: var(--primary, #8b5cf6);
     border-color: var(--primary, #8b5cf6);
   }
 
-  .custom-checkbox:checked + .custom-checkbox-indicator::after {
+  .custom-checkbox:checked+.custom-checkbox-indicator::after {
     transform: rotate(45deg) scale(1);
     border-color: #ffffff;
   }
@@ -626,10 +773,10 @@
   }
 
   /* 📱 Responsive Design */
-  @media (max-width: 768px) {
+  @media (max-width: 800px) {
 
     .dispatch-card {
-      padding: 1rem;
+      /* padding: 1rem; */
     }
 
     .outgoing-fields-section {
@@ -638,13 +785,15 @@
     }
 
     .field-row {
-      grid-template-columns: auto auto;
+      display: grid;
+      grid-template-columns: 100px 1fr;
       gap: 0.75rem;
+      align-items: end;
     }
 
     .serial-number-input,
     .usid-input {
-      width: 150px;
+      width: 100%;
       font-size: 0.85rem;
     }
 
@@ -660,13 +809,23 @@
 
     .add-btn,
     .remove-btn {
-      width: 50px;
-      margin: 0 auto;
+      width: 40px;
+      height: 40px;
+      margin: 0;
+      align-self: flex-end;
     }
 
     .form-grid {
       grid-template-columns: 1fr;
       gap: 1rem;
+    }
+
+    /* Adjust label size for tighter fit */
+    .field-row .input-label {
+      font-size: 0.65rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 </style>
@@ -678,7 +837,7 @@
     <h1>Dispatch</h1>
     <hr />
   </div>
-  
+
   <!-- 🚚 Dispatch Container - Will be populated by JavaScript -->
   <div id="dispatchContainer">
     <!-- Loading or content will be inserted here -->
@@ -689,5 +848,3 @@
 {% block extra_scripts %}
 <script src="{% static 'js/dynamic_api/dispatch_api.js' %}" defer></script>
 {% endblock %}
-
-

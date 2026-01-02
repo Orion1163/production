@@ -266,7 +266,7 @@ body {
 
 @media (max-width: 768px) {
   body {
-      padding: 1rem;
+      /* padding: 1rem; */
   }
 
   .model-card {

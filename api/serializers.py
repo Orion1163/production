@@ -504,3 +504,38 @@ class SprayingSubmitSerializer(serializers.Serializer):
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
     entries = SprayingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
     spraying = serializers.BooleanField(required=True, help_text='Spraying checkbox value')
+
+
+class DispatchEntrySerializer(serializers.Serializer):
+    """Serializer for a single Dispatch entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class DispatchPartDataSerializer(serializers.Serializer):
+    """Serializer for dispatch data for a single part"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = DispatchEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    # Custom fields and checkboxes for this part
+    custom_fields = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom field values (field_name: value)'
+    )
+    custom_checkboxes = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text='Dictionary of custom checkbox values (checkbox_name: true/false)'
+    )
+
+
+class DispatchSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Dispatch data - links entries to in_process table and updates completion table"""
+    # Primary part data (has outgoing batch and serial number)
+    primary_part = DispatchPartDataSerializer(required=True, help_text='Primary part dispatch data')
+    outgoing_batch_no = serializers.CharField(required=True, help_text='Outgoing Batch Number (SO Number)')
+    outgoing_serial_no = serializers.CharField(required=True, help_text='Outgoing Serial Number (common linking field)')
+    dispatch_done_by = serializers.CharField(required=False, allow_blank=True, help_text='Person who did the Dispatch')
+    # Additional parts data
+    additional_parts = DispatchPartDataSerializer(many=True, required=False, default=list, help_text='Additional parts dispatch data')
+    dispatch = serializers.BooleanField(required=True, help_text='Dispatch checkbox value')

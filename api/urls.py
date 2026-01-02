@@ -10,7 +10,7 @@ from .views import (
     TestingProcedureConfigView, DispatchProcedureConfigView, DispatchSONumbersView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
     HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
     GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView,
-    DispatchSerialNumberSearchView
+    DispatchSerialNumberSearchView, DispatchSubmitView
 )
 
 urlpatterns = [
@@ -60,4 +60,5 @@ urlpatterns = [
     path('glueing-serial-number-search/', GlueingSerialNumberSearchView.as_view(), name='glueing-serial-number-search'),
     path('spraying-serial-number-search/', SprayingSerialNumberSearchView.as_view(), name='spraying-serial-number-search'),
     path('dispatch-serial-number-search/', DispatchSerialNumberSearchView.as_view(), name='dispatch-serial-number-search'),
+    path('dispatch-submit/', DispatchSubmitView.as_view(), name='dispatch-submit'),
 ]

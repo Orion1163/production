@@ -6,456 +6,7 @@
 {% block page_title %}Testing{% endblock %}
 
 {% block extra_head %}
-<style>
-  .testing-container {
-    width: 100%;
-    height: 100%;
-  }
-
-  .testing-form-card {
-    width: 100%;
-    margin: 0 auto;
-    background: var(--card-bg, #1f202b);
-    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
-    border-radius: var(--radius-lg, 18px);
-    padding: 2.5rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .form-header {
-    margin-bottom: 2rem;
-    text-align: center;
-  }
-
-  .form-header p {
-    color: var(--text-muted, rgba(229, 231, 235, 0.8));
-    font-size: 0.95rem;
-    margin: 0;
-    line-height: 1.6;
-  }
-
-  .form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .input-group {
-    position: relative;
-    animation: fadeInUp 0.6s ease-out;
-    animation-fill-mode: both;
-  }
-
-  .input-group:nth-child(1) {
-    animation-delay: 0.1s;
-  }
-
-  .input-group:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .input-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--primary-muted, #a5adcb);
-    margin-bottom: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .input-icon {
-    width: 20px;
-    height: 20px;
-    color: var(--primary, #8b5cf6);
-    transition: transform 0.3s ease;
-  }
-
-  .input-group:hover .input-icon {
-    transform: scale(1.1) rotate(5deg);
-  }
-
-  .input-field-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .input-field {
-    width: 100%;
-    padding: 1rem 1rem 1rem 3rem;
-    background: var(--surface, #2a2b38);
-    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
-    border-radius: var(--radius-sm, 10px);
-    color: var(--primary-strong, #f5f7fb);
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  .input-field::placeholder {
-    color: var(--text-muted, rgba(229, 231, 235, 0.5));
-    transition: opacity 0.3s ease;
-  }
-
-  .input-field:focus::placeholder {
-    opacity: 0.6;
-  }
-
-  .input-field:focus {
-    border-color: var(--primary, #8b5cf6);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1), 0 4px 12px rgba(139, 92, 246, 0.15);
-    background: var(--card-bg, #1f202b);
-    transform: translateY(-2px);
-  }
-
-  .input-field:hover:not(:focus) {
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .input-field-icon {
-    position: absolute;
-    left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 20px;
-    height: 20px;
-    color: var(--primary, #8b5cf6);
-    pointer-events: none;
-    transition: all 0.3s ease;
-    z-index: 1;
-  }
-
-  .input-field:focus ~ .input-field-icon {
-    color: var(--primary, #8b5cf6);
-    transform: translateY(-50%) scale(1.15);
-    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.5));
-  }
-
-  .input-field:invalid:not(:placeholder-shown) {
-    border-color: #ef4444;
-  }
-
-  .input-field:valid:not(:placeholder-shown) {
-    border-color: #10b981;
-  }
-
-  .input-field[readonly] {
-    background: var(--surface, #2a2b38);
-    cursor: not-allowed;
-    opacity: 0.8;
-  }
-
-  .input-field[readonly]:focus {
-    border-color: var(--surface-border, rgba(255, 255, 255, 0.08));
-    box-shadow: none;
-    transform: none;
-  }
-
-  /* Textarea Styles */
-  textarea.input-field {
-    min-height: 120px;
-    resize: vertical;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  textarea.input-field ~ .input-field-icon {
-    top: 1rem;
-    transform: translateY(0);
-  }
-
-  /* Checkboxes Section Styles */
-  .checkboxes-section {
-    animation: fadeInUp 0.6s ease-out 0.3s both;
-  }
-
-  .section-divider {
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
-    margin: 2rem 0;
-  }
-
-  .checkboxes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-  }
-
-  /* Checkbox Styles */
-  .checkbox-group {
-    position: relative;
-    animation: fadeInUp 0.6s ease-out;
-    animation-fill-mode: both;
-  }
-
-  .checkbox-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    width: 100%;
-    padding: 1.25rem 1.5rem;
-    background: linear-gradient(135deg, var(--surface, #2a2b38) 0%, #252632 100%);
-    border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
-    border-radius: var(--radius-sm, 12px);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    overflow: hidden;
-  }
-
-  .checkbox-wrapper::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
-    transition: left 0.5s ease;
-  }
-
-  .checkbox-wrapper:hover::before {
-    left: 100%;
-  }
-
-  .checkbox-wrapper:hover {
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(139, 92, 246, 0.1);
-    transform: translateY(-2px);
-  }
-
-  .custom-checkbox {
-    position: absolute;
-    opacity: 0;
-    width: 28px;
-    height: 28px;
-    margin: 0;
-    cursor: pointer;
-    z-index: 2;
-    left: 1.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .custom-checkbox-indicator {
-    position: relative;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    background: var(--surface, #2a2b38);
-    border: 2.5px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-  }
-
-  .custom-checkbox-indicator::after {
-    content: '';
-    position: absolute;
-    width: 6px;
-    height: 12px;
-    border: solid var(--primary, #8b5cf6);
-    border-width: 0 3px 3px 0;
-    transform: rotate(45deg) scale(0);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    margin-top: -2px;
-  }
-
-  .custom-checkbox:checked + .custom-checkbox-indicator {
-    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
-    border-color: var(--primary, #8b5cf6);
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2), 0 4px 12px rgba(139, 92, 246, 0.3);
-  }
-
-  .custom-checkbox:checked + .custom-checkbox-indicator::after {
-    transform: rotate(45deg) scale(1);
-    border-color: #ffffff;
-  }
-
-  .checkbox-label {
-    display: flex;
-    align-items: center;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--primary-strong, #f5f7fb);
-    cursor: pointer;
-    user-select: none;
-    flex: 1;
-    transition: color 0.3s ease;
-  }
-
-  .checkbox-wrapper.checked {
-    border-color: var(--primary, #8b5cf6);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 6px 20px rgba(139, 92, 246, 0.25);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
-    transform: translateY(-2px);
-  }
-
-  .checkbox-wrapper.checked .checkbox-label {
-    color: var(--primary, #8b5cf6);
-  }
-
-  /* Mode-specific containers */
-  .automatic-mode-container,
-  .manual-mode-container {
-    display: none;
-  }
-
-  .automatic-mode-container.active,
-  .manual-mode-container.active {
-    display: block;
-  }
-
-  /* Loading indicator */
-  .loading-indicator {
-    grid-column: 1 / -1;
-    text-align: center;
-    color: var(--text-muted, rgba(229, 231, 235, 0.8));
-    padding: 2rem;
-    font-size: 0.95rem;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-  }
-
-  /* Submit Button Styles */
-  .submit-section {
-    display: flex;
-    justify-content: center;
-    margin-top: 2.5rem;
-    animation: fadeInUp 0.6s ease-out 0.3s both;
-  }
-
-  .submit-btn {
-    background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
-    color: white;
-    border: none;
-    padding: 1rem 3rem;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm, 10px);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .submit-btn::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-  }
-
-  .submit-btn:hover::before {
-    width: 300px;
-    height: 300px;
-  }
-
-  .submit-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-  }
-
-  .submit-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
-  }
-
-  .submit-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .submit-btn span {
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .testing-form-card {
-      padding: 1.5rem;
-    }
-
-    .form-grid {
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-    }
-
-    .form-header p {
-      font-size: 0.9rem;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .testing-form-card {
-      padding: 1rem;
-      border-radius: var(--radius-md, 14px);
-    }
-
-    .input-field {
-      padding: 0.875rem 0.875rem 0.875rem 2.75rem;
-      font-size: 0.95rem;
-    }
-
-    .input-label {
-      font-size: 0.85rem;
-    }
-
-    .submit-btn {
-      padding: 0.875rem 2rem;
-      font-size: 0.9rem;
-    }
-  }
-
-  @media (min-width: 769px) {
-    .form-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-</style>
+<link rel="stylesheet" href="{% static 'css/testing.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -464,35 +15,30 @@
     <h1>Testing</h1>
     <hr />
   </div>
-  
+
   <div class="testing-form-card">
-  
+
 
     <form id="testingForm" class="testing-form">
       <div class="form-grid">
         <!-- Serial Number Input -->
         <div class="input-group">
           <label class="input-label" for="serialNumber">
-            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
             </svg>
             Serial Number
           </label>
           <div class="input-field-wrapper">
-            <input 
-              type="text" 
-              id="serialNumber" 
-              name="serialNumber" 
-              class="input-field" 
-              placeholder="Enter 4-digit serial number"
-              required
-              autocomplete="off"
-              maxlength="4"
-              pattern="\d{4}"
-              inputmode="numeric"
-            />
-            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            <input type="text" id="serialNumber" name="serialNumber" class="input-field"
+              placeholder="Enter 4-digit serial number" required autocomplete="off" maxlength="4" pattern="\d{4}"
+              inputmode="numeric" />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
             </svg>
           </div>
         </div>
@@ -500,24 +46,22 @@
         <!-- USID Input -->
         <div class="input-group">
           <label class="input-label" for="usid">
-            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2">
+              </path>
             </svg>
             USID
           </label>
           <div class="input-field-wrapper">
-            <input 
-              type="text" 
-              id="usid" 
-              name="usid" 
-              class="input-field" 
-              placeholder="Enter USID"
-              required
-              autocomplete="off"
-              readonly
-            />
-            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+            <input type="text" id="usid" name="usid" class="input-field" placeholder="Enter USID" required
+              autocomplete="off" readonly />
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2">
+              </path>
             </svg>
           </div>
         </div>
@@ -525,24 +69,44 @@
 
       <!-- Automatic Mode Container - Test Message Textarea -->
       <div class="automatic-mode-container" id="automaticModeContainer">
+        <!-- Serial Port Controls -->
+        <div class="serial-port-controls">
+          <button type="button" id="toggleConnectBtn" class="serial-btn-toggle" title="Connect USB Serial">
+            <svg class="connect-icon" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <!-- USB Symbol -->
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <svg class="disconnect-icon" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+          <!-- <div class="serial-status disconnected" id="serialStatus">Not connected</div> -->
+        </div>
+
         <div class="input-group">
           <label class="input-label" for="testMessage">
-            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+              </path>
             </svg>
             Test Message
           </label>
           <div class="input-field-wrapper">
-            <textarea 
-              id="testMessage" 
-              name="testMessage" 
-              class="input-field" 
-              placeholder="Enter test message"
-              required
-              autocomplete="off"
-            ></textarea>
-            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            <textarea id="testMessage" name="testMessage" class="input-field"
+              placeholder="Enter test message or connect serial port to receive data automatically" required
+              autocomplete="off" readonly></textarea>
+            <svg class="input-field-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+              </path>
             </svg>
           </div>
         </div>

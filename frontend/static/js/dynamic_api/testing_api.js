@@ -3,20 +3,20 @@
  * Fetches custom_fields and custom_checkboxes from procedure_config based on mode
  */
 
-(function() {
+(function () {
     'use strict';
 
     // API endpoints
     const TESTING_SERIAL_SEARCH_URL = '/api/v2/testing-serial-number-search/';
     const TESTING_CONFIG_URL = '/api/v2/testing-procedure-config/';
     const TESTING_SUBMIT_URL = '/api/v2/testing-submit/';
-    
+
     // Get part_no from window (set in base_section.html)
     const PART_NO = window.PART_NO;
-    
+
     // Store current config globally for form submission
     let currentTestingConfig = null;
-    
+
     /**
      * Get CSRF token from cookies
      */
@@ -80,7 +80,7 @@
 
         return null;
     }
-    
+
     /**
      * Search for serial number and populate USID if found
      */
@@ -90,17 +90,17 @@
             showMessage('Part number not available', 'error');
             return;
         }
-        
+
         if (!serialNumber) {
             return;
         }
-        
+
         try {
             const params = new URLSearchParams({
                 part_no: PART_NO,
                 serial_number: serialNumber
             });
-            
+
             const response = await fetch(`${TESTING_SERIAL_SEARCH_URL}?${params.toString()}`, {
                 method: 'GET',
                 headers: {
@@ -108,9 +108,9 @@
                 },
                 credentials: 'same-origin'
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok) {
                 // Handle error response
                 const errorMessage = data.message || data.error || 'Failed to search serial number';
@@ -121,7 +121,7 @@
                 }
                 return;
             }
-            
+
             // Success - populate USID field
             const usidInput = document.getElementById('usid');
             if (data.usid && usidInput) {
@@ -131,7 +131,7 @@
             } else {
                 showMessage('USID not found in response', 'error');
             }
-            
+
         } catch (error) {
             console.error('Error searching serial number:', error);
             showMessage('Error searching serial number. Please try again.', 'error');
@@ -141,7 +141,7 @@
             }
         }
     }
-    
+
     /**
      * Fetch Testing procedure configuration from API
      */
@@ -189,7 +189,7 @@
         const label = document.createElement('label');
         label.className = 'input-label';
         label.setAttribute('for', fieldName);
-        
+
         // Icon SVG
         const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         iconSvg.setAttribute('class', 'input-icon');
@@ -203,7 +203,7 @@
         iconPath.setAttribute('stroke-width', '2');
         iconPath.setAttribute('d', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z');
         iconSvg.appendChild(iconPath);
-        
+
         label.appendChild(iconSvg);
         label.appendChild(document.createTextNode(fieldLabel));
 
@@ -281,7 +281,7 @@
 
         // Add click handler to wrapper to toggle checkbox
         // This makes the entire wrapper clickable, not just the label
-        checkboxWrapper.addEventListener('click', function(e) {
+        checkboxWrapper.addEventListener('click', function (e) {
             // If clicking on the label, let it handle via 'for' attribute
             // Otherwise, toggle the checkbox manually
             if (e.target === checkboxWrapper || e.target === checkboxIndicator) {
@@ -292,7 +292,7 @@
         });
 
         // Add event listener to toggle checked class
-        checkbox.addEventListener('change', function() {
+        checkbox.addEventListener('change', function () {
             if (this.checked) {
                 checkboxWrapper.classList.add('checked');
             } else {
@@ -312,7 +312,7 @@
         const manualFieldsGrid = document.getElementById('manualFieldsGrid');
         const checkboxesSection = document.getElementById('checkboxesSection');
         const checkboxesGrid = document.getElementById('checkboxesGrid');
-        
+
         if (!automaticContainer || !manualContainer) {
             console.error('Mode containers not found');
             return;
@@ -326,13 +326,13 @@
         }
 
         const mode = config.mode || 'Manual';
-        
+
         // Clear existing dynamic fields
         if (manualFieldsGrid) {
             const existingFields = manualFieldsGrid.querySelectorAll('.dynamic-field');
             existingFields.forEach(field => field.remove());
         }
-        
+
         if (checkboxesGrid) {
             checkboxesGrid.innerHTML = '';
         }
@@ -341,21 +341,42 @@
             // Show automatic mode container, hide manual mode container
             automaticContainer.classList.add('active');
             manualContainer.classList.remove('active');
-            
+
             // Set testMessage as required for automatic mode
             const testMessageField = document.getElementById('testMessage');
             if (testMessageField) {
                 testMessageField.required = true;
+                // Add input event listener to monitor textarea changes
+                testMessageField.addEventListener('input', checkTestMessageAndUpdateSubmitButton);
             }
+
+            // Disable submit button initially in automatic mode
+            const submitButton = document.querySelector('#testingForm button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            // Initialize serial port controls for automatic mode
+            setTimeout(() => {
+                initSerialPort();
+            }, 100);
         } else {
             // Show manual mode container, hide automatic mode container
             automaticContainer.classList.remove('active');
             manualContainer.classList.add('active');
-            
+
             // Remove required from testMessage for manual mode (to avoid validation error when hidden)
             const testMessageField = document.getElementById('testMessage');
             if (testMessageField) {
                 testMessageField.required = false;
+            }
+
+            // Disconnect serial port if connected when switching to manual mode
+            if (keepReading && serialPort) {
+                const toggleBtn = document.getElementById('toggleConnectBtn');
+                if (toggleBtn && toggleBtn.classList.contains('connected')) {
+                    toggleBtn.click();
+                }
             }
 
             const customFields = config.custom_fields || [];
@@ -376,12 +397,12 @@
                 const checkboxName = (cb.name || '').toLowerCase();
                 return checkboxName !== 'testing';
             });
-            
+
             if (checkboxesGrid && visibleCheckboxes.length > 0) {
                 if (checkboxesSection) {
                     checkboxesSection.style.display = 'block';
                 }
-                
+
                 visibleCheckboxes.forEach((checkbox, index) => {
                     const checkboxElement = createCheckboxField(checkbox, index);
                     if (checkboxElement) {
@@ -392,6 +413,172 @@
                 if (checkboxesSection) {
                     checkboxesSection.style.display = 'none';
                 }
+            }
+        }
+    }
+
+    /**
+     * Serial Port Management (for Automatic Mode only)
+     */
+    let serialPort = null;
+    let serialReader = null;
+    let keepReading = false;
+    let serialPortInitialized = false;
+
+    /**
+     * Check if test message ends with "$TESTED OK$" and update submit button state
+     */
+    function checkTestMessageAndUpdateSubmitButton() {
+        const testMessageField = document.getElementById('testMessage');
+        const submitButton = document.querySelector('#testingForm button[type="submit"]');
+        
+        if (!testMessageField || !submitButton) {
+            return;
+        }
+
+        const testMessage = testMessageField.value.trim();
+        const endsWithTestedOk = testMessage.endsWith('$TESTED OK$');
+        
+        // Enable submit button only if message ends with "$TESTED OK$"
+        submitButton.disabled = !endsWithTestedOk;
+        
+        if (endsWithTestedOk) {
+            console.log('✅ Test message validated - Submit button enabled');
+        }
+    }
+
+    /**
+     * Initialize serial port connection handlers
+     */
+    function initSerialPort() {
+        const toggleBtn = document.getElementById('toggleConnectBtn');
+        const serialStatus = document.getElementById('serialStatus');
+        const testMessageField = document.getElementById('testMessage');
+
+        if (!toggleBtn || !serialStatus) {
+            return;
+        }
+
+        if (serialPortInitialized) {
+            return;
+        }
+        serialPortInitialized = true;
+
+        if (!navigator.serial) {
+            console.warn('Web Serial API is not supported in this browser');
+            toggleBtn.disabled = true;
+            toggleBtn.title = 'Web Serial API not supported';
+            serialStatus.textContent = 'Serial API not supported';
+            return;
+        }
+
+        toggleBtn.addEventListener('click', async () => {
+            if (serialPort) {
+                // Disconnect logic
+                toggleBtn.disabled = true;
+                keepReading = false;
+
+                try {
+                    if (serialReader) {
+                        await serialReader.cancel();
+                        // wait for the loop to exit? reader.cancel() should cause read() to return done usually
+                        await serialReader.releaseLock();
+                        serialReader = null;
+                    }
+                    if (serialPort) {
+                        await serialPort.close();
+                        serialPort = null;
+
+                    if (serialStatus) {
+                        serialStatus.textContent = '🔌 Disconnected from serial port';
+                        serialStatus.classList.remove('connected');
+                        serialStatus.classList.add('disconnected');
+                    }
+
+                    toggleBtn.classList.remove('connected');
+                    toggleBtn.title = 'Connect Serial Port';
+                    
+                    // Disable submit button when disconnecting
+                    const submitButton = document.querySelector('#testingForm button[type="submit"]');
+                    if (submitButton && currentTestingConfig && currentTestingConfig.mode === 'Automatic') {
+                        submitButton.disabled = true;
+                    }
+                    }
+                } catch (err) {
+                    console.error('❗ Error closing serial port:', err);
+                    showMessage('Error closing serial port: ' + err.message, 'error');
+                } finally {
+                    toggleBtn.disabled = false;
+                }
+            } else {
+                // Connect logic
+                try {
+                    // Reset reading flag just in case
+                    keepReading = true; // Set to true BEFORE starting loop
+
+                    const port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 9600 });
+                    serialPort = port;
+
+                    if (serialStatus) {
+                        serialStatus.textContent = '🔌 Connected to serial port...';
+                        serialStatus.classList.remove('disconnected');
+                        serialStatus.classList.add('connected');
+                    }
+
+                    toggleBtn.classList.add('connected');
+                    toggleBtn.title = 'Disconnect Serial Port';
+
+                    // Disable submit button when connecting (will be enabled when "$TESTED OK$" is received)
+                    const submitButton = document.querySelector('#testingForm button[type="submit"]');
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    const decoder = new TextDecoderStream();
+                    const readableStreamClosed = serialPort.readable.pipeTo(decoder.writable);
+                    serialReader = decoder.readable.getReader();
+
+                    // Start reading loop
+                    readSerialLoop();
+
+                } catch (err) {
+                    console.error('❗ Error connecting to serial port:', err);
+                    if (err.name !== 'NotFoundError') { // Ignore if user cancelled
+                        showMessage('Error connecting to serial port: ' + err.message, 'error');
+                    }
+                    if (serialStatus) {
+                        serialStatus.textContent = 'Connection failed';
+                        serialStatus.classList.remove('connected');
+                        serialStatus.classList.add('disconnected');
+                    }
+                    serialPort = null;
+                }
+            }
+        });
+
+        async function readSerialLoop() {
+            try {
+                while (keepReading && serialPort) {
+                    const { value, done } = await serialReader.read();
+                    if (done) break;
+                    if (value) {
+                        console.log('🔄 Received:', value);
+                        if (testMessageField) {
+                            testMessageField.value += value;
+                            testMessageField.scrollTop = testMessageField.scrollHeight;
+                            // Check if message ends with "$TESTED OK$" and update submit button
+                            checkTestMessageAndUpdateSubmitButton();
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error reading from serial port:', err);
+                if (serialStatus) {
+                    serialStatus.textContent = 'Error reading from serial port';
+                }
+            } finally {
+                // Reader lock release is handled in disconnect usually
             }
         }
     }
@@ -423,6 +610,23 @@
             // Store config globally for form submission
             currentTestingConfig = config;
             renderFieldsByMode(config);
+
+            // Initialize serial port if in automatic mode
+            const mode = config.mode || 'Manual';
+            if (mode === 'Automatic') {
+                // Wait a bit for DOM to update, then initialize serial port
+                setTimeout(() => {
+                    initSerialPort();
+                }, 100);
+            } else {
+                // Disconnect serial port if switching to manual mode
+                if (keepReading && serialPort) {
+                    const toggleBtn = document.getElementById('toggleConnectBtn');
+                    if (toggleBtn && toggleBtn.classList.contains('connected')) {
+                        toggleBtn.click();
+                    }
+                }
+            }
         } else {
             console.warn('No Testing configuration found or Testing section is not enabled');
             // Default to manual mode if config not found
@@ -436,31 +640,31 @@
         // Serial number input field
         const serialNumberInput = document.getElementById('serialNumber');
         const usidInput = document.getElementById('usid');
-        
+
         let lastCheckedValue = '';
-        
+
         // Setup serial number search
         if (serialNumberInput) {
             // Restrict input to numbers only
-            serialNumberInput.addEventListener('input', function(e) {
+            serialNumberInput.addEventListener('input', function (e) {
                 // Remove any non-digit characters
                 this.value = this.value.replace(/\D/g, '');
             });
-            
-            serialNumberInput.addEventListener('input', function(e) {
+
+            serialNumberInput.addEventListener('input', function (e) {
                 const serialNumber = this.value.trim();
-                
+
                 // Clear USID field when serial number changes
                 if (usidInput) {
                     usidInput.value = '';
                 }
-                
+
                 // Hide message if input is cleared
                 if (serialNumber.length === 0) {
                     lastCheckedValue = '';
                     return;
                 }
-                
+
                 // Only search when exactly 4 digits are entered
                 if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
                     lastCheckedValue = serialNumber;
@@ -476,9 +680,9 @@
                 }
                 // If less than 4 digits, do nothing - don't search
             });
-            
+
             // Also search on blur (when user leaves the field) if exactly 4 digits
-            serialNumberInput.addEventListener('blur', function(e) {
+            serialNumberInput.addEventListener('blur', function (e) {
                 const serialNumber = this.value.trim();
                 if (/^\d{4}$/.test(serialNumber) && serialNumber !== lastCheckedValue) {
                     lastCheckedValue = serialNumber;
@@ -486,7 +690,7 @@
                 }
             });
         }
-        
+
         // Setup form submission handler
         setupFormSubmission();
     }
@@ -561,10 +765,7 @@
             // Get user emp_id
             const empId = await getUserEmpId();
 
-            // Get mode from config
-            const mode = currentTestingConfig.mode || 'Manual';
-
-            // Prepare payload based on mode
+            // Prepare payload based on mode (mode already declared above)
             const payload = {
                 part_no: PART_NO,
                 usid: usid,
@@ -641,12 +842,41 @@
             const result = await response.json();
             showMessage(result.message || 'Testing data submitted successfully!', 'success');
 
-            // Reset form after successful submission
-            form.reset();
-
-            // Re-enable submit button after reset
-            if (submitButton) {
-                submitButton.disabled = false;
+            // Use mode already declared above to determine reset behavior
+            if (mode === 'Automatic') {
+                // In automatic mode: reset fields but keep serial port connected and continue reading
+                const serialNumberInput = document.getElementById('serialNumber');
+                const usidInput = document.getElementById('usid');
+                const testMessageField = document.getElementById('testMessage');
+                
+                // Reset serial number and USID fields
+                if (serialNumberInput) {
+                    serialNumberInput.value = '';
+                }
+                if (usidInput) {
+                    usidInput.value = '';
+                }
+                
+                // Clear test message but keep textarea visible
+                if (testMessageField) {
+                    testMessageField.value = '';
+                }
+                
+                // Disable submit button again (will be enabled when "$TESTED OK$" is received)
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+                
+                // Serial port should remain connected and continue reading
+                // The readSerialLoop is already running and will continue
+            } else {
+                // In manual mode: full form reset
+                form.reset();
+                
+                // Re-enable submit button after reset
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
             }
 
         } catch (error) {
@@ -664,7 +894,7 @@
             }
         }
     }
-    
+
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initTestingForm);

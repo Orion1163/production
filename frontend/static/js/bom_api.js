@@ -126,7 +126,7 @@
       return;
     }
     const parts = getPartsForModel(selectedModelNo);
-    
+
     // Clear existing options except the first one
     const firstOption = partSelect.querySelector('option[value=""]');
     partSelect.innerHTML = '';
@@ -153,7 +153,7 @@
    */
   const initBOMAPI = () => {
     const modelNoSelect = document.getElementById('modelNo');
-    
+
     if (!modelNoSelect) {
       return;
     }
@@ -166,12 +166,12 @@
       newSelect.id = 'modelNo';
       newSelect.name = 'model_no';
       newSelect.required = true;
-      
+
       const defaultOption = document.createElement('option');
       defaultOption.value = '';
       defaultOption.textContent = 'Loading models...';
       newSelect.appendChild(defaultOption);
-      
+
       modelNoSelect.replaceWith(newSelect);
     }
 
