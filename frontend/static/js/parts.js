@@ -3,7 +3,7 @@
  * Handles part loading and card rendering for a specific model
  */
 
-(function() {
+(function () {
     'use strict';
 
     const MODEL_NO = window.MODEL_NO;
@@ -24,13 +24,19 @@
         card.className = 'part-card model-card';
         card.setAttribute('data-part-no', part.part_no.toLowerCase());
 
-        // Use part_image_url first, then form_image_url, or placeholder
-        const imageUrl = part.part_image_url || part.form_image_url || '';
-        const hasImage = imageUrl && imageUrl.trim() !== '';
+        // Use part_image_url first, then try local image, then placeholder
+        const apiImageUrl = part.part_image_url || part.form_image_url;
+        const localImageUrl = `/static/img/${part.part_no.toLowerCase()}.png`;
 
-        const imageHtml = hasImage
-            ? `<img src="${imageUrl}" alt="${part.part_no}" loading="lazy">`
-            : `<div class="model-card-placeholder">${part.part_no.charAt(0)}</div>`;
+        let imageHtml;
+        // Note: class attribute unquoted to avoid quote nesting hell in inline onerror handler
+        const placeholderHtml = `<div class=model-card-placeholder>${part.part_no.charAt(0)}</div>`;
+
+        if (apiImageUrl && apiImageUrl.trim() !== '') {
+            imageHtml = `<img src="${apiImageUrl}" alt="${part.part_no}" loading="lazy" onerror="this.onerror=null; this.src='${localImageUrl}'; this.onerror=function(){ this.parentElement.innerHTML='${placeholderHtml}'; }">`;
+        } else {
+            imageHtml = `<img src="${localImageUrl}" alt="${part.part_no}" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='${placeholderHtml}';">`;
+        }
 
         card.innerHTML = `
             <div class="model-card-image">
@@ -48,10 +54,10 @@
         `;
 
         // Add click handler - navigate to first enabled section
-        card.addEventListener('click', async function(e) {
+        card.addEventListener('click', async function (e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             // Fetch enabled sections for this part
             try {
                 const sectionsResponse = await fetch(`/api/v2/user/parts/${encodeURIComponent(part.part_no)}/sections/`, {
@@ -69,7 +75,7 @@
                         // Access denied
                         const errorData = await sectionsResponse.json().catch(() => ({}));
                         const errorMessage = errorData.message || 'You do not have permission to access this part.';
-                        
+
                         if (typeof showError === 'function') {
                             showError(errorMessage, { duration: 6000 });
                         } else if (typeof window.showToast === 'function') {

@@ -1,0 +1,69 @@
+api endpoint for Model no : /api/v2/user/models/
+response : 
+[
+    {
+        "model_no": "EICS124M",
+        "image_url": null,
+        "part_numbers": [
+            "EICS124MX_Part",
+            "EICS42B_Part",
+            "EICS124MA_Part"
+        ],
+        "part_count": 3
+    },
+    {
+        "model_no": "EICS144",
+        "image_url": null,
+        "part_numbers": [
+            "EICS144_Part"
+        ],
+        "part_count": 1
+    },
+    {
+        "model_no": "EICS112",
+        "image_url": null,
+        "part_numbers": [
+            "EICS112_Part"
+        ],
+        "part_count": 1
+    }
+]
+
+api endpoint for Part no : /api/v2/user/models/<model_no>/parts/
+response :
+{
+    "model_no": "EICS124M",
+    "parts": [
+        {
+            "id": 80,
+            "model_no": "EICS124M",
+            "part_no": "EICS124MX_Part",
+            "part_image": null,
+            "part_image_url": null
+        },
+        {
+            "id": 79,
+            "model_no": "EICS124M",
+            "part_no": "EICS42B_Part",
+            "part_image": null,
+            "part_image_url": null
+        },
+        {
+            "id": 78,
+            "model_no": "EICS124M",
+            "part_no": "EICS124MA_Part",
+            "part_image": null,
+            "part_image_url": null
+        }
+    ],
+    "count": 3
+}
+
+api endpoint for serial number : /api/v2/qc-images-serial-number-search/?part_no=<part_no>&serial_number=<serial_number>
+response:
+{
+    "usid": "260103-EICS124MX_Part-0001",
+    "serial_number": "1122",
+    "part_no": "EICS124MX_Part",
+    "message": "Serial number found and all required sections completed"
+}

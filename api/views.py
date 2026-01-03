@@ -8153,3 +8153,324 @@ class DispatchSubmitView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class QCImagesSerialNumberSearchView(APIView):
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Check QC checkbox is true (required section before qc_images)
+            qc_checkbox_found = False
+            qc_checkbox_true = False
+            
+            # Try different patterns for QC checkbox
+            qc_patterns = ['qc_qc', 'qc']
+            for pattern in qc_patterns:
+                if pattern in all_field_names:
+                    try:
+                        qc_value = getattr(entry, pattern, None)
+                        qc_checkbox_found = True
+                        if isinstance(qc_value, bool):
+                            qc_checkbox_true = qc_value
+                        elif isinstance(qc_value, str):
+                            qc_checkbox_true = qc_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(qc_value, (int, float)):
+                            qc_checkbox_true = bool(qc_value)
+                        break
+                    except Exception:
+                        continue
+            
+            if not qc_checkbox_found:
+                return Response(
+                    {
+                        'error': 'QC checkbox field not found',
+                        'message': 'Cannot verify QC completion status'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if not qc_checkbox_true:
+                return Response(
+                    {
+                        'error': 'QC not completed',
+                        'message': 'QC checkbox is not checked for this serial number. QC must be completed before QC Images.'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Define section order - sections before qc_images
+            sections_before_qc_images = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc'
+            ]
+            
+            # Check that all enabled sections before qc_images have their checkboxes set to true
+            # Only check sections that are enabled in the procedure config
+            for section in sections_before_qc_images:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Skip 'qc' as we already checked it above
+                if section == 'qc':
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., kit_kit, smd_smd
+                    f'{section}',  # e.g., kit, smd
+                    f'qc_{section}',  # e.g., qc_kit
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" checkbox is not checked. All enabled sections before QC Images must be completed.',
+                            'incomplete_section': section
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # If checkbox field not found for an enabled section, log warning but continue
+                # (some sections might not have checkboxes in the database)
+                if not section_checkbox_found:
+                    import sys
+                    print(f"Warning: Checkbox field not found for enabled section '{section}'", file=sys.stderr)
+            
+            # Check that qc_images section itself is not already completed
+            qc_images_patterns = [
+                'qc_images_qc_images',
+                'qc_images',
+                'qc_qc_images',
+                'qc_images_done',
+                'qc_images_completed',
+                'qc_images_status'
+            ]
+            
+            for pattern in qc_images_patterns:
+                if pattern in all_field_names:
+                    try:
+                        qc_images_value = getattr(entry, pattern, None)
+                        qc_images_completed = False
+                        if isinstance(qc_images_value, bool):
+                            qc_images_completed = qc_images_value
+                        elif isinstance(qc_images_value, str):
+                            qc_images_completed = qc_images_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(qc_images_value, (int, float)):
+                            qc_images_completed = bool(qc_images_value)
+                        
+                        if qc_images_completed:
+                            return Response(
+                                {
+                                    'error': 'QC Images already completed',
+                                    'message': 'QC Images section is already completed for this serial number'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break  # Found the field, no need to check other patterns
+                    except Exception:
+                        continue
+            
+            # Check that sections after qc_images are not completed
+            # Sections after qc_images: testing, heat_run, cleaning, glueing, spraying, dispatch
+            sections_after_qc_images = [
+                'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
+            ]
+            
+            for section in sections_after_qc_images:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., testing_testing
+                    f'{section}',  # e.g., testing
+                    f'qc_{section}',  # e.g., qc_testing
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_completed = False
+                            if isinstance(section_value, bool):
+                                section_completed = section_value
+                            elif isinstance(section_value, str):
+                                section_completed = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_completed = bool(section_value)
+                            
+                            if section_completed:
+                                return Response(
+                                    {
+                                        'error': 'Later section already completed',
+                                        'message': f'Section "{section}" is already completed. QC Images cannot be processed after later sections are completed.',
+                                        'completed_section': section
+                                    },
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+            
+            # All conditions met - return USID
+            usid = getattr(entry, 'usid', None)
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': 'Serial number found but USID is missing'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            return Response(
+                {
+                    'usid': usid,
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and all required sections completed'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"QC Images Serial Number Search Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+

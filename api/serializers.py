@@ -26,7 +26,7 @@ class ModelPartSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ModelPart
-        fields = '__all__'
+        fields = ['id', 'model_no', 'part_no', 'part_image', 'form_image_url', 'part_image_url']
     
     def get_form_image_url(self, obj):
         if obj.form_image:

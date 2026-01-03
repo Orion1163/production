@@ -10,7 +10,7 @@ from .views import (
     TestingProcedureConfigView, DispatchProcedureConfigView, DispatchSONumbersView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
     HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
     GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView,
-    DispatchSerialNumberSearchView, DispatchSubmitView
+    DispatchSerialNumberSearchView, DispatchSubmitView, QCImagesSerialNumberSearchView
 )
 
 urlpatterns = [
@@ -55,6 +55,7 @@ urlpatterns = [
     path('spraying-submit/', SprayingSubmitView.as_view(), name='spraying-submit'),
     path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
     path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
+    path('qc-images-serial-number-search/', QCImagesSerialNumberSearchView.as_view(), name='qc-images-serial-number-search'),
     path('heat-run-serial-number-search/', HeatRunSerialNumberSearchView.as_view(), name='heat-run-serial-number-search'),
     path('cleaning-serial-number-search/', CleaningSerialNumberSearchView.as_view(), name='cleaning-serial-number-search'),
     path('glueing-serial-number-search/', GlueingSerialNumberSearchView.as_view(), name='glueing-serial-number-search'),
