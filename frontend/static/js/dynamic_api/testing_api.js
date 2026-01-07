@@ -455,7 +455,8 @@
         const serialStatus = document.getElementById('serialStatus');
         const testMessageField = document.getElementById('testMessage');
 
-        if (!toggleBtn || !serialStatus) {
+        if (!toggleBtn) {
+            console.warn('Serial port toggle button not found');
             return;
         }
 
@@ -468,7 +469,9 @@
             console.warn('Web Serial API is not supported in this browser');
             toggleBtn.disabled = true;
             toggleBtn.title = 'Web Serial API not supported';
-            serialStatus.textContent = 'Serial API not supported';
+            if (serialStatus) {
+                serialStatus.textContent = 'Serial API not supported';
+            }
             return;
         }
 

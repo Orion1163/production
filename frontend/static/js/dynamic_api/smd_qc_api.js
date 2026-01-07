@@ -1,6 +1,6 @@
 /**
  * SMD QC API Integration
- * Handles fetching SMD QC data when SO No is entered and populates form fields
+ * Handles fetching SMD QC data when Kit No is entered and populates form fields
  */
 
 (() => {
@@ -95,16 +95,16 @@
   }
 
   /**
-   * Fetch SMD QC data by SO No
+   * Fetch SMD QC data by Kit No
    */
-  async function fetchSMDQCData(soNo) {
+  async function fetchSMDQCData(kitNo) {
     const partNo = getPartNo();
     if (!partNo) {
       showToast('Part number not found. Please refresh the page.', 'error');
       return null;
     }
 
-    if (!soNo || soNo.trim() === '') {
+    if (!kitNo || kitNo.trim() === '') {
       return null;
     }
 
@@ -114,7 +114,7 @@
       // Build query parameters
       const params = new URLSearchParams({
         part_no: partNo,
-        so_no: soNo.trim()
+        kit_no: kitNo.trim()
       });
 
       const response = await fetch(`${API_BASE_URL}?${params.toString()}`, {
@@ -186,10 +186,10 @@
   function populateFormFields(data) {
     if (!data) {
       // Clear fields if no data
-      const kitNoInput = document.getElementById('kitNo');
+      const soNoInput = document.getElementById('soNo');
       const smdQCAvailableQuantityInput = document.getElementById('smdQCAvailableQuantity');
       
-      if (kitNoInput) kitNoInput.value = '';
+      if (soNoInput) soNoInput.value = '';
       if (smdQCAvailableQuantityInput) smdQCAvailableQuantityInput.value = '';
       
       // Update submit button state
@@ -198,10 +198,10 @@
       return;
     }
 
-    // Populate Kit No
-    const kitNoInput = document.getElementById('kitNo');
-    if (kitNoInput && data.kit_no) {
-      kitNoInput.value = data.kit_no;
+    // Populate SO No
+    const soNoInput = document.getElementById('soNo');
+    if (soNoInput && data.so_no) {
+      soNoInput.value = data.so_no;
     }
 
     // Populate SMD QC Available Quantity
@@ -218,19 +218,19 @@
    * Handle search button click
    */
   async function handleSearchClick() {
-    const soNoInput = document.getElementById('soNo');
+    const kitNoInput = document.getElementById('kitNo');
     const searchBtn = document.getElementById('searchSMDQCBtn');
     
-    if (!soNoInput) {
-      showToast('SO No input field not found', 'error');
+    if (!kitNoInput) {
+      showToast('Kit No input field not found', 'error');
       return;
     }
 
-    const soNo = soNoInput.value.trim();
+    const kitNo = kitNoInput.value.trim();
 
-    // Validate SO No is not empty
-    if (soNo === '') {
-      showToast('Please enter a Sales Order Number', 'error');
+    // Validate Kit No is not empty
+    if (kitNo === '') {
+      showToast('Please enter a Kit Number', 'error');
       return;
     }
 
@@ -241,23 +241,23 @@
       }
 
       // Show loading state
-      const kitNoInput = document.getElementById('kitNo');
+      const soNoInput = document.getElementById('soNo');
       const smdQCAvailableQuantityInput = document.getElementById('smdQCAvailableQuantity');
       
-      if (kitNoInput) {
-        kitNoInput.value = 'Loading...';
-        kitNoInput.style.opacity = '0.6';
+      if (soNoInput) {
+        soNoInput.value = 'Loading...';
+        soNoInput.style.opacity = '0.6';
       }
       if (smdQCAvailableQuantityInput) {
         smdQCAvailableQuantityInput.value = 'Loading...';
         smdQCAvailableQuantityInput.style.opacity = '0.6';
       }
 
-      const data = await fetchSMDQCData(soNo);
+      const data = await fetchSMDQCData(kitNo);
       
       // Remove loading state
-      if (kitNoInput) {
-        kitNoInput.style.opacity = '1';
+      if (soNoInput) {
+        soNoInput.style.opacity = '1';
       }
       if (smdQCAvailableQuantityInput) {
         smdQCAvailableQuantityInput.style.opacity = '1';
@@ -282,9 +282,9 @@
   }
 
   /**
-   * Handle Enter key press on SO No input
+   * Handle Enter key press on Kit No input
    */
-  function handleSONoKeyPress(event) {
+  function handleKitNoKeyPress(event) {
     if (event.key === 'Enter') {
       event.preventDefault();
       handleSearchClick();
@@ -318,21 +318,21 @@
       }
 
       // Collect form data
-      const soNoInput = document.getElementById('soNo');
+      const kitNoInput = document.getElementById('kitNo');
       const forwardingQuantityInput = document.getElementById('forwardingQuantity');
       const smdQCAvailableQuantityInput = document.getElementById('smdQCAvailableQuantity');
-      const kitNoInput = document.getElementById('kitNo');
+      const soNoInput = document.getElementById('soNo');
 
-      if (!soNoInput || !forwardingQuantityInput) {
+      if (!kitNoInput || !forwardingQuantityInput) {
         throw new Error('Required form fields not found');
       }
 
-      const soNo = soNoInput.value.trim();
+      const kitNo = kitNoInput.value.trim();
       const forwardingQuantity = parseInt(forwardingQuantityInput.value, 10);
 
       // Validate form data
-      if (!soNo) {
-        throw new Error('SO No is required');
+      if (!kitNo) {
+        throw new Error('Kit No is required');
       }
 
       if (isNaN(forwardingQuantity) || forwardingQuantity < 0) {
@@ -357,7 +357,7 @@
       // Prepare payload
       const payload = {
         part_no: partNo,
-        so_no: soNo,
+        kit_no: kitNo,
         forwarding_quantity: forwardingQuantity,
         smd_qc_done_by: empId.toString(), // Convert to string
       };
@@ -388,8 +388,8 @@
       form.reset();
 
       // Clear all readonly fields as well
-      if (kitNoInput) {
-        kitNoInput.value = '';
+      if (soNoInput) {
+        soNoInput.value = '';
       }
       if (smdQCAvailableQuantityInput) {
         smdQCAvailableQuantityInput.value = '';
@@ -422,11 +422,11 @@
       return;
     }
 
-    const soNoInput = document.getElementById('soNo');
+    const kitNoInput = document.getElementById('kitNo');
     const searchBtn = document.getElementById('searchSMDQCBtn');
     
-    if (!soNoInput) {
-      console.warn('SO No input field not found');
+    if (!kitNoInput) {
+      console.warn('Kit No input field not found');
       return;
     }
 
@@ -438,8 +438,8 @@
     // Attach click event listener to search button
     searchBtn.addEventListener('click', handleSearchClick);
 
-    // Attach Enter key press listener to SO No input
-    soNoInput.addEventListener('keypress', handleSONoKeyPress);
+    // Attach Enter key press listener to Kit No input
+    kitNoInput.addEventListener('keypress', handleKitNoKeyPress);
 
     // Attach form submit handler
     const form = document.getElementById('smdQCForm');

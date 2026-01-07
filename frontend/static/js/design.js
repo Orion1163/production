@@ -349,6 +349,12 @@
 
   window.addPartEntry = addPartEntry;
   window.removePart = removePart;
+  window.handlePartSelection = handlePartSelection;
+  window.togglePanel = togglePanel;
+  window.toggleTestingMode = toggleTestingMode;
+  window.addInputField = addInputField;
+  window.addCheckboxField = addCheckboxField;
+  window.cancelPartImage = cancelPartImage;
   /* 🎨 Custom Dropdown Logic with MutationObserver for Dynamic updates */
   class CustomSelect {
     constructor(nativeSelect) {

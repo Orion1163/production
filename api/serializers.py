@@ -277,7 +277,7 @@ class SMDDataFetchSerializer(serializers.Serializer):
 class SMDUpdateSerializer(serializers.Serializer):
     """Serializer for updating SMD data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD')
 
@@ -291,7 +291,7 @@ class SMDQCDataFetchSerializer(serializers.Serializer):
 class SMDQCUpdateSerializer(serializers.Serializer):
     """Serializer for updating SMD QC data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD QC')
 
@@ -305,7 +305,7 @@ class PreFormingQCDataFetchSerializer(serializers.Serializer):
 class PreFormingQCUpdateSerializer(serializers.Serializer):
     """Serializer for updating Pre-Forming QC data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     pre_forming_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Pre-Forming QC')
 
@@ -319,7 +319,7 @@ class LeadedQCDataFetchSerializer(serializers.Serializer):
 class LeadedQCUpdateSerializer(serializers.Serializer):
     """Serializer for updating Leaded QC data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     leaded_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded QC')
 
@@ -333,7 +333,7 @@ class ProdQCDataFetchSerializer(serializers.Serializer):
 class ProdQCUpdateSerializer(serializers.Serializer):
     """Serializer for updating Prod QC data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     prodqc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Prod QC')
     production_qc = serializers.BooleanField(required=False, default=True, help_text='Alternative field name for Prod QC boolean')
@@ -348,7 +348,7 @@ class AccessoriesPackingDataFetchSerializer(serializers.Serializer):
 class AccessoriesPackingUpdateSerializer(serializers.Serializer):
     """Serializer for updating Accessories Packing data with forwarding quantity"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
-    so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     accessories_packing_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Accessories Packing')
 
@@ -539,3 +539,12 @@ class DispatchSubmitSerializer(serializers.Serializer):
     # Additional parts data
     additional_parts = DispatchPartDataSerializer(many=True, required=False, default=list, help_text='Additional parts dispatch data')
     dispatch = serializers.BooleanField(required=True, help_text='Dispatch checkbox value')
+
+
+class QCImagesSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting QC Images data to completion table"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+    qc_images_done_by = serializers.CharField(required=False, allow_blank=True, help_text='Person who did the QC Images')
+    qc_images = serializers.BooleanField(required=True, help_text='QC Images checkbox value')

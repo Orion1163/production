@@ -795,12 +795,8 @@ class UserPartSectionsView(APIView):
                 enabled_sections = []
             
             # Filter sections by user roles - only return sections user has access to
-            # Also exclude qc_images from sidebar (it should not appear as a sidebar option)
             accessible_sections = []
             for section_key in enabled_sections:
-                # Skip qc_images - it should not appear in the sidebar
-                if section_key == 'qc_images':
-                    continue
                 if has_role_access(user_roles, section_key):
                     accessible_sections.append(section_key)
             
@@ -1303,28 +1299,28 @@ class KitVerificationView(APIView):
 
 class SMDDataFetchView(APIView):
     """
-    GET API endpoint for fetching SMD data by SO No.
-    Returns kit_no, kit_available_quantity, and smd_available_quantity for a given SO No.
+    GET API endpoint for fetching SMD data by Kit No.
+    Returns so_no, kit_available_quantity, and smd_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch SMD data by SO No and part_no.
+        Fetch SMD data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - kit_available_quantity: Kit available quantity
         - smd_available_quantity: SMD available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -1332,9 +1328,9 @@ class SMDDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -1390,27 +1386,27 @@ class SMDDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
                 # Build filter dictionary
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 
-                # Get the most recent entry matching the SO No
+                # Get the most recent entry matching the Kit No
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No kit verification entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No kit verification entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -1418,8 +1414,8 @@ class SMDDataFetchView(APIView):
                 # Get the most recent entry
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find kit_available_quantity field
                 kit_available_quantity_field = find_field_name([
@@ -1439,11 +1435,11 @@ class SMDDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if kit_available_quantity_field:
                     kit_available_quantity_value = getattr(entry, kit_available_quantity_field, None)
@@ -1498,11 +1494,11 @@ class SMDUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates smd_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -1518,7 +1514,7 @@ class SMDUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             smd_done_by = validated_data['smd_done_by']
             
@@ -1775,28 +1771,28 @@ class SMDUpdateView(APIView):
 
 class SMDQCDataFetchView(APIView):
     """
-    GET API endpoint for fetching SMD QC data by SO No.
-    Returns kit_no, smd_available_quantity, and smd_qc_available_quantity for a given SO No.
+    GET API endpoint for fetching SMD QC data by Kit No.
+    Returns so_no, smd_available_quantity, and smd_qc_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch SMD QC data by SO No and part_no.
+        Fetch SMD QC data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - smd_available_quantity: SMD available quantity
         - smd_qc_available_quantity: SMD QC available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -1804,9 +1800,9 @@ class SMDQCDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -1860,32 +1856,32 @@ class SMDQCDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find smd_available_quantity field
                 smd_available_quantity_field = find_field_name([
@@ -1904,11 +1900,11 @@ class SMDQCDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if smd_available_quantity_field:
                     smd_available_quantity_value = getattr(entry, smd_available_quantity_field, None)
@@ -1963,12 +1959,12 @@ class SMDQCUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         - smd_qc_done_by: Person who did the SMD QC (required)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates smd_qc_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -1984,7 +1980,7 @@ class SMDQCUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             smd_qc_done_by = validated_data['smd_qc_done_by']
             
@@ -2038,24 +2034,24 @@ class SMDQCUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -2241,27 +2237,27 @@ class SMDQCUpdateView(APIView):
 
 class PreFormingQCDataFetchView(APIView):
     """
-    GET API endpoint for fetching Pre-Forming QC data by SO No.
-    Returns kit_no and pre_forming_qc_available_quantity for a given SO No.
+    GET API endpoint for fetching Pre-Forming QC data by Kit No.
+    Returns so_no and pre_forming_qc_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch Pre-Forming QC data by SO No and part_no.
+        Fetch Pre-Forming QC data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - pre_forming_qc_available_quantity: Pre-Forming QC available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -2269,9 +2265,9 @@ class PreFormingQCDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -2325,32 +2321,32 @@ class PreFormingQCDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find pre_forming_qc_available_quantity field
                 pre_forming_qc_available_quantity_field = find_field_name([
@@ -2363,11 +2359,11 @@ class PreFormingQCDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if pre_forming_qc_available_quantity_field:
                     pre_forming_qc_available_quantity_value = getattr(entry, pre_forming_qc_available_quantity_field, None)
@@ -2416,12 +2412,12 @@ class PreFormingQCUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         - pre_forming_qc_done_by: Person who did the Pre-Forming QC (required)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates pre_forming_qc_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -2437,7 +2433,7 @@ class PreFormingQCUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             pre_forming_qc_done_by = validated_data['pre_forming_qc_done_by']
             
@@ -2491,24 +2487,24 @@ class PreFormingQCUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -2695,27 +2691,27 @@ class PreFormingQCUpdateView(APIView):
 
 class LeadedQCDataFetchView(APIView):
     """
-    GET API endpoint for fetching Leaded QC data by SO No.
-    Returns kit_no and leaded_qc_available_quantity for a given SO No.
+    GET API endpoint for fetching Leaded QC data by Kit No.
+    Returns so_no and leaded_qc_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch Leaded QC data by SO No and part_no.
+        Fetch Leaded QC data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - leaded_qc_available_quantity: Leaded QC available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -2723,9 +2719,9 @@ class LeadedQCDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -2779,32 +2775,32 @@ class LeadedQCDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find leaded_qc_available_quantity field
                 leaded_qc_available_quantity_field = find_field_name([
@@ -2817,11 +2813,11 @@ class LeadedQCDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if leaded_qc_available_quantity_field:
                     leaded_qc_available_quantity_value = getattr(entry, leaded_qc_available_quantity_field, None)
@@ -2870,12 +2866,12 @@ class LeadedQCUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         - leaded_qc_done_by: Person who did the Leaded QC (required)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates leaded_qc_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -2891,7 +2887,7 @@ class LeadedQCUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             leaded_qc_done_by = validated_data['leaded_qc_done_by']
             
@@ -2945,24 +2941,24 @@ class LeadedQCUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -3149,27 +3145,27 @@ class LeadedQCUpdateView(APIView):
 
 class ProdQCDataFetchView(APIView):
     """
-    GET API endpoint for fetching Prod QC data by SO No.
-    Returns kit_no and prod_qc_available_quantity for a given SO No.
+    GET API endpoint for fetching Prod QC data by Kit No.
+    Returns so_no and prod_qc_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch Prod QC data by SO No and part_no.
+        Fetch Prod QC data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - prod_qc_available_quantity: Prod QC available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -3177,9 +3173,9 @@ class ProdQCDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -3233,32 +3229,32 @@ class ProdQCDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find prod_qc_available_quantity field
                 prod_qc_available_quantity_field = find_field_name([
@@ -3272,11 +3268,11 @@ class ProdQCDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if prod_qc_available_quantity_field:
                     prod_qc_available_quantity_value = getattr(entry, prod_qc_available_quantity_field, None)
@@ -3325,13 +3321,13 @@ class ProdQCUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         - prodqc_done_by: Person who did the Prod QC (required)
         - production_qc: Boolean flag indicating Prod QC is done (optional, defaults to True)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates prod_qc_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -3347,7 +3343,7 @@ class ProdQCUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             prodqc_done_by = validated_data['prodqc_done_by']
             production_qc = validated_data.get('production_qc', True)  # Default to True if not provided
@@ -3402,24 +3398,24 @@ class ProdQCUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -3718,27 +3714,27 @@ class ProdQCUpdateView(APIView):
 
 class AccessoriesPackingDataFetchView(APIView):
     """
-    GET API endpoint for fetching Accessories Packing data by SO No.
-    Returns kit_no and accessories_packing_available_quantity for a given SO No.
+    GET API endpoint for fetching Accessories Packing data by Kit No.
+    Returns so_no and accessories_packing_available_quantity for a given Kit No.
     """
     parser_classes = [JSONParser, FormParser, MultiPartParser]
     
     def get(self, request):
         """
-        Fetch Accessories Packing data by SO No and part_no.
+        Fetch Accessories Packing data by Kit No and part_no.
         
         Query parameters:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         
         Returns:
-        - kit_no: Kit number
+        - so_no: Sales Order Number
         - accessories_packing_available_quantity: Accessories Packing available quantity
         """
         try:
             # Get query parameters
             part_no = request.query_params.get('part_no')
-            so_no = request.query_params.get('so_no')
+            kit_no = request.query_params.get('kit_no')
             
             if not part_no:
                 return Response(
@@ -3746,9 +3742,9 @@ class AccessoriesPackingDataFetchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if not so_no:
+            if not kit_no:
                 return Response(
-                    {'error': 'so_no is required'},
+                    {'error': 'kit_no is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -3802,32 +3798,32 @@ class AccessoriesPackingDataFetchView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Query the in_process table for entries matching the SO No
+            # Query the in_process table for entries matching the Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
                 
-                # Find kit_no field
-                kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
                 
                 # Find accessories_packing_available_quantity field
                 accessories_packing_available_quantity_field = find_field_name([
@@ -3840,11 +3836,11 @@ class AccessoriesPackingDataFetchView(APIView):
                 # Extract values from the entry
                 response_data = {}
                 
-                if kit_no_field:
-                    kit_no_value = getattr(entry, kit_no_field, None)
-                    response_data['kit_no'] = str(kit_no_value) if kit_no_value is not None else ''
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
                 else:
-                    response_data['kit_no'] = ''
+                    response_data['so_no'] = ''
                 
                 if accessories_packing_available_quantity_field:
                     accessories_packing_available_quantity_value = getattr(entry, accessories_packing_available_quantity_field, None)
@@ -3893,12 +3889,12 @@ class AccessoriesPackingUpdateView(APIView):
         
         Expected data:
         - part_no: Part number (required)
-        - so_no: Sales Order Number (required)
+        - kit_no: Kit Number (required)
         - forwarding_quantity: Quantity to forward to next section (required)
         - accessories_packing_done_by: Person who did the Accessories Packing (required)
         
         Logic:
-        - Finds entry by so_no
+        - Finds entry by kit_no
         - Updates accessories_packing_available_quantity = current - forwarding_quantity
         - Updates next section's available_quantity = forwarding_quantity (in same entry)
         """
@@ -3914,7 +3910,7 @@ class AccessoriesPackingUpdateView(APIView):
             
             validated_data = serializer.validated_data
             part_no = validated_data['part_no']
-            so_no = validated_data['so_no']
+            kit_no = validated_data['kit_no']
             forwarding_quantity = validated_data['forwarding_quantity']
             accessories_packing_done_by = validated_data['accessories_packing_done_by']
             
@@ -3968,24 +3964,24 @@ class AccessoriesPackingUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
@@ -8468,6 +8464,441 @@ class QCImagesSerialNumberSearchView(APIView):
                 {
                     'error': str(e),
                     'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class QCImagesSubmitView(APIView):
+    """
+    PUT API endpoint for updating QC Images data in completion table.
+    Updates an existing entry in the completion table with QC Images data based on serial_number and usid.
+    Sets qc_images to True/False and qc_images_done_by to the person who did the QC Images.
+    """
+    
+    def put(self, request):
+        """
+        Update QC Images data in completion table.
+        Finds existing entry by serial_number and usid, then updates QC Images fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - usid: Unique Serial ID (required)
+        - serial_number: Serial Number/Tag No. (required)
+        - qc_images_done_by: Person who did the QC Images (optional)
+        - qc_images: Boolean indicating if QC Images checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import QCImagesSubmitSerializer
+            serializer = QCImagesSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            usid = validated_data['usid']
+            serial_number = validated_data['serial_number']
+            qc_images_done_by = validated_data.get('qc_images_done_by', '')
+            qc_images = validated_data.get('qc_images', False)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with QC Images section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find existing entry by serial_number and usid
+            try:
+                entry = completion_model.objects.get(
+                    serial_number=serial_number,
+                    usid=usid
+                )
+            except completion_model.DoesNotExist:
+                return Response(
+                    {'error': f'Entry not found for serial number {serial_number} and USID {usid}. Please ensure the entry exists in the completion table.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except completion_model.MultipleObjectsReturned:
+                # If multiple entries exist, get the most recent one
+                entry = completion_model.objects.filter(
+                    serial_number=serial_number,
+                    usid=usid
+                ).order_by('-created_at').first()
+            
+            # Prepare update data
+            update_data = {}
+            
+            # Find qc_images field name (try different patterns)
+            qc_images_field = None
+            qc_images_patterns = [
+                'qc_images_qc_images',
+                'qc_images',
+                'qc_qc_images',
+                'qc_images_done',
+                'qc_images_completed',
+                'qc_images_status'
+            ]
+            
+            for pattern in qc_images_patterns:
+                if pattern in all_field_names:
+                    qc_images_field = pattern
+                    break
+            
+            # Set qc_images field if it exists
+            if qc_images_field:
+                update_data[qc_images_field] = qc_images
+            else:
+                return Response(
+                    {'error': 'QC Images field not found in completion model. Please ensure QC Images section is enabled in procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Find qc_images_done_by field name (try different patterns)
+            qc_images_done_by_field = None
+            qc_images_done_by_patterns = [
+                'qc_images_qc_images_done_by',
+                'qc_images_done_by',
+                'qc_qc_images_done_by',
+                'qc_images_qc_images_done_by'
+            ]
+            
+            for pattern in qc_images_done_by_patterns:
+                if pattern in all_field_names:
+                    qc_images_done_by_field = pattern
+                    break
+            
+            # Set qc_images_done_by field if it exists
+            if qc_images_done_by_field:
+                update_data[qc_images_done_by_field] = qc_images_done_by
+            
+            # Update the entry in completion table
+            try:
+                # Update all fields in update_data
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'QC Images data updated successfully for USID: {usid}',
+                    'part_no': part_no,
+                    'serial_number': serial_number,
+                    'usid': usid,
+                    'qc_images': qc_images,
+                    'qc_images_done_by': qc_images_done_by if qc_images_done_by else None,
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                import sys
+                error_details = traceback.format_exc()
+                print(f"QC Images Update Error: {str(e)}", file=sys.stderr)
+                print(error_details, file=sys.stderr)
+                return Response(
+                    {
+                        'error': f'Failed to update QC Images data: {str(e)}',
+                        'message': 'Error updating entry in completion table',
+                        'details': error_details
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"QC Images Submit Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to submit QC Images data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SectionEntryCountView(APIView):
+    """
+    GET API endpoint for counting entries in process for each section.
+    Returns counts of entries that are ready to be processed in each section,
+    checking that previous sections have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Get counts of entries in process for each section.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        
+        Returns:
+        - Dictionary with section names as keys and counts as values
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot count entries without procedure configuration'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get dynamic models
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': 'In-process model not found for this part'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': 'Completion model not found for this part'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from both models
+            in_process_field_names = [f.name for f in in_process_model._meta.fields]
+            completion_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Define section order
+            section_order = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
+            ]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names, field_list):
+                for name in possible_names:
+                    for field_name in field_list:
+                        if field_name.lower() == name.lower() or field_name.lower().endswith(f'_{name.lower()}'):
+                            return field_name
+                return None
+            
+            # Helper function to check if section checkbox is true
+            def is_section_completed(entry, section_name, field_names):
+                section_patterns = [
+                    f'{section_name}_{section_name}',
+                    f'{section_name}',
+                    f'qc_{section_name}',
+                    f'{section_name}_done',
+                    f'{section_name}_completed',
+                    f'{section_name}_status'
+                ]
+                
+                for pattern in section_patterns:
+                    if pattern in field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            if isinstance(section_value, bool):
+                                return section_value
+                            elif isinstance(section_value, str):
+                                return section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                return bool(section_value)
+                        except Exception:
+                            continue
+                return False
+            
+            # Helper function to get quantity value
+            def get_quantity_value(entry, field_name):
+                if not field_name:
+                    return 0
+                try:
+                    value = getattr(entry, field_name, None)
+                    if isinstance(value, str):
+                        return int(value) if value else 0
+                    elif value is None:
+                        return 0
+                    else:
+                        return int(value)
+                except (ValueError, TypeError):
+                    return 0
+            
+            # Initialize result dictionary
+            result = {}
+            
+            # Process each enabled section
+            for section in section_order:
+                if section not in enabled_sections:
+                    result[section] = 0
+                    continue
+                
+                # Get sections before this one
+                section_index = section_order.index(section)
+                previous_sections = section_order[:section_index]
+                
+                count = 0
+                
+                if section == 'qc':
+                    # QC section: sum up forwarded quantity + ready for production quantity
+                    # Check that prod_qc checkbox is true
+                    if 'prod_qc' in enabled_sections and 'prod_qc' in previous_sections:
+                        # Get all entries from in_process table
+                        entries = in_process_model.objects.all()
+                        
+                        # Find forwarded quantity and ready for production fields
+                        forwarded_qty_field = find_field_name([
+                            'qc_forwarded_quantity',
+                            'forwarded_quantity',
+                            'qc_forwardedquantity',
+                            'forwardedquantity'
+                        ], in_process_field_names)
+                        
+                        readyfor_production_field = find_field_name([
+                            'readyfor_production',
+                            'ready_for_production',
+                            'readyforproduction',
+                            'ready_forproduction',
+                            'readyfor_production_quantity',
+                            'ready_for_production_quantity',
+                            'qc_readyfor_production',
+                            'qc_ready_for_production'
+                        ], in_process_field_names)
+                        
+                        for entry in entries:
+                            # Check that prod_qc checkbox is true
+                            if is_section_completed(entry, 'prod_qc', in_process_field_names):
+                                forwarded_qty = get_quantity_value(entry, forwarded_qty_field)
+                                readyfor_qty = get_quantity_value(entry, readyfor_production_field)
+                                total_qty = forwarded_qty + readyfor_qty
+                                # Sum up the quantities
+                                count += total_qty
+                    
+                    result[section] = count
+                
+                elif section == 'qc_images':
+                    # QC Images: count entries that have completed QC
+                    entries = completion_model.objects.all()
+                    
+                    for entry in entries:
+                        if is_section_completed(entry, 'qc', completion_field_names):
+                            count += 1
+                    
+                    result[section] = count
+                
+                else:
+                    # Other sections: count entries ready to be processed
+                    # Check that previous enabled sections have their checkboxes set to true
+                    
+                    # Determine which table to query based on section
+                    # Pre-QC sections use in_process, post-QC sections use completion
+                    pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                    
+                    if section in pre_qc_sections:
+                        # Query in_process table
+                        entries = in_process_model.objects.all()
+                        field_names = in_process_field_names
+                    else:
+                        # Query completion table
+                        entries = completion_model.objects.all()
+                        field_names = completion_field_names
+                    
+                    for entry in entries:
+                        # Check that all previous enabled sections have their checkboxes set to true
+                        all_previous_completed = True
+                        
+                        for prev_section in previous_sections:
+                            if prev_section in enabled_sections:
+                                if not is_section_completed(entry, prev_section, field_names):
+                                    all_previous_completed = False
+                                    break
+                        
+                        # If all previous sections are completed, check if current section is not completed
+                        if all_previous_completed:
+                            if not is_section_completed(entry, section, field_names):
+                                count += 1
+                    
+                    result[section] = count
+            
+            return Response(
+                {
+                    'part_no': part_no,
+                    'counts': result,
+                    'total_sections': len(enabled_sections)
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            print(f"Section Entry Count Error: {str(e)}", file=sys.stderr)
+            print(error_details, file=sys.stderr)
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to count section entries',
                     'details': error_details
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

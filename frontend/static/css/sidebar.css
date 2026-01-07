@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+
 :root {
   --base-clr: #11121a;
   --line-clr: #42434a;
@@ -9,18 +10,23 @@
   --sidebar-width: 250px;
   --sidebar-collapsed-width: 60px;
 }
+
 * {
   margin: 0;
   padding: 0;
 }
+
 /* Add to your sidebar.css file */
 .logout-link {
-  color: #ff5252 !important; /* Red color to make it stand out */
+  color: #ff5252 !important;
+  /* Red color to make it stand out */
 }
 
 .logout-link:hover {
-  background-color: rgba(255, 82, 82, 0.1); /* Light red background on hover */
+  background-color: rgba(255, 82, 82, 0.1);
+  /* Light red background on hover */
 }
+
 html {
   font-family: Poppins, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.5rem;
@@ -53,24 +59,35 @@ body {
   isolation: isolate;
   text-wrap: nowrap;
 }
+
 #sidebar.close {
   padding: 5px;
   width: 60px;
 }
+
+#sidebar.close a,
+#sidebar.close .dropdown-btn {
+  position: relative;
+  justify-content: center;
+}
+
 #sidebar ul {
   list-style: none;
   display: flex;
   flex-direction: column;
   height: 95%;
 }
-#sidebar > ul > li:first-child {
+
+#sidebar>ul>li:first-child {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
+
   .logo {
     font-weight: 600;
   }
 }
+
 #sidebar ul li.active a {
   color: var(--accent-clr);
 
@@ -89,7 +106,9 @@ body {
   display: flex;
   align-items: center;
   gap: 1em;
+  position: relative;
 }
+
 .dropdown-btn {
   width: 100%;
   text-align: left;
@@ -98,39 +117,115 @@ body {
   font: inherit;
   cursor: pointer;
 }
+
 #sidebar svg {
   flex-shrink: 0;
   fill: var(--text-clr);
+  position: relative;
 }
-#sidebar a span,
-#sidebar .dropdown-btn span {
+
+#sidebar a span:not(.count-badge),
+#sidebar .dropdown-btn span:not(.count-badge) {
   flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+/* Count badge styling - inline by default for expanded sidebar */
+.count-badge {
+  display: inline;
+  margin-left: 0.25em;
+  padding: 0;
+  color: var(--secondary-text-clr);
+  font-size: 0.9em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Notification-style badge only in collapsed sidebar */
+#sidebar.close .count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0.3em;
+  left: 1.8em;
+  margin-left: 0;
+  padding: 0.15em 0.35em;
+  background-color: var(--accent-clr);
+  color: #ffffff;
+  border-radius: 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.2em;
+  height: 1.2em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 2px solid var(--base-clr);
+  text-indent: -9999px;
+}
+
+/* Show only the number without parentheses using data attribute */
+#sidebar.close .count-badge::after {
+  content: attr(data-count);
+  text-indent: 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Disabled sidebar items */
+.sidebar-item-disabled {
+  border-radius: 0.5em;
+  padding: 0.85em;
+  text-decoration: none;
+  color: var(--text-clr);
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  position: relative;
+}
+
+.sidebar-item-disabled span:not(.count-badge) {
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #sidebar a:hover,
 #sidebar .dropdown-btn:hover {
   background-color: var(--hover-clr);
 }
+
 #sidebar .sub-menu {
   display: grid;
   grid-template-rows: 0fr;
   transition: 300ms ease-in-out;
 
-  > div {
+  >div {
     overflow: hidden;
   }
 }
+
 #sidebar .sub-menu.show {
   grid-template-rows: 1fr;
 }
+
 .dropdown-btn svg {
   transition: 200ms ease;
 }
+
 .rotate svg:last-child {
   rotate: 180deg;
 }
+
 #sidebar .sub-menu a {
   padding-left: 2em;
 }
+
 #toggle-btn {
   margin-left: auto;
   padding: 1em;
@@ -143,6 +238,7 @@ body {
     transition: rotate 150ms ease;
   }
 }
+
 #toggle-btn:hover {
   background-color: var(--hover-clr);
 }
@@ -166,11 +262,13 @@ body.sidebar-collapsed main {
   /* padding-bottom: clamp(2rem, 5vw, 3rem); */
   box-sizing: border-box;
 }
+
 main p {
   color: var(--secondary-text-clr);
   margin-top: 5px;
   margin-bottom: 15px;
 }
+
 .container {
   border: 1px solid var(--line-clr);
   border-radius: 1em;
@@ -182,6 +280,7 @@ main p {
     margin-top: 1em;
   }
 }
+
 #sidebar ul li:last-child {
   margin-top: auto;
 }
@@ -198,15 +297,14 @@ main p {
   body.sidebar-collapsed {
     padding-left: 0;
   }
+
   main {
     width: 100%;
     margin-left: 0;
     order: 1;
     flex: 1 1 auto;
     width: 100%;
-    padding: 1.25rem clamp(1rem, 4vw, 1.5rem)
-      calc(160px + clamp(1rem, 4vw, 1.5rem))
-      clamp(1rem, 4vw, 1.5rem);
+    padding: 1.25rem clamp(1rem, 4vw, 1.5rem) calc(160px + clamp(1rem, 4vw, 1.5rem)) clamp(1rem, 4vw, 1.5rem);
     overflow-y: auto;
     position: relative;
     z-index: 0;
@@ -217,14 +315,17 @@ main p {
     position: relative;
     z-index: 0;
   }
+
   .container {
     border: none;
     padding: 0;
   }
+
   #sidebar svg {
     width: 36px;
     height: 36px;
   }
+
   #sidebar {
     order: 2;
     height: 60px;
@@ -242,7 +343,7 @@ main p {
     backdrop-filter: blur(12px);
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.75);
 
-    > ul {
+    >ul {
       padding: 0;
       display: grid;
       grid-auto-columns: 60px;
@@ -255,9 +356,11 @@ main p {
       gap: 12px;
       background-color: transparent;
     }
+
     ul li {
       height: 100%;
     }
+
     ul a,
     ul .dropdown-btn {
       width: 60px;
@@ -265,12 +368,51 @@ main p {
       padding: 0;
       border-radius: 0;
       justify-content: center;
+      position: relative;
     }
 
-    ul li span,
+    ul li span:not(.count-badge),
     ul li:first-child,
     .dropdown-btn svg:last-child {
       display: none;
+    }
+
+    /* Hide qc_images section on mobile */
+    ul li:has(a[data-section="qc_images"]),
+    ul li:has(span[data-section="qc_images"]) {
+      display: none !important;
+    }
+
+    /* Show count badge on mobile - notification style */
+    ul li .count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 0.3em;
+      left: 2em;
+      background-color: var(--accent-clr);
+      color: #ffffff;
+      border-radius: 10px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0.15em 0.35em;
+      min-width: 1.2em;
+      height: 1.2em;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      border: 2px solid var(--base-clr);
+      text-indent: -9999px;
+    }
+
+    /* Show only the number without parentheses using data attribute */
+    ul li .count-badge::after {
+      content: attr(data-count);
+      text-indent: 0;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
     }
 
     ul li .sub-menu.show {
@@ -286,12 +428,14 @@ main p {
       display: flex;
       justify-content: center;
 
-      > div {
+      >div {
         overflow-x: auto;
       }
+
       li {
         display: inline-flex;
       }
+
       a {
         box-sizing: border-box;
         padding: 1em;

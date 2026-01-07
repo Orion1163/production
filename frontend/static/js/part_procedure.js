@@ -3,14 +3,16 @@
  * Handles loading enabled sections and populating the sidebar
  */
 
-(function() {
+(function () {
     'use strict';
 
     const PART_NO = window.PART_NO;
     const API_ENDPOINT = `/api/v2/user/parts/${PART_NO}/sections/`;
+    const COUNT_API_ENDPOINT = `/api/v2/section-entry-count/?part_no=${encodeURIComponent(PART_NO)}`;
     const sidebarList = document.getElementById('sidebar-list');
     const partTitle = document.getElementById('partTitle');
     const partSubtitle = document.getElementById('partSubtitle');
+    let sectionCounts = {}; // Store counts for each section
 
     function getCookie(name) {
         const cookieValue = document.cookie
@@ -46,6 +48,9 @@
         'qc': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
         </svg>`,
+        'qc_images': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
+            <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm140-80h280L520-440 420-320l-60-80-60 80Zm-60-400h560v-80H280v80Z"/>
+        </svg>`,
         'testing': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M320-240 80-480l240-240 57 57-184 184 184 183-57 56Zm320 0-57-57 184-183-184-184 57-56 240 240-240 240Z"/>
         </svg>`,
@@ -68,24 +73,110 @@
 
     function createSidebarItem(section) {
         const li = document.createElement('li');
-        const a = document.createElement('a');
-        
-        // Create URL for the section page
-        const sectionUrl = `/user/parts/${encodeURIComponent(PART_NO)}/section/${encodeURIComponent(section.key)}/`;
-        a.href = sectionUrl;
-        a.setAttribute('data-section', section.key);
-        
-        // Get specific icon for section or use default
-        const iconSvg = sectionIcons[section.key] || `
-            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
-                <path d="M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360Zm-80 0v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23.5 56.5T720-120H560q-17 0-28.5-11.5T520-160v-200h-80v200q0 17-11.5 28.5T400-120H240q-33 0-56.5-23.5T160-200Zm320-270Z"/>
-            </svg>
-        `;
-        
-        a.innerHTML = iconSvg + `<span>${section.name}</span>`;
-        
-        li.appendChild(a);
+
+        // Get count for this section (default to 0 if not loaded yet)
+        const count = sectionCounts[section.key] || 0;
+
+        // For qc_images, make it non-clickable (use span instead of anchor)
+        if (section.key === 'qc_images') {
+            const span = document.createElement('span');
+            span.className = 'sidebar-item-disabled';
+            span.style.cursor = 'not-allowed';
+            span.style.opacity = '0.6';
+            span.setAttribute('data-section', section.key);
+
+            // Get specific icon for section or use default
+            const iconSvg = sectionIcons[section.key] || `
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
+                    <path d="M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360Zm-80 0v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23.5 56.5T720-120H560q-17 0-28.5-11.5T520-160v-200h-80v200q0 17-11.5 28.5T400-120H240q-33 0-56.5-23.5T160-200Zm320-270Z"/>
+                </svg>
+            `;
+
+            // Count with parentheses for inline display
+            const countBadge = count > 0 ? `<span class="count-badge" data-count="${count}">(${count})</span>` : '';
+            span.innerHTML = iconSvg + `<span>${section.name}</span>${countBadge}`;
+            li.appendChild(span);
+        } else {
+            const a = document.createElement('a');
+
+            // Create URL for the section page
+            const sectionUrl = `/user/parts/${encodeURIComponent(PART_NO)}/section/${encodeURIComponent(section.key)}/`;
+            a.href = sectionUrl;
+            a.setAttribute('data-section', section.key);
+
+            // Get specific icon for section or use default
+            const iconSvg = sectionIcons[section.key] || `
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
+                    <path d="M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360Zm-80 0v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23.5 56.5T720-120H560q-17 0-28.5-11.5T520-160v-200h-80v200q0 17-11.5 28.5T400-120H240q-33 0-56.5-23.5T160-200Zm320-270Z"/>
+                </svg>
+            `;
+
+            // Count with parentheses for inline display
+            const countBadge = count > 0 ? `<span class="count-badge" data-count="${count}">(${count})</span>` : '';
+            a.innerHTML = iconSvg + `<span>${section.name}</span>${countBadge}`;
+            li.appendChild(a);
+        }
+
         return li;
+    }
+
+    async function loadSectionCounts() {
+        try {
+            const response = await fetch(COUNT_API_ENDPOINT, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                credentials: 'same-origin',
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.counts) {
+                    sectionCounts = data.counts;
+                    // Update sidebar items with new counts
+                    updateSidebarCounts();
+                }
+            } else {
+                console.warn('Failed to load section counts:', response.status);
+            }
+        } catch (error) {
+            console.error('Error fetching section counts:', error);
+        }
+    }
+
+    function updateSidebarCounts() {
+        // Update all sidebar items with current counts
+        const sidebarItems = sidebarList.querySelectorAll('[data-section]');
+        sidebarItems.forEach(item => {
+            const sectionKey = item.getAttribute('data-section');
+            if (!sectionKey) return;
+
+            const count = sectionCounts[sectionKey] || 0;
+
+            // Find or create the count badge
+            let countBadge = item.querySelector('.count-badge');
+
+            if (count > 0) {
+                if (!countBadge) {
+                    // Create new count badge
+                    countBadge = document.createElement('span');
+                    countBadge.className = 'count-badge';
+                    item.appendChild(countBadge);
+                }
+                // Store raw count in data attribute for CSS to use
+                countBadge.setAttribute('data-count', count);
+                // Display with parentheses for inline view (CSS will override in collapsed/mobile)
+                countBadge.textContent = `(${count})`;
+            } else {
+                // Remove count badge if count is 0
+                if (countBadge) {
+                    countBadge.remove();
+                }
+            }
+        });
     }
 
     async function loadSections() {
@@ -105,13 +196,13 @@
                     // Access denied - show toast and redirect
                     const errorData = await response.json().catch(() => ({}));
                     const errorMessage = errorData.message || 'You do not have permission to access this resource.';
-                    
+
                     if (typeof showError === 'function') {
                         showError(errorMessage, { duration: 6000 });
                     } else if (typeof window.showToast === 'function') {
                         window.showToast(errorMessage, 'error', { duration: 6000 });
                     }
-                    
+
                     // Redirect to home after a short delay
                     setTimeout(() => {
                         window.location.href = '/user/home/';
@@ -138,7 +229,7 @@
             if (data.model_no && partSubtitle) {
                 partSubtitle.textContent = `Model: ${data.model_no} - ${data.count} section(s) enabled`;
             }
-            
+
             // Update sidebar logo with part number
             const sidebarLogo = document.getElementById('sidebar-logo');
             if (data.part_no && sidebarLogo) {
@@ -147,7 +238,7 @@
 
             // Get the first li (logo/toggle button) to preserve it
             const firstLi = sidebarList.querySelector('li:first-child');
-            
+
             // Clear all items except the first one
             while (sidebarList.children.length > 1) {
                 sidebarList.removeChild(sidebarList.lastChild);
@@ -164,7 +255,7 @@
             const profileLink = document.createElement('a');
             profileLink.href = '#';
             profileLink.className = 'profile-link';
-            profileLink.onclick = function(e) {
+            profileLink.onclick = function (e) {
                 e.preventDefault();
                 if (typeof openProfileModal === 'function') {
                     openProfileModal();
@@ -185,6 +276,9 @@
             profileLi.appendChild(profileLink);
             sidebarList.appendChild(profileLi);
 
+            // Load section counts after sections are loaded
+            await loadSectionCounts();
+
         } catch (error) {
             console.error('Error fetching sections:', error);
             if (partSubtitle) {
@@ -200,6 +294,11 @@
         } else {
             loadSections();
         }
+
+        // Refresh counts every 30 seconds
+        setInterval(() => {
+            loadSectionCounts();
+        }, 30000);
     }
 
     // Initialize when DOM is ready

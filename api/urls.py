@@ -7,10 +7,11 @@ from .views import (
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
     LeadedQCDataFetchView, LeadedQCUpdateView, ProdQCDataFetchView, ProdQCUpdateView,
     AccessoriesPackingDataFetchView, AccessoriesPackingUpdateView, QCProcedureConfigView,
-    TestingProcedureConfigView, DispatchProcedureConfigView, DispatchSONumbersView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
+    TestingProcedureConfigView,     DispatchProcedureConfigView, DispatchSONumbersView, USIDGenerateView, QCSubmitView, TestingSubmitView, SerialNumberStatusView, TestingSerialNumberSearchView,
     HeatRunSerialNumberSearchView, HeatRunSubmitView, CleaningSerialNumberSearchView, CleaningSubmitView,
     GlueingSerialNumberSearchView, GlueingSubmitView, SprayingSerialNumberSearchView, SprayingSubmitView,
-    DispatchSerialNumberSearchView, DispatchSubmitView, QCImagesSerialNumberSearchView
+    DispatchSerialNumberSearchView, DispatchSubmitView, QCImagesSerialNumberSearchView, QCImagesSubmitView,
+    SectionEntryCountView
 )
 
 urlpatterns = [
@@ -56,10 +57,12 @@ urlpatterns = [
     path('serial-number-status/', SerialNumberStatusView.as_view(), name='serial-number-status'),
     path('testing-serial-number-search/', TestingSerialNumberSearchView.as_view(), name='testing-serial-number-search'),
     path('qc-images-serial-number-search/', QCImagesSerialNumberSearchView.as_view(), name='qc-images-serial-number-search'),
+    path('qc-images-submit/', QCImagesSubmitView.as_view(), name='qc-images-submit'),
     path('heat-run-serial-number-search/', HeatRunSerialNumberSearchView.as_view(), name='heat-run-serial-number-search'),
     path('cleaning-serial-number-search/', CleaningSerialNumberSearchView.as_view(), name='cleaning-serial-number-search'),
     path('glueing-serial-number-search/', GlueingSerialNumberSearchView.as_view(), name='glueing-serial-number-search'),
     path('spraying-serial-number-search/', SprayingSerialNumberSearchView.as_view(), name='spraying-serial-number-search'),
     path('dispatch-serial-number-search/', DispatchSerialNumberSearchView.as_view(), name='dispatch-serial-number-search'),
     path('dispatch-submit/', DispatchSubmitView.as_view(), name='dispatch-submit'),
+    path('section-entry-count/', SectionEntryCountView.as_view(), name='section-entry-count'),
 ]
