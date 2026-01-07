@@ -996,6 +996,7 @@ class KitVerificationView(APIView):
                     cursor.execute(f"PRAGMA table_info({table_name})")
                     db_columns = [row[1] for row in cursor.fetchall()]
             except Exception as e:
+                pass
             
             # Check if we found the critical fields (kit_no and so_no)
             missing_fields = []
@@ -1025,7 +1026,7 @@ class KitVerificationView(APIView):
                             """, [table_name])
                             db_columns = [row[0] for row in cursor.fetchall()]
                 except Exception as e:
-                    import sys
+                    pass
                 
                 return Response(
                     {
@@ -1149,8 +1150,7 @@ class KitVerificationView(APIView):
                     
             except Exception as next_section_error:
                 # Log error but don't fail the main kit verification
-                import sys
-                import traceback
+                pass
             
             # Create the entry in the in_process table (with both kit verification data and next section's available_quantity)
             try:
@@ -1168,6 +1168,7 @@ class KitVerificationView(APIView):
                         value = getattr(entry, field_name, None)
                         entry_values[field_name] = value
                     except Exception as e:
+                        pass
                 
                 # Check if critical fields have values
                 critical_fields_empty = []
@@ -1176,7 +1177,9 @@ class KitVerificationView(APIView):
                         critical_fields_empty.append(field_name)
                 
                 if critical_fields_empty:
+                    pass
                 else:
+                    pass
                 
                 # Prepare response data
                 response_data = {
@@ -1634,8 +1637,7 @@ class SMDUpdateView(APIView):
                                         next_section_available_quantity_field = field_name
                                         break
                 except Exception as next_section_error:
-                    import sys
-                    import traceback
+                    pass
                 
                 # Find smd and smd_done_by fields
                 smd_field = find_field_name(['smd', 'smd_verification', 'smd_smd', 'smd_smd_verification'])
@@ -2098,8 +2100,7 @@ class SMDQCUpdateView(APIView):
                                         next_section_available_quantity_field = field_name
                                         break
                 except Exception as next_section_error:
-                    import sys
-                    import traceback
+                    pass
                 
                 # Find smd_qc and smd_qc_done_by fields
                 smd_qc_field = find_field_name(['smd_qc', 'smd_qc_verification', 'smd_qc_smd_qc', 'smd_qc_smd_qc_verification'])
@@ -3495,15 +3496,18 @@ class ProdQCUpdateView(APIView):
                         if isinstance(field_obj, models.BooleanField):
                             update_data[production_qc_field] = bool(production_qc)  # Use value from payload, ensure it's a Python boolean
                         else:
+                            pass
                     except Exception as e:
                         # If we can't verify the field type, log and skip setting it
                         pass
                 else:
+                    pass
                 
                 # Add prodqc_done_by field
                 if prodqc_done_by_field:
                     update_data[prodqc_done_by_field] = str(prodqc_done_by)
                 else:
+                    pass
                 
                 
                 # Add forwarding quantity to readyfor_production field if found
@@ -3574,6 +3578,7 @@ class ProdQCUpdateView(APIView):
                     try:
                         setattr(entry, field_name, value)
                     except Exception as e:
+                        pass
                 
                 try:
                     entry.save()
