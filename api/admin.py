@@ -57,8 +57,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
     # admin.site._registry is a dict where keys are model classes
     try:
         if model_class in admin.site._registry:
-            import sys
-            print("Model %s already registered in admin" % part_name, file=sys.stderr)
             return True
     except (TypeError, AttributeError):
         # If comparison fails, try checking by model name
@@ -66,8 +64,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
             model_name = model_class._meta.label
             registered_models = [m._meta.label for m in admin.site._registry.keys()]
             if model_name in registered_models:
-                import sys
-                print("Model %s already registered in admin (by name)" % part_name, file=sys.stderr)
                 return True
         except:
             pass
@@ -104,8 +100,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
                             related_part_name = related_class_name.replace('_in_process', '').replace('inprocess', '')
                     
                     # Register the related in_process model FIRST (before registering completion model)
-                    import sys
-                    print("CRITICAL: Registering related in_process model FIRST for %s: %s" % (part_name, related_part_name), file=sys.stderr)
                     try:
                         # Use a flag to prevent infinite recursion
                         if not hasattr(related_model, '_registering_in_admin'):
@@ -114,21 +108,12 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                 # Register with the proper part name format
                                 related_part_display_name = f"{related_part_name}_in_process"
                                 result = register_dynamic_model_in_admin(related_model, related_part_display_name)
-                                if result:
-                                    import sys
-                                    print("SUCCESS: Registered related in_process model %s before completion model %s" % (
-                                        related_part_display_name, part_name
-                                    ), file=sys.stderr)
-                                else:
-                                    import sys
-                                    print("WARNING: Failed to register related in_process model %s" % related_part_display_name, file=sys.stderr)
                             finally:
                                 if hasattr(related_model, '_registering_in_admin'):
                                     delattr(related_model, '_registering_in_admin')
                     except Exception as e:
                         import sys
                         import traceback
-                        print("ERROR: Could not register related in_process model: %s" % str(e), file=sys.stderr)
                         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
     
     # Get all field names from the model
@@ -229,8 +214,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
                         section_map[section].append(field_name)
                         break
     except Exception as e:
-        import sys
-        print("Warning: Could not get procedure_config for admin: %s" % str(e), file=sys.stderr)
         # Fallback grouping - process longer section names first
         # Use production workflow order
         section_order = [
@@ -406,10 +389,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                     else:
                                         related_part_name = related_class_name
                                 
-                                import sys
-                                print("Auto-registering related model %s for ForeignKey field %s" % (
-                                    related_part_name, db_field.name
-                                ), file=sys.stderr)
                                 # Determine table type for registration
                                 if 'inprocess' in related_class_name or 'in_process' in related_class_name:
                                     register_dynamic_model_in_admin(related_model, f"{related_part_name}_in_process")
@@ -418,8 +397,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                 else:
                                     register_dynamic_model_in_admin(related_model, related_part_name)
                             except Exception as e:
-                                import sys
-                                print("Warning: Could not auto-register related model: %s" % str(e), file=sys.stderr)
+                                pass
                     
                     # Override get_related_url to prevent URL reversal errors (general case)
                     if hasattr(widget, 'get_related_url'):
@@ -443,28 +421,15 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                                 related_part_name = related_class_name
                                                 register_dynamic_model_in_admin(related_model, related_part_name)
                                         except Exception as reg_e:
-                                            import sys
-                                            print("Warning: Could not register related model before URL reversal: %s" % str(reg_e), file=sys.stderr)
+                                            pass
                                 
                                 # Try to get the URL using our custom reverse function
                                 return original_get_related_url(info, action, *args, **kwargs)
                             except NoReverseMatch as e:
                                 # If URL reversal fails (NoReverseMatch), return None to hide the add button
-                                import sys
-                                print("Warning: Could not reverse URL for %s.%s.%s: %s" % (
-                                    info[0] if len(info) > 0 else 'unknown',
-                                    info[1] if len(info) > 1 else 'unknown',
-                                    action, str(e)
-                                ), file=sys.stderr)
                                 return None
                             except Exception as e:
                                 # For other exceptions, also return None to be safe
-                                import sys
-                                print("Warning: Exception in get_related_url for %s.%s.%s: %s" % (
-                                    info[0] if len(info) > 0 else 'unknown',
-                                    info[1] if len(info) > 1 else 'unknown',
-                                    action, str(e)
-                                ), file=sys.stderr)
                                 return None
                         # Only override if not already overridden for completion models
                         if not (is_completion_model and db_field.name == 'in_process_entry'):
@@ -480,10 +445,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
                             except NoReverseMatch as e:
                                 # If get_context fails due to NoReverseMatch,
                                 # catch the exception and create a safe context without the add URL
-                                import sys
-                                print("Warning: NoReverseMatch in widget get_context for %s: %s" % (
-                                    db_field.name, str(e)
-                                ), file=sys.stderr)
                                 
                                 # Get the base widget context (without the wrapper's add URL)
                                 try:
@@ -506,8 +467,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
                                             'attrs': attrs,
                                         }
                                 except Exception as inner_e:
-                                    import sys
-                                    print("Warning: Could not create fallback context: %s" % str(inner_e), file=sys.stderr)
                                     # Return minimal context as last resort
                                     return {
                                         'widget': {'name': name, 'value': value, 'attrs': attrs},
@@ -589,20 +548,16 @@ def register_dynamic_model_in_admin(model_class, part_name):
             # Ensure model is registered in admin (in case registration failed earlier)
             try:
                 if model_class not in admin.site._registry:
-                    import sys
-                    print("Model %s not in admin registry, registering now..." % part_name, file=sys.stderr)
                     register_dynamic_model_in_admin(model_class, part_name)
             except Exception as e:
-                import sys
-                print("Warning: Could not ensure admin registration: %s" % str(e), file=sys.stderr)
+                pass
             
             # Sync table to ensure all columns exist
             from api.dynamic_model_utils import create_dynamic_table_in_db
             try:
                 create_dynamic_table_in_db(model_class)
             except Exception as e:
-                import sys
-                print("Warning: Could not sync table: %s" % str(e), file=sys.stderr)
+                pass
             
             return super().changelist_view(request, extra_context)
         
@@ -615,8 +570,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
             try:
                 create_dynamic_table_in_db(model_class)
             except Exception as e:
-                import sys
-                print("Warning: Could not sync table for %s: %s" % (part_name, str(e)), file=sys.stderr)
+                pass
             
             # Patch extra_context to fix URL reversing in templates
             if extra_context is None:
@@ -634,8 +588,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
         try:
             if model_class in admin.site._registry:
                 admin.site.unregister(model_class)
-                import sys
-                print("Unregistered existing model %s before re-registering" % part_name, file=sys.stderr)
         except:
             pass
         
@@ -670,14 +622,10 @@ def register_dynamic_model_in_admin(model_class, part_name):
             try:
                 admin.site.unregister(model_class)
                 admin.site.register(model_class, DynamicModelAdmin)
-                import sys
-                print("Re-registered %s in admin" % part_name, file=sys.stderr)
             except Exception as e:
-                import sys
-                print("Warning: Could not re-register %s: %s" % (part_name, str(e)), file=sys.stderr)
+                pass
         except Exception as reg_error:
-            import sys
-            print("Warning: Registration error for %s: %s" % (part_name, str(reg_error)), file=sys.stderr)
+            pass
             # Try to register directly in registry as fallback
             try:
                 admin.site._registry[model_class] = DynamicModelAdmin(model_class, admin.site)
@@ -715,43 +663,16 @@ def register_dynamic_model_in_admin(model_class, part_name):
                 if 'api' not in django_apps.all_models:
                     django_apps.all_models['api'] = {}
                 django_apps.all_models['api'][model_key] = model_class
-                import sys
-                print("Re-registered model %s in app registry with key: %s" % (part_name, model_key), file=sys.stderr)
         except Exception as e:
-            import sys
-            print("Warning: Could not update admin registry cache: %s" % str(e), file=sys.stderr)
-        
-        import sys
-        # Use model_name (lowercase class name) for admin URL
-        model_name_for_url = getattr(model_class._meta, 'model_name', model_class.__name__.lower())
-        admin_url = f"/admin/api/{model_name_for_url}/"
-        print("=" * 80, file=sys.stderr)
-        print("SUCCESS: Registered %s in admin" % part_name, file=sys.stderr)
-        print("  - Admin URL: %s" % admin_url, file=sys.stderr)
-        print("  - Table: %s" % model_class._meta.db_table, file=sys.stderr)
-        print("  - App Label: %s" % model_class._meta.app_label, file=sys.stderr)
-        print("  - Model Name: %s" % getattr(model_class._meta, 'model_name', 'N/A'), file=sys.stderr)
-        print("  - Verbose Name: %s" % model_class._meta.verbose_name, file=sys.stderr)
-        print("  - Fields: %d" % len(all_fields), file=sys.stderr)
-        
-        # Verify registration
-        if model_class in admin.site._registry:
-            print("  - VERIFIED: Model %s is in admin registry" % part_name, file=sys.stderr)
-            print("  - Access at: %s" % admin_url, file=sys.stderr)
-        else:
-            print("  - WARNING: Model %s registered but not found in registry" % part_name, file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
+            pass
         
         return True
     except AlreadyRegistered:
-        import sys
-        print("Model %s already registered (AlreadyRegistered exception)" % part_name, file=sys.stderr)
         return True
     except Exception as e:
         # Model might already be registered or other error
         import sys
         import traceback
-        print("ERROR: Could not register %s in admin: %s" % (part_name, str(e)), file=sys.stderr)
         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
         return False
 
@@ -761,11 +682,6 @@ def register_all_dynamic_models_in_admin():
     Register all existing dynamic models in Django admin.
     This should be called when Django admin loads.
     """
-    import sys
-    print("=" * 80, file=sys.stderr)
-    print("REGISTERING ALL DYNAMIC MODELS IN ADMIN", file=sys.stderr)
-    print("=" * 80, file=sys.stderr)
-    
     from .models import ModelPart
     
     registered_count = 0
@@ -791,7 +707,6 @@ def register_all_dynamic_models_in_admin():
                 result = register_dynamic_model_in_admin(in_process_model, f"{model_part.part_no}_in_process")
                 if result:
                     registered_count += 1
-                    print("Registered: %s (in_process)" % model_part.part_no, file=sys.stderr)
             
             # Register completion model
             if models_dict.get('completion'):
@@ -799,12 +714,10 @@ def register_all_dynamic_models_in_admin():
                 result = register_dynamic_model_in_admin(completion_model, f"{model_part.part_no}_completion")
                 if result:
                     registered_count += 1
-                    print("Registered: %s (completion)" % model_part.part_no, file=sys.stderr)
         except PartProcedureDetail.DoesNotExist:
-            print("Skipping %s - no procedure_detail" % model_part.part_no, file=sys.stderr)
             continue
         except Exception as e:
-            print("Error registering %s: %s" % (model_part.part_no, str(e)), file=sys.stderr)
+            import sys
             import traceback
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
             continue
@@ -824,9 +737,6 @@ def register_all_dynamic_models_in_admin():
                     result = register_dynamic_model_in_admin(model_class, f"{part_name}_{table_type}")
                     if result:
                         registered_count += 1
-    
-    print("Total registered: %d dynamic models" % registered_count, file=sys.stderr)
-    print("=" * 80, file=sys.stderr)
 
 
 # Monkey-patch Django's reverse function to handle dynamic model URLs
@@ -952,12 +862,9 @@ def reverse_with_dynamic_models(viewname, urlconf=None, args=None, kwargs=None, 
                                     # Ensure it's registered in admin
                                     if found_model not in admin.site._registry:
                                         try:
-                                            import sys
-                                            print("Auto-registering model %s from DynamicModelRegistry for URL reverse" % found_model_name, file=sys.stderr)
                                             register_dynamic_model_in_admin(found_model, f"{part_name}_{table_type_candidate}")
                                         except Exception as e:
-                                            import sys
-                                            print("Warning: Could not auto-register model: %s" % str(e), file=sys.stderr)
+                                            pass
                                     break
                     
                     # If we found a model in DynamicModelRegistry, use it
@@ -1725,9 +1632,6 @@ def catch_all_view_with_dynamic_models(request, url):
     """
     Custom catch-all view that handles dynamic models registered after startup.
     """
-    import sys
-    print("Catch-all view called with URL: %s" % url, file=sys.stderr)
-    
     # First, try to find the model in the registry
     from django.apps import apps as django_apps
     
@@ -1737,7 +1641,6 @@ def catch_all_view_with_dynamic_models(request, url):
     if len(url_parts) >= 2:
         app_label = url_parts[0]
         model_name = url_parts[1]
-        print("Parsed URL - app_label: %s, model_name: %s" % (app_label, model_name), file=sys.stderr)
         
         # Check if this is a dynamic model in the 'api' app
         if app_label == 'api':
@@ -1811,8 +1714,7 @@ def catch_all_view_with_dynamic_models(request, url):
                         if model_class is not None:
                             break
                 except Exception as e:
-                    import sys
-                    print("Error checking DynamicModelRegistry: {}".format(str(e)), file=sys.stderr)
+                    pass
             
             # If we found a model, try to register it if not already registered
             if model_class is not None:
@@ -1825,30 +1727,21 @@ def catch_all_view_with_dynamic_models(request, url):
                         # Determine which view to call based on URL
                         if len(url_parts) == 2:
                             # Changelist view: /admin/api/eics120_part/
-                            import sys
-                            print("Routing to changelist view for %s" % model_name, file=sys.stderr)
                             return admin_class.changelist_view(request)
                         elif len(url_parts) == 3:
                             if url_parts[2] == 'add':
                                 # Add view: /admin/api/eics120_part/add/
-                                import sys
-                                print("Routing to add view for %s" % model_name, file=sys.stderr)
                                 return admin_class.add_view(request)
                             elif url_parts[2] == 'change':
                                 # Change view (list): /admin/api/eics120_part/change/
-                                import sys
-                                print("Routing to changelist view for %s" % model_name, file=sys.stderr)
                                 return admin_class.changelist_view(request)
                             else:
                                 # Object detail view: /admin/api/eics120_part/<id>/
                                 try:
                                     object_id = url_parts[2]
-                                    import sys
-                                    print("Routing to change view for %s, object_id=%s" % (model_name, object_id), file=sys.stderr)
                                     return admin_class.change_view(request, object_id)
                                 except Exception as e:
-                                    import sys
-                                    print("Error in change view: %s" % str(e), file=sys.stderr)
+                                    pass
                                     return _original_catch_all(request, url)
                         else:
                             # Try original catch-all for other URLs
@@ -1872,8 +1765,6 @@ def catch_all_view_with_dynamic_models(request, url):
                             
                             result = register_dynamic_model_in_admin(model_class, part_name)
                             if result:
-                                import sys
-                                print("Successfully registered dynamic model %s via catch-all view" % part_name, file=sys.stderr)
                                 # Now route to the admin view
                                 admin_class = admin.site._registry[model_class]
                                 if len(url_parts) == 2:
@@ -1886,12 +1777,10 @@ def catch_all_view_with_dynamic_models(request, url):
                         except Exception as e:
                             import sys
                             import traceback
-                            print("Error registering dynamic model in catch-all: %s" % str(e), file=sys.stderr)
                             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
                 except Exception as e:
                     import sys
                     import traceback
-                    print("Error in catch-all view: %s" % str(e), file=sys.stderr)
                     traceback.print_exception(*sys.exc_info(), file=sys.stderr)
     
     # Fall back to original catch-all view

@@ -137,10 +137,7 @@ def create_dynamic_table_in_db(model_class):
                     """, [table_name])
                     existing_columns = {row[0] for row in cursor.fetchall()}
     except Exception as e:
-        import sys
-        error_msg = str(e)
-        # Use format() instead of % to avoid issues with % characters in error messages
-        print("Error checking table existence: {}".format(error_msg), file=sys.stderr)
+        pass
     
     # If table exists, check for missing columns and add them
     if table_exists:
@@ -164,51 +161,37 @@ def create_dynamic_table_in_db(model_class):
                     missing_columns.append(field.name)
         
         if missing_columns:
-            import sys
-            print("Table %s exists but missing columns: %s" % (table_name, ', '.join(missing_columns)), file=sys.stderr)
-            print("Existing columns: %s" % ', '.join(sorted(existing_columns)), file=sys.stderr)
             result = _add_missing_columns(model_class, connection, table_name, missing_columns, existing_columns)
             if result:
-                print("Successfully added missing columns to %s" % table_name, file=sys.stderr)
+                return result
             return result
         else:
-            import sys
-            print("Table %s exists with all required columns" % table_name, file=sys.stderr)
             return True
     
     # Try manual SQL creation first (more reliable for dynamic models)
     # Then fall back to schema editor if needed
     import sys
-    print("Attempting to create table: %s" % table_name, file=sys.stderr)
     try:
         result = _create_table_manually(model_class, connection, table_name)
         if result:
             return True
-        else:
-            print("Manual creation returned False for %s" % table_name, file=sys.stderr)
     except Exception as e1:
         error_msg1 = str(e1)
-        print("Manual table creation failed for %s: %s" % (table_name, error_msg1), file=sys.stderr)
         import traceback
         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
         
         # If manual creation fails, try schema editor
         try:
-            print("Trying schema editor for table: %s" % table_name, file=sys.stderr)
             with connection.schema_editor() as schema_editor:
                 schema_editor.create_model(model_class)
-            print("Schema editor successfully created table: %s" % table_name, file=sys.stderr)
             return True
         except Exception as e2:
             # Check if error is because table already exists
             error_msg2 = str(e2)
             if 'already exists' in error_msg1.lower() or 'already exists' in error_msg2.lower():
-                print("Table %s already exists" % table_name, file=sys.stderr)
                 return True  # Table exists, which is fine
             
             # Log errors
-            print("Error creating table %s manually: %s" % (table_name, error_msg1), file=sys.stderr)
-            print("Error creating table %s with schema editor: %s" % (table_name, error_msg2), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
             return False
     
@@ -251,17 +234,13 @@ def create_dynamic_table_in_db(model_class):
                             final_missing_columns.append(field.name)
                 
                 if final_missing_columns:
-                    import sys
-                    print("Final check: Table %s missing columns: %s" % (table_name, ', '.join(final_missing_columns)), file=sys.stderr)
                     result = _add_missing_columns(model_class, connection, table_name, final_missing_columns, final_existing_columns)
                     if result:
-                        print("Successfully added missing columns in final check for %s" % table_name, file=sys.stderr)
                         return True
                 else:
                     return True  # Table exists with all columns
     except Exception as final_error:
-        import sys
-        print("Warning: Final column check failed: %s" % str(final_error), file=sys.stderr)
+        pass
     
     return False
 
@@ -290,14 +269,12 @@ def _add_missing_columns(model_class, connection, table_name, missing_columns, e
                         break
                 
                 if not field:
-                    print("Warning: Field for column %s not found in model" % column_name, file=sys.stderr)
                     continue
                 
                 # Handle ForeignKey fields - they use {field_name}_id column
                 if isinstance(field, models.ForeignKey):
                     # Verify the column name matches
                     if field.column != column_name:
-                        print("Warning: ForeignKey field %s column mismatch: expected %s, got %s" % (field.name, field.column, column_name), file=sys.stderr)
                         continue
                     
                     field_type = 'INTEGER'
@@ -341,16 +318,14 @@ def _add_missing_columns(model_class, connection, table_name, missing_columns, e
                 
                 try:
                     cursor.execute(alter_sql)
-                    print("Added column %s to table %s" % (column_name, table_name), file=sys.stderr)
                 except Exception as e:
                     # Column might already exist or other error
-                    print("Warning: Could not add column %s: %s" % (column_name, str(e)), file=sys.stderr)
+                    pass
         
         return True
     except Exception as e:
         import sys
         import traceback
-        print("Error adding missing columns to %s: %s" % (table_name, str(e)), file=sys.stderr)
         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
         return False
 
@@ -432,8 +407,6 @@ def _create_table_manually(model_class, connection, table_name):
                 existing_tables = [row[0] for row in cursor.fetchall()]
             
             if table_name in existing_tables:
-                import sys
-                print("Successfully created table: %s" % table_name, file=sys.stderr)
                 # After creating table, check for missing columns and add them
                 # This handles the case where table already existed but was missing columns
                 try:
@@ -464,24 +437,17 @@ def _create_table_manually(model_class, connection, table_name):
                                 missing_columns_after.append(field.name)
                     
                     if missing_columns_after:
-                        print("Table %s exists but missing columns after creation: %s" % (table_name, ', '.join(missing_columns_after)), file=sys.stderr)
                         result = _add_missing_columns(model_class, connection, table_name, missing_columns_after, existing_columns_after)
                         if result:
-                            print("Successfully added missing columns to %s" % table_name, file=sys.stderr)
+                            pass
                 except Exception as col_error:
-                    import sys
-                    print("Warning: Could not check/add missing columns: %s" % str(col_error), file=sys.stderr)
+                    pass
                 
                 return True
             else:
-                import sys
-                print("Warning: Table creation SQL executed but table not found: %s" % table_name, file=sys.stderr)
-                print("Existing tables: %s" % ', '.join(existing_tables[:10]), file=sys.stderr)  # Show first 10
                 return False
     except Exception as e:
         import sys
-        print("Error executing CREATE TABLE for %s: %s" % (table_name, str(e)), file=sys.stderr)
-        print("SQL was: %s" % create_sql, file=sys.stderr)
         import traceback
         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
         raise
@@ -497,21 +463,17 @@ def ensure_all_dynamic_tables_exist():
     failed_tables = []
     
     model_parts = ModelPart.objects.all()
-    print("Found %d ModelPart records" % model_parts.count(), file=sys.stderr)
     
     for model_part in model_parts:
         try:
-            print("Processing part: %s" % model_part.part_no, file=sys.stderr)
             try:
                 procedure_detail = PartProcedureDetail.objects.get(model_part=model_part)
             except PartProcedureDetail.DoesNotExist:
-                print("  WARNING: No procedure_detail found for %s (id: %d)" % (model_part.part_no, model_part.id), file=sys.stderr)
                 failed_tables.append(model_part.part_no)
                 continue
             
             enabled_sections = procedure_detail.get_enabled_sections()
             procedure_config = procedure_detail.procedure_config
-            print("  Enabled sections: %s" % enabled_sections, file=sys.stderr)
             models_dict = ensure_dynamic_model_exists(
                 model_part.part_no,
                 enabled_sections,
@@ -525,28 +487,20 @@ def ensure_all_dynamic_tables_exist():
             # Create in_process table
             if models_dict.get('in_process'):
                 in_process_model = models_dict['in_process']
-                print("  In-Process model: %s" % in_process_model.__name__, file=sys.stderr)
-                print("  In-Process table: %s" % in_process_model._meta.db_table, file=sys.stderr)
                 result = create_dynamic_table_in_db(in_process_model)
                 if result:
                     register_dynamic_model_in_admin(in_process_model, f"{model_part.part_no}_in_process")
-                    print("  SUCCESS: Created in_process table for %s" % model_part.part_no, file=sys.stderr)
                 else:
                     all_success = False
-                    print("  FAILED: In-process table creation failed for %s" % model_part.part_no, file=sys.stderr)
             
             # Create completion table
             if models_dict.get('completion'):
                 completion_model = models_dict['completion']
-                print("  Completion model: %s" % completion_model.__name__, file=sys.stderr)
-                print("  Completion table: %s" % completion_model._meta.db_table, file=sys.stderr)
                 result = create_dynamic_table_in_db(completion_model)
                 if result:
                     register_dynamic_model_in_admin(completion_model, f"{model_part.part_no}_completion")
-                    print("  SUCCESS: Created completion table for %s" % model_part.part_no, file=sys.stderr)
                 else:
                     all_success = False
-                    print("  FAILED: Completion table creation failed for %s" % model_part.part_no, file=sys.stderr)
             
             if all_success:
                 created_tables.append(model_part.part_no)
@@ -556,16 +510,8 @@ def ensure_all_dynamic_tables_exist():
             import traceback
             # Get full error information
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            error_msg = str(e)
-            
-            # Print error with part name - use % formatting to avoid issues
-            try:
-                print("ERROR processing %s: %s" % (model_part.part_no, error_msg), file=sys.stderr)
-            except:
-                print("ERROR processing part (formatting failed): %s" % error_msg, file=sys.stderr)
             
             # Always print traceback
-            print("Full traceback:", file=sys.stderr)
             traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
             
             failed_tables.append(model_part.part_no)
@@ -574,7 +520,6 @@ def ensure_all_dynamic_tables_exist():
         'created': created_tables,
         'failed': failed_tables
     }
-    print("Final result: %s" % result, file=sys.stderr)
     return result
 
 

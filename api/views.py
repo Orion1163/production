@@ -300,26 +300,18 @@ class ProductionProcedureCreateView(APIView):
                 
                 # Create database tables for dynamic models
                 import sys
-                print("=" * 80, file=sys.stderr)
-                print("CREATING DYNAMIC TABLES", file=sys.stderr)
-                print("=" * 80, file=sys.stderr)
                 
                 from api.dynamic_model_utils import ensure_all_dynamic_tables_exist
                 try:
                     table_result = ensure_all_dynamic_tables_exist()
-                    print("Table creation result: %s" % table_result, file=sys.stderr)
                     # Add table creation info to response
                     result['tables_created'] = len(table_result.get('created', []))
                     result['tables_failed'] = len(table_result.get('failed', []))
                     if table_result.get('failed'):
                         result['table_errors'] = table_result.get('failed', [])
-                    print("Tables created: %d, Failed: %d" % (result['tables_created'], result['tables_failed']), file=sys.stderr)
                 except Exception as e:
-                    print("ERROR creating dynamic tables: %s" % str(e), file=sys.stderr)
                     import traceback
                     traceback.print_exception(*sys.exc_info(), file=sys.stderr)
-                
-                print("=" * 80, file=sys.stderr)
                 
                 return Response(result, status=status.HTTP_201_CREATED)
             else:
@@ -898,19 +890,16 @@ class KitVerificationView(APIView):
             
             # Debug: Log available fields (can be removed in production)
             import sys
-            print(f"Available fields for {part_no} in_process model: {sorted(all_field_names)}", file=sys.stderr)
             
             # Helper function to find field name (try exact match, then variations, then partial match)
             def find_field_name(possible_names):
                 # First try exact match
                 for name in possible_names:
                     if name in all_field_names:
-                        print(f"Found field '{name}' in field list (exact match)", file=sys.stderr)
                         return name
                     # Also check using hasattr and get_field
                     try:
                         in_process_model._meta.get_field(name)
-                        print(f"Found field '{name}' using get_field", file=sys.stderr)
                         return name
                     except:
                         pass
@@ -922,14 +911,11 @@ class KitVerificationView(APIView):
                     for field_name in all_field_names:
                         field_normalized = field_name.lower().replace('_', '')
                         if name_normalized == field_normalized:
-                            print(f"Found field '{field_name}' (partial match for '{name}')", file=sys.stderr)
                             return field_name
                         # Also check if field contains the name
                         if name_normalized in field_normalized or field_normalized in name_normalized:
-                            print(f"Found field '{field_name}' (contains match for '{name}')", file=sys.stderr)
                             return field_name
                 
-                print(f"Field not found. Tried: {possible_names}, Available: {sorted(all_field_names)}", file=sys.stderr)
                 return None
             
             # Prepare data for the dynamic model
@@ -965,7 +951,6 @@ class KitVerificationView(APIView):
                 import sys
                 kit_related_fields = [f for f in all_field_names if 'kit' in f.lower() and ('no' in f.lower() or 'number' in f.lower())]
                 if kit_related_fields:
-                    print(f"Found kit-related 'no' fields: {kit_related_fields}, using first one: {kit_related_fields[0]}", file=sys.stderr)
                     entry_data[kit_related_fields[0]] = validated_data['kit_no']
             
             # Map kit_quantity
@@ -1002,8 +987,6 @@ class KitVerificationView(APIView):
             
             # Debug: Log what we're trying to insert
             import sys
-            print(f"Attempting to create entry with data: {entry_data}", file=sys.stderr)
-            print(f"Available model fields: {sorted(all_field_names)}", file=sys.stderr)
             
             # Also try to get field names from the database table directly
             try:
@@ -1012,9 +995,7 @@ class KitVerificationView(APIView):
                 with connection.cursor() as cursor:
                     cursor.execute(f"PRAGMA table_info({table_name})")
                     db_columns = [row[1] for row in cursor.fetchall()]
-                    print(f"Database columns in table '{table_name}': {sorted(db_columns)}", file=sys.stderr)
             except Exception as e:
-                print(f"Could not query database columns: {e}", file=sys.stderr)
             
             # Check if we found the critical fields (kit_no and so_no)
             missing_fields = []
@@ -1045,7 +1026,6 @@ class KitVerificationView(APIView):
                             db_columns = [row[0] for row in cursor.fetchall()]
                 except Exception as e:
                     import sys
-                    print(f"Could not query database columns: {e}", file=sys.stderr)
                 
                 return Response(
                     {
@@ -1093,9 +1073,6 @@ class KitVerificationView(APIView):
             
             if missing_essential_fields:
                 import sys
-                print(f"ERROR: Missing essential fields: {missing_essential_fields}", file=sys.stderr)
-                print(f"Entry data keys: {list(entry_data.keys())}", file=sys.stderr)
-                print(f"Available model fields: {sorted(all_field_names)}", file=sys.stderr)
                 return Response(
                     {
                         'error': f'Missing essential kit verification fields: {", ".join(missing_essential_fields)}',
@@ -1161,39 +1138,28 @@ class KitVerificationView(APIView):
                             # Add the available_quantity field to the same entry_data
                             entry_data[available_quantity_field] = str(validated_data['kit_quantity'])
                             import sys
-                            print(f"Added {next_section_name} section's available_quantity field ({available_quantity_field}) to kit verification entry", file=sys.stderr)
                         else:
                             import sys
-                            print(f"Warning: available_quantity field not found for {next_section_name} section in in_process model. Available fields: {sorted(all_field_names)}", file=sys.stderr)
                     else:
                         # Next section is in completion table, so we can't add it to the same entry
                         # In this case, we'll skip adding it since it's in a different table
                         import sys
-                        print(f"Info: Next section {next_section_name} is in completion table, cannot add to same entry", file=sys.stderr)
                 else:
                     import sys
-                    print(f"Info: No next enabled section found after kit for part {part_no}", file=sys.stderr)
                     
             except Exception as next_section_error:
                 # Log error but don't fail the main kit verification
                 import sys
                 import traceback
-                print(f"Warning: Could not add next section available_quantity to entry: {str(next_section_error)}", file=sys.stderr)
-                print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
             
             # Create the entry in the in_process table (with both kit verification data and next section's available_quantity)
             try:
                 # Debug: Log entry data before creation
                 import sys
-                print(f"Creating kit verification entry with data: {entry_data}", file=sys.stderr)
-                print(f"Number of fields in entry_data: {len(entry_data)}", file=sys.stderr)
-                print(f"Entry data details: {json.dumps({k: str(v) for k, v in entry_data.items()}, indent=2)}", file=sys.stderr)
                 
                 entry = in_process_model.objects.create(**entry_data)
                 
                 # Debug: Log successful creation and verify data was saved
-                print(f"Successfully created kit verification entry with ID: {entry.id}", file=sys.stderr)
-                print(f"Entry fields populated: {list(entry_data.keys())}", file=sys.stderr)
                 
                 # Verify the entry was created with the correct data
                 entry_values = {}
@@ -1201,9 +1167,7 @@ class KitVerificationView(APIView):
                     try:
                         value = getattr(entry, field_name, None)
                         entry_values[field_name] = value
-                        print(f"  {field_name} = {value}", file=sys.stderr)
                     except Exception as e:
-                        print(f"  Could not read {field_name}: {e}", file=sys.stderr)
                 
                 # Check if critical fields have values
                 critical_fields_empty = []
@@ -1212,9 +1176,7 @@ class KitVerificationView(APIView):
                         critical_fields_empty.append(field_name)
                 
                 if critical_fields_empty:
-                    print(f"WARNING: Some fields are empty after creation: {critical_fields_empty}", file=sys.stderr)
                 else:
-                    print("All fields have values after creation", file=sys.stderr)
                 
                 # Prepare response data
                 response_data = {
@@ -1255,10 +1217,6 @@ class KitVerificationView(APIView):
                 
                 # Log the error for debugging
                 import sys
-                print(f"ERROR creating entry: {error_details}", file=sys.stderr)
-                print(f"Traceback: {traceback_str}", file=sys.stderr)
-                print(f"Entry data attempted: {entry_data}", file=sys.stderr)
-                print(f"Available fields: {sorted(all_field_names)}", file=sys.stderr)
                 
                 # Check if it's a field error
                 if 'no such column' in error_details.lower() or 'field' in error_details.lower() or 'unknown column' in error_details.lower():
@@ -1678,8 +1636,6 @@ class SMDUpdateView(APIView):
                 except Exception as next_section_error:
                     import sys
                     import traceback
-                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                 
                 # Find smd and smd_done_by fields
                 smd_field = find_field_name(['smd', 'smd_verification', 'smd_smd', 'smd_smd_verification'])
@@ -2144,8 +2100,6 @@ class SMDQCUpdateView(APIView):
                 except Exception as next_section_error:
                     import sys
                     import traceback
-                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                 
                 # Find smd_qc and smd_qc_done_by fields
                 smd_qc_field = find_field_name(['smd_qc', 'smd_qc_verification', 'smd_qc_smd_qc', 'smd_qc_smd_qc_verification'])
@@ -2598,8 +2552,6 @@ class PreFormingQCUpdateView(APIView):
                 except Exception as next_section_error:
                     import sys
                     import traceback
-                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                 
                 # Find pre_forming_qc and pre_forming_qc_done_by fields
                 pre_forming_qc_field = find_field_name(['pre_forming_qc', 'pre_forming_qc_verification', 'pre_forming_qc_pre_forming_qc', 'pre_forming_qc_pre_forming_qc_verification', 'preforming_qc'])
@@ -3052,8 +3004,6 @@ class LeadedQCUpdateView(APIView):
                 except Exception as next_section_error:
                     import sys
                     import traceback
-                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                 
                 # Find leaded_qc and leaded_qc_done_by fields
                 leaded_qc_field = find_field_name(['leaded_qc', 'leaded_qc_verification', 'leaded_qc_leaded_qc', 'leaded_qc_leaded_qc_verification', 'leadedqc'])
@@ -3477,13 +3427,11 @@ class ProdQCUpdateView(APIView):
                 
                 # Debug: Log available fields
                 import sys
-                print(f"DEBUG: Available fields for {part_no}: {sorted(all_field_names)}", file=sys.stderr)
                 
                 # Find production_qc and prodqc_done_by fields first (before readyfor_production to avoid conflicts)
                 production_qc_field = find_field_name(['production_qc', 'production_qc_verification', 'prod_qc', 'prod_qc_verification', 'prod_qc_prod_qc', 'prod_qc_prod_qc_verification', 'prodqc'])
                 prodqc_done_by_field = find_field_name(['prodqc_done_by', 'prod_qc_done_by', 'prod_qc_prod_qc_done_by', 'prod_qc_done_by_', 'production_qc_done_by'])
                 
-                print(f"DEBUG: Found fields - production_qc_field: {production_qc_field}, prodqc_done_by_field: {prodqc_done_by_field}", file=sys.stderr)
                 
                 # Find readyfor_production field to add forwarding quantity
                 # Use a more precise search that excludes boolean fields
@@ -3546,24 +3494,17 @@ class ProdQCUpdateView(APIView):
                         from django.db import models
                         if isinstance(field_obj, models.BooleanField):
                             update_data[production_qc_field] = bool(production_qc)  # Use value from payload, ensure it's a Python boolean
-                            print(f"DEBUG: Setting {production_qc_field} = {bool(production_qc)}", file=sys.stderr)
                         else:
-                            print(f"DEBUG: Field {production_qc_field} is not a BooleanField (type: {type(field_obj)})", file=sys.stderr)
                     except Exception as e:
                         # If we can't verify the field type, log and skip setting it
-                        print(f"DEBUG: Error verifying {production_qc_field}: {str(e)}", file=sys.stderr)
                         pass
                 else:
-                    print(f"DEBUG: production_qc_field not found", file=sys.stderr)
                 
                 # Add prodqc_done_by field
                 if prodqc_done_by_field:
                     update_data[prodqc_done_by_field] = str(prodqc_done_by)
-                    print(f"DEBUG: Setting {prodqc_done_by_field} = {str(prodqc_done_by)}", file=sys.stderr)
                 else:
-                    print(f"DEBUG: prodqc_done_by_field not found", file=sys.stderr)
                 
-                print(f"DEBUG: update_data before verification: {update_data}", file=sys.stderr)
                 
                 # Add forwarding quantity to readyfor_production field if found
                 # Note: Field type verification already done during field finding
@@ -3576,7 +3517,6 @@ class ProdQCUpdateView(APIView):
                         if isinstance(field_obj, models.BooleanField):
                             # This shouldn't happen if field finding worked correctly, but log it
                             import sys
-                            print(f"Warning: readyfor_production_field '{readyfor_production_field}' is a BooleanField, skipping update", file=sys.stderr)
                             readyfor_production_field = None
                         else:
                             # Get current value and add forwarding quantity to it
@@ -3596,7 +3536,6 @@ class ProdQCUpdateView(APIView):
                     except Exception as e:
                         # If we can't verify the field, skip it to avoid errors
                         import sys
-                        print(f"Warning: Could not verify readyfor_production_field '{readyfor_production_field}': {str(e)}", file=sys.stderr)
                         readyfor_production_field = None
                 
                 # Before updating, verify all fields in update_data are correct types
@@ -3616,40 +3555,30 @@ class ProdQCUpdateView(APIView):
                                         verified_update_data[field_name] = False
                                     else:
                                         # Invalid value for boolean field, skip it
-                                        print(f"Error: Attempting to set boolean field '{field_name}' with non-boolean value: {value} (type: {type(value)})", file=sys.stderr)
                                         continue
                                 else:
                                     verified_update_data[field_name] = bool(value)
                             else:
                                 verified_update_data[field_name] = value
-                            print(f"DEBUG: Verified boolean field '{field_name}' = {verified_update_data[field_name]}", file=sys.stderr)
                         else:
                             # Not a boolean field, use value as-is
                             verified_update_data[field_name] = value
-                            print(f"DEBUG: Verified non-boolean field '{field_name}' = {value}", file=sys.stderr)
                     except Exception as e:
                         # Field doesn't exist or can't be verified, log warning but skip it
-                        print(f"Warning: Could not verify field '{field_name}': {str(e)}", file=sys.stderr)
                         # Skip this field to avoid errors
                         continue
                 
-                print(f"DEBUG: verified_update_data: {verified_update_data}", file=sys.stderr)
                 
                 # Update the entry with verified data
                 for field_name, value in verified_update_data.items():
                     try:
                         setattr(entry, field_name, value)
-                        print(f"DEBUG: Set {field_name} = {value} on entry", file=sys.stderr)
                     except Exception as e:
-                        print(f"Error: Failed to set {field_name} = {value}: {str(e)}", file=sys.stderr)
                 
                 try:
                     entry.save()
-                    print(f"DEBUG: Entry saved successfully", file=sys.stderr)
                 except Exception as e:
-                    print(f"Error: Failed to save entry: {str(e)}", file=sys.stderr)
                     import traceback
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                     raise
                 
                 # Prepare response
@@ -4087,8 +4016,6 @@ class AccessoriesPackingUpdateView(APIView):
                 except Exception as next_section_error:
                     import sys
                     import traceback
-                    print(f"Warning: Could not find next section: {str(next_section_error)}", file=sys.stderr)
-                    print(f"Traceback: {traceback.format_exc()}", file=sys.stderr)
                 
                 # Find accessories_packing and accessories_packing_done_by fields
                 accessories_packing_field = find_field_name(['accessories_packing', 'accessories_packing_verification', 'accessories_packing_accessories_packing', 'accessories_packing_accessories_packing_verification', 'accessoriespacking'])
@@ -4654,8 +4581,6 @@ class USIDGenerateView(APIView):
             error_details = traceback.format_exc()
             # Log the error for debugging
             import sys
-            print(f"USID Generation Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             
             # Check if it's a database table error
             error_msg = str(e).lower()
@@ -4764,7 +4689,6 @@ class QCSubmitView(APIView):
                 # Log warning if field doesn't exist but value was provided
                 if incoming_batch_no:
                     import sys
-                    print(f"Warning: incoming_batch_no field not found in model. Available fields: {all_field_names[:10]}...", file=sys.stderr)
             
             # Add qc_done_by if field exists in model
             # Try both with and without qc_ prefix
@@ -4830,7 +4754,6 @@ class QCSubmitView(APIView):
                             checkbox_value = custom_checkboxes.get(checkbox_name, False)
                             if checkbox_value:
                                 import sys
-                                print(f"Warning: Checkbox field '{checkbox_name}' (tried '{prefixed_checkbox_name}') not found in model. Available fields: {[f for f in all_field_names if 'qc' in f.lower()][:10]}...", file=sys.stderr)
                 
                 # Set qc boolean flag if field exists
                 if 'qc_qc' in all_field_names:
@@ -4843,7 +4766,6 @@ class QCSubmitView(APIView):
                 pass
             except Exception as e:
                 import sys
-                print(f"Warning: Could not process custom fields: {str(e)}", file=sys.stderr)
             
             # Create the entry in completion table
             try:
@@ -4868,8 +4790,6 @@ class QCSubmitView(APIView):
                 import traceback
                 import sys
                 error_details = traceback.format_exc()
-                print(f"Error creating QC entry: {str(e)}", file=sys.stderr)
-                print(error_details, file=sys.stderr)
                 return Response(
                     {
                         'error': 'Failed to create QC entry',
@@ -4883,8 +4803,6 @@ class QCSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"QC Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -5068,7 +4986,6 @@ class TestingSubmitView(APIView):
                                 checkbox_value = custom_checkboxes.get(checkbox_name, False)
                                 if checkbox_value:
                                     import sys
-                                    print(f"Warning: Testing checkbox field '{checkbox_name}' (tried '{prefixed_checkbox_name}') not found in model. Available fields: {[f for f in all_field_names if 'testing' in f.lower()][:10]}...", file=sys.stderr)
                 
                 # Set testing boolean flag if field exists
                 if 'testing_testing' in all_field_names:
@@ -5081,7 +4998,6 @@ class TestingSubmitView(APIView):
                 pass
             except Exception as e:
                 import sys
-                print(f"Warning: Could not process Testing custom fields: {str(e)}", file=sys.stderr)
             
             # Update the entry in completion table
             try:
@@ -5112,8 +5028,6 @@ class TestingSubmitView(APIView):
                 import traceback
                 import sys
                 error_details = traceback.format_exc()
-                print(f"Error updating Testing entry: {str(e)}", file=sys.stderr)
-                print(error_details, file=sys.stderr)
                 return Response(
                     {
                         'error': 'Failed to update Testing entry',
@@ -5127,8 +5041,6 @@ class TestingSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Testing Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -5308,7 +5220,6 @@ class HeatRunSubmitView(APIView):
                     else:
                         # No fields to update - log warning
                         import sys
-                        print(f"Warning: No heat_run fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'heat' in f.lower()][:10]}...", file=sys.stderr)
                         failed_entries.append({
                             'serial_number': serial_number,
                             'usid': usid,
@@ -5317,7 +5228,6 @@ class HeatRunSubmitView(APIView):
                         
                 except Exception as e:
                     import sys
-                    print(f"Error updating Heat Run entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
                     failed_entries.append({
                         'serial_number': serial_number,
                         'usid': usid,
@@ -5357,8 +5267,6 @@ class HeatRunSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Heat Run Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -5538,7 +5446,6 @@ class CleaningSubmitView(APIView):
                     else:
                         # No fields to update - log warning
                         import sys
-                        print(f"Warning: No cleaning fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'clean' in f.lower()][:10]}...", file=sys.stderr)
                         failed_entries.append({
                             'serial_number': serial_number,
                             'usid': usid,
@@ -5547,7 +5454,6 @@ class CleaningSubmitView(APIView):
                         
                 except Exception as e:
                     import sys
-                    print(f"Error updating Cleaning entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
                     failed_entries.append({
                         'serial_number': serial_number,
                         'usid': usid,
@@ -5587,8 +5493,6 @@ class CleaningSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Cleaning Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -5768,7 +5672,6 @@ class SprayingSubmitView(APIView):
                     else:
                         # No fields to update - log warning
                         import sys
-                        print(f"Warning: No spraying fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'spray' in f.lower()][:10]}...", file=sys.stderr)
                         failed_entries.append({
                             'serial_number': serial_number,
                             'usid': usid,
@@ -5777,7 +5680,6 @@ class SprayingSubmitView(APIView):
                         
                 except Exception as e:
                     import sys
-                    print(f"Error updating Spraying entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
                     failed_entries.append({
                         'serial_number': serial_number,
                         'usid': usid,
@@ -5817,8 +5719,6 @@ class SprayingSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Spraying Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -5909,7 +5809,6 @@ class SerialNumberStatusView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, it's a new entry
@@ -6010,7 +5909,6 @@ class SerialNumberStatusView(APIView):
                 )
             except Exception as e:
                 import sys
-                print(f"Error checking section status: {str(e)}", file=sys.stderr)
                 return Response(
                     {
                         'exists': True,
@@ -6025,8 +5923,6 @@ class SerialNumberStatusView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Serial Number Status Check Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -6113,7 +6009,6 @@ class TestingSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -6244,7 +6139,6 @@ class TestingSerialNumberSearchView(APIView):
                 # (some sections might not have checkboxes in the database)
                 if not section_checkbox_found:
                     import sys
-                    print(f"Warning: Checkbox field not found for enabled section '{section}'", file=sys.stderr)
             
             # Check that testing section itself is not already completed
             testing_patterns = [
@@ -6305,8 +6199,6 @@ class TestingSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Testing Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -6393,7 +6285,6 @@ class HeatRunSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -6477,7 +6368,6 @@ class HeatRunSerialNumberSearchView(APIView):
                 # (some sections might not have checkboxes in the database)
                 if not section_checkbox_found:
                     import sys
-                    print(f"Warning: Checkbox field not found for enabled section '{section}'", file=sys.stderr)
             
             # Check that heat_run section itself is not already completed
             heat_run_patterns = [
@@ -6538,8 +6428,6 @@ class HeatRunSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Heat Run Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -6719,7 +6607,6 @@ class GlueingSubmitView(APIView):
                     else:
                         # No fields to update - log warning
                         import sys
-                        print(f"Warning: No glueing fields found in model for part {part_no}. Available fields: {[f for f in all_field_names if 'glue' in f.lower()][:10]}...", file=sys.stderr)
                         failed_entries.append({
                             'serial_number': serial_number,
                             'usid': usid,
@@ -6728,7 +6615,6 @@ class GlueingSubmitView(APIView):
                         
                 except Exception as e:
                     import sys
-                    print(f"Error updating Glueing entry for serial_number={serial_number}, usid={usid}: {str(e)}", file=sys.stderr)
                     failed_entries.append({
                         'serial_number': serial_number,
                         'usid': usid,
@@ -6768,8 +6654,6 @@ class GlueingSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Glueing Submission Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -6856,7 +6740,6 @@ class CleaningSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -7006,8 +6889,6 @@ class CleaningSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Cleaning Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -7094,7 +6975,6 @@ class GlueingSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -7244,8 +7124,6 @@ class GlueingSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Glueing Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -7332,7 +7210,6 @@ class SprayingSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -7482,8 +7359,6 @@ class SprayingSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Spraying Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -7570,7 +7445,6 @@ class DispatchSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"⚠️ Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # ❌ If entry doesn't exist, return error
@@ -7720,8 +7594,6 @@ class DispatchSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"🚚 Dispatch Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -8006,7 +7878,6 @@ class DispatchSubmitView(APIView):
                             pass
                         except Exception as e:
                             import sys
-                            print(f"Warning: Could not process dispatch custom fields for {part_no}: {str(e)}", file=sys.stderr)
                         
                         # Link to in_process table using outgoing serial number
                         # Find entry in in_process table by serial number or USID
@@ -8102,8 +7973,6 @@ class DispatchSubmitView(APIView):
                         import traceback
                         import sys
                         error_details = traceback.format_exc()
-                        print(f"Error processing entry {serial_number}/{usid} for part {part_no}: {str(e)}", file=sys.stderr)
-                        print(error_details, file=sys.stderr)
                         part_results['errors'].append({
                             'serial_number': serial_number,
                             'usid': usid,
@@ -8139,8 +8008,6 @@ class DispatchSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"🚚 Dispatch Submit Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -8223,7 +8090,6 @@ class QCImagesSerialNumberSearchView(APIView):
                             break
                     except Exception as e:
                         import sys
-                        print(f"Warning: Could not query by {field_name}: {str(e)}", file=sys.stderr)
                         continue
             
             # If entry doesn't exist, return error
@@ -8351,7 +8217,6 @@ class QCImagesSerialNumberSearchView(APIView):
                 # (some sections might not have checkboxes in the database)
                 if not section_checkbox_found:
                     import sys
-                    print(f"Warning: Checkbox field not found for enabled section '{section}'", file=sys.stderr)
             
             # Check that qc_images section itself is not already completed
             qc_images_patterns = [
@@ -8458,8 +8323,6 @@ class QCImagesSerialNumberSearchView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"QC Images Serial Number Search Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -8624,8 +8487,6 @@ class QCImagesSubmitView(APIView):
                 import traceback
                 import sys
                 error_details = traceback.format_exc()
-                print(f"QC Images Update Error: {str(e)}", file=sys.stderr)
-                print(error_details, file=sys.stderr)
                 return Response(
                     {
                         'error': f'Failed to update QC Images data: {str(e)}',
@@ -8639,8 +8500,6 @@ class QCImagesSubmitView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"QC Images Submit Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),
@@ -8893,8 +8752,6 @@ class SectionEntryCountView(APIView):
             import traceback
             import sys
             error_details = traceback.format_exc()
-            print(f"Section Entry Count Error: {str(e)}", file=sys.stderr)
-            print(error_details, file=sys.stderr)
             return Response(
                 {
                     'error': str(e),

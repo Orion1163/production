@@ -124,8 +124,7 @@ class DynamicModelRegistry:
                         except:
                             pass
                     except Exception as e:
-                        import sys
-                        print("Warning: Could not clean up model %s: %s" % (class_name, str(e)), file=sys.stderr)
+                        pass
 
 
 def sanitize_part_name(part_name):
@@ -172,8 +171,6 @@ def get_table_name(part_name, suffix=''):
     table_name = sanitized.lower()
     if suffix:
         table_name = f"{table_name}_{suffix}"
-    import sys
-    print("Generated table name for '%s' (suffix: '%s'): '%s'" % (part_name, suffix, table_name), file=sys.stderr)
     return table_name
 
 
@@ -292,9 +289,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             if not section_data.get('enabled', False):
                 continue
             
-            import sys
-            print("  Processing enabled section: %s in %s table" % (section_name, table_type), file=sys.stderr)
-            
             section_fields[section_name] = {}
             
             # Track which fields we've already added to avoid duplicates
@@ -305,11 +299,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             # Add custom input fields first (if they have labels preserved)
             # These are user-added fields from the "Add text field" button
             custom_fields = section_data.get('custom_fields', [])
-            if custom_fields:
-                import sys
-                print("  Processing %d custom_fields for section %s in %s table" % (
-                    len(custom_fields), section_name, table_type
-                ), file=sys.stderr)
             for field_obj in custom_fields:
                 # custom_fields is an array of objects with 'name' and 'label'
                 if isinstance(field_obj, dict):
@@ -347,10 +336,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                 }
                 added_field_names.add(field_name)
                 custom_input_field_names.add(prefixed_name)  # Track this as a custom input field
-                import sys
-                print("    ✓ Created custom input field: %s (label: %s)" % (
-                    prefixed_name, field_label
-                ), file=sys.stderr)
             
             # Add default fields (text fields) with section prefix
             # These are fallback fields or fields from token-list
@@ -362,14 +347,10 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                 if mode.lower() == 'manual':
                     # Remove test_message from default_fields for manual mode
                     default_fields = [f for f in default_fields if f != 'test_message']
-                    import sys
-                    print("    ⚠ Testing section in manual mode - excluded 'test_message' from default_fields", file=sys.stderr)
                 elif mode.lower() == 'automatic':
                     # Ensure test_message is included for automatic mode
                     if 'test_message' not in default_fields:
                         default_fields.append('test_message')
-                        import sys
-                        print("    ✓ Testing section in automatic mode - added 'test_message' to default_fields", file=sys.stderr)
             
             for field_name in default_fields:
                 # Skip if already added as custom field
@@ -403,11 +384,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             
             # Add custom checkboxes (boolean fields) with section prefix
             custom_checkboxes = section_data.get('custom_checkboxes', [])
-            if custom_checkboxes:
-                import sys
-                print("  Processing %d custom_checkboxes for section %s in %s table" % (
-                    len(custom_checkboxes), section_name, table_type
-                ), file=sys.stderr)
             for checkbox in custom_checkboxes:
                 field_name = checkbox.get('name')
                 field_label = checkbox.get('label', field_name)
@@ -425,10 +401,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                         'section': section_name,
                         'is_common': False
                     }
-                    import sys
-                    print("    ✓ Created custom checkbox field: %s (label: %s)" % (
-                        prefixed_name, field_label
-                    ), file=sys.stderr)
         
         # Create fields for each section's fields
         # Track custom fields across all sections for summary logging
@@ -452,14 +424,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                             section_custom_fields.add(field_name_base)
                         else:
                             section_custom_fields.add(f"{section_name}_{field_name_base}")
-            
-            # Log if section has fields to process
-            section_field_count = len(section_fields[section_name])
-            if section_field_count > 0:
-                import sys
-                print("  Creating %d field(s) for section %s in %s table" % (
-                    section_field_count, section_name, table_type
-                ), file=sys.stderr)
             
             for field_name, field_info in sorted(section_fields[section_name].items()):
                 meta = field_metadata.get(field_name, {})
@@ -488,15 +452,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                         all_custom_input_fields.add(field_name)
                 
                 fields[field_name]._section = field_info.get('section', '')
-        
-        # Log summary of created fields
-        if all_custom_input_fields or all_custom_checkbox_fields:
-            import sys
-            print("  Summary for %s table (%s):" % (table_type, part_name), file=sys.stderr)
-            if all_custom_input_fields:
-                print("    ✓ Custom input fields created: %s" % ', '.join(sorted(all_custom_input_fields)), file=sys.stderr)
-            if all_custom_checkbox_fields:
-                print("    ✓ Custom checkbox fields created: %s" % ', '.join(all_custom_checkbox_fields), file=sys.stderr)
     
     # Add timestamps
     fields['created_at'] = models.DateTimeField(auto_now_add=True)
@@ -563,8 +518,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             return {'in_process': in_process_model, 'completion': completion_model}
         else:
             # New config provided - unregister old models and create new ones
-            import sys
-            print("Recreating models for %s with updated procedure_config" % part_name, file=sys.stderr)
             # Unregister both models and clean up from Django registry
             DynamicModelRegistry.unregister(part_name)
             
@@ -581,18 +534,12 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                 if hasattr(api_models, completion_class):
                     delattr(api_models, completion_class)
             except Exception as e:
-                import sys
-                print("Warning: Could not clean up api.models: %s" % str(e), file=sys.stderr)
+                pass
     
     # Split sections into pre-QC and post-QC
     pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config = split_sections_by_qc(
         enabled_sections, procedure_config
     )
-    
-    import sys
-    print("Creating two models for %s:" % part_name, file=sys.stderr)
-    print("  In-Process sections: %s" % pre_qc_sections, file=sys.stderr)
-    print("  Completion sections: %s" % post_qc_sections, file=sys.stderr)
     
     # Create in_process model first
     in_process_model = None
@@ -645,8 +592,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                     if existing_model._meta.db_table == db_table:
                         # Same table - don't add to avoid duplicate
                         should_add = False
-                        import sys
-                        print("Model %s already exists in api.models with table %s, skipping" % (class_name, db_table), file=sys.stderr)
                     elif existing_model != model_class:
                         # Different model, different table - replace it
                         setattr(api_models, class_name, model_class)
@@ -661,8 +606,7 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             if not hasattr(app_config, 'models'):
                 app_config.models = api_models
         except Exception as e:
-            import sys
-            print("Warning: Could not add model to api.models module: %s" % str(e), file=sys.stderr)
+            pass
         
         # Register model in Django's app registry for admin discovery
         # We need to manually register since models are created at runtime
@@ -692,34 +636,23 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                             break
                         else:
                             # Different model with same table - this is a conflict
-                            import sys
-                            print("WARNING: Table %s already registered with different model %s, removing old registration" % (db_table, registered_model.__name__), file=sys.stderr)
                             # Remove the conflicting registration
                             del django_apps.all_models['api'][key]
             
             if not already_registered:
                 # Register with class_key only (Django uses this for admin URLs)
                 django_apps.all_models['api'][class_key] = model_class
-                import sys
-                print("Registered model %s (%s) in Django's app registry (key: %s, table: %s)" % (class_name, table_type, class_key, table_key), file=sys.stderr)
-            else:
-                import sys
-                print("Model %s (%s) already registered (table: %s), skipping" % (class_name, table_type, table_key), file=sys.stderr)
         except Exception as e:
             import sys
             import traceback
-            print("Warning: Could not add model to Django's model registry: %s" % str(e), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
         
         # Register in Django admin immediately
         try:
             from api.admin import register_dynamic_model_in_admin
             register_dynamic_model_in_admin(model_class, f"{part_name}_{table_type}")
-            import sys
-            print("Registered dynamic model '%s' (%s) in admin" % (part_name, table_type), file=sys.stderr)
         except Exception as e:
-            import sys
-            print("Note: Could not register %s (%s) in admin immediately: %s" % (part_name, table_type, str(e)), file=sys.stderr)
+            pass
     
     # Return both models
     return {'in_process': in_process_model, 'completion': completion_model}
@@ -776,6 +709,5 @@ def create_table_for_dynamic_model(model_class):
             schema_editor.create_model(model_class)
         return True
     except Exception as e:
-        print(f"Error creating table for {model_class.__name__}: {e}")
         return False
 

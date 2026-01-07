@@ -165,17 +165,11 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
         try:
             result = create_dynamic_table_in_db(in_process_model)
             if result:
-                import sys
-                print("SUCCESS: Created in_process table for %s" % part_name, file=sys.stderr)
                 # Register in admin
                 register_dynamic_model_in_admin(in_process_model, f"{part_name}_in_process")
-            else:
-                import sys
-                print("WARNING: In-process table creation returned False for %s" % part_name, file=sys.stderr)
         except Exception as e:
             import sys
             import traceback
-            print("ERROR: Could not create in_process table for %s: %s" % (part_name, str(e)), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
     
     # Process completion model (depends on in_process)
@@ -184,40 +178,23 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
         try:
             result = create_dynamic_table_in_db(completion_model)
             if result:
-                import sys
-                print("SUCCESS: Created completion table for %s" % part_name, file=sys.stderr)
                 # Register in admin
                 register_dynamic_model_in_admin(completion_model, f"{part_name}_completion")
-            else:
-                import sys
-                print("WARNING: Completion table creation returned False for %s" % part_name, file=sys.stderr)
         except Exception as e:
             import sys
             import traceback
-            print("ERROR: Could not create completion table for %s: %s" % (part_name, str(e)), file=sys.stderr)
             traceback.print_exception(*sys.exc_info(), file=sys.stderr)
     
     # Run full registration to ensure all models are properly registered
     try:
-        import sys
-        print("=" * 80, file=sys.stderr)
-        print("Running full dynamic model registration...", file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
-        
         register_all_dynamic_models_in_admin()
         
         # Clear admin's app_dict cache to force rebuild
         if hasattr(admin.site, '_app_dict'):
             delattr(admin.site, '_app_dict')
-        
-        import sys
-        print("=" * 80, file=sys.stderr)
-        print("SUCCESS: Full registration completed for all dynamic models", file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
     except Exception as e:
         import sys
         import traceback
-        print("WARNING: Full registration had errors (this is usually okay): %s" % str(e), file=sys.stderr)
         traceback.print_exception(*sys.exc_info(), file=sys.stderr)
 
 
