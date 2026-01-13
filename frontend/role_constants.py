@@ -17,6 +17,7 @@ ROLE_NAMES = {
     11: "Pre-Forming QC",
     12: "Leaded QC",
     13: "Production QC",
+    14: "Programmer",
 }
 
 # Role ID to Section Keys mapping
@@ -35,6 +36,7 @@ ROLE_SECTION_MAPPING = {
     11: ['pre_forming_qc'],  # Pre-Forming QC
     12: ['leaded_qc'],  # Leaded QC
     13: ['prod_qc'],  # Production QC
+    14: ['programming'],  # Programmer
 }
 
 # Section key to Role IDs mapping (reverse lookup)
@@ -48,6 +50,7 @@ SECTION_ROLE_MAPPING = {
     'prod_qc': [1, 13],
     'qc': [1, 2],
     'qc_images': [1, 2],  # Same access as QC
+    'programming': [1, 14],  # Admin and Programmer
     'testing': [1, 3],
     'heat_run': [1, 3],
     'glueing': [1, 4],
@@ -59,7 +62,7 @@ SECTION_ROLE_MAPPING = {
 # All available sections
 ALL_SECTIONS = [
     'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-    'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run',
+    'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run',
     'glueing', 'cleaning', 'spraying', 'dispatch'
 ]
 
@@ -74,6 +77,7 @@ SECTION_NAMES = {
     'prod_qc': 'Production QC',
     'qc': 'QC',
     'qc_images': 'QC Images',
+    'programming': 'Programming',
     'testing': 'Testing',
     'heat_run': 'Heat Run',
     'glueing': 'Glueing',

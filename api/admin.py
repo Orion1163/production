@@ -10,7 +10,17 @@ from .models import User, Admin, ModelPart, PartProcedureDetail, USIDCounter
 from .dynamic_models import DynamicModelRegistry
 
 
-admin.site.register(Admin)
+@admin.register(Admin)
+class AdminAdmin(admin.ModelAdmin):
+    list_display = ('emp_id', 'role', 'get_role_display_name')
+    list_filter = ('role',)
+    search_fields = ('emp_id',)
+    fields = ('emp_id', 'pin', 'role')
+    
+    def get_role_display_name(self, obj):
+        """Display the role name in admin list."""
+        return obj.get_role_display_name()
+    get_role_display_name.short_description = 'Role'
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -201,7 +211,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
             # Use production workflow order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             # Process longer section names first to avoid conflicts
@@ -260,6 +270,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'prod_qc': 'Production QC',
         'qc': 'QC',
         'qc_images': 'QC Images',
+        'programming': 'Programming',
         'testing': 'Testing',
         'heat_run': 'Heat Run',
         'cleaning': 'Cleaning',
@@ -279,13 +290,14 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'leaded_qc',              # 6. Leaded QC
         'prod_qc',                # 7. Production QC
         'qc',                     # 8. QC
-        'qc_images',              # 8. QC Images
-        'testing',                # 9. Testing
-        'heat_run',               # 10. Heat Run
-         'cleaning',               # 11. Cleaning
-        'glueing',                # 12. Glueing   
-        'spraying',               # 13. Spraying
-        'dispatch'                # 14. Dispatch
+        'qc_images',              # 9. QC Images
+        'programming',            # 10. Programming
+        'testing',                # 11. Testing
+        'heat_run',               # 12. Heat Run
+         'cleaning',               # 13. Cleaning
+        'glueing',                # 14. Glueing   
+        'spraying',               # 15. Spraying
+        'dispatch'                # 16. Dispatch
     ]
     
     # For field matching, we need to process longer section names first to avoid conflicts

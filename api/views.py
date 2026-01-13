@@ -6042,7 +6042,7 @@ class TestingSerialNumberSearchView(APIView):
             # All possible section names
             all_sections = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             
@@ -6088,7 +6088,7 @@ class TestingSerialNumberSearchView(APIView):
             # Define section order - sections before testing
             sections_before_testing = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming'
             ]
             
             # Check that all enabled sections before testing have their checkboxes set to true
@@ -6318,7 +6318,7 @@ class HeatRunSerialNumberSearchView(APIView):
             # Define sections before heat_run (in order)
             sections_before_heat_run = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing'
             ]
             
             # Check that all enabled sections before heat_run have their checkboxes set to true
@@ -6773,7 +6773,7 @@ class CleaningSerialNumberSearchView(APIView):
             # Define sections before cleaning (in order, including heat_run)
             sections_before_cleaning = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run'
             ]
             
             # Check that all enabled sections before cleaning have their checkboxes set to true
@@ -7008,7 +7008,7 @@ class GlueingSerialNumberSearchView(APIView):
             # Define sections before glueing (in order, including heat_run but not cleaning)
             sections_before_glueing = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run'
             ]
             
             # Check that all enabled sections before glueing have their checkboxes set to true
@@ -7243,7 +7243,7 @@ class SprayingSerialNumberSearchView(APIView):
             # Define sections before spraying (in order, including cleaning)
             sections_before_spraying = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run', 'glueing', 'cleaning'
             ]
             
             # Check that all enabled sections before spraying have their checkboxes set to true
@@ -7478,7 +7478,7 @@ class DispatchSerialNumberSearchView(APIView):
             # 🎯 Define sections before dispatch (all sections except dispatch itself)
             sections_before_dispatch = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying'
             ]
             
             # ✅ Check that all enabled sections before dispatch have their checkboxes set to true
@@ -8258,9 +8258,9 @@ class QCImagesSerialNumberSearchView(APIView):
                         continue
             
             # Check that sections after qc_images are not completed
-            # Sections after qc_images: testing, heat_run, cleaning, glueing, spraying, dispatch
+            # Sections after qc_images: programming, testing, heat_run, cleaning, glueing, spraying, dispatch
             sections_after_qc_images = [
-                'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
+                'programming', 'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
             ]
             
             for section in sections_after_qc_images:
@@ -8515,6 +8515,466 @@ class QCImagesSubmitView(APIView):
             )
 
 
+class ProgrammingSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all previous enabled sections (before programming, including qc_images) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Define sections before programming (in order, including qc_images)
+            sections_before_programming = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images'
+            ]
+            
+            # Check that all enabled sections before programming have their checkboxes set to true
+            for section in sections_before_programming:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., qc_images_qc_images, qc_qc
+                    f'{section}',  # e.g., qc_images, qc
+                    f'qc_{section}',  # e.g., qc_qc_images
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Programming. Please complete all previous sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check that programming section itself is not already completed
+            programming_patterns = [
+                'programming_programming',
+                'programming',
+                'qc_programming',
+                'programming_done',
+                'programming_completed',
+                'programming_status'
+            ]
+            
+            for pattern in programming_patterns:
+                if pattern in all_field_names:
+                    try:
+                        programming_value = getattr(entry, pattern, None)
+                        programming_completed = False
+                        if isinstance(programming_value, bool):
+                            programming_completed = programming_value
+                        elif isinstance(programming_value, str):
+                            programming_completed = programming_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(programming_value, (int, float)):
+                            programming_completed = bool(programming_value)
+                        
+                        if programming_completed:
+                            return Response(
+                                {
+                                    'error': 'Programming already completed',
+                                    'message': f'Programming has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Programming'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProgrammingSubmitView(APIView):
+    """
+    PUT API endpoint for updating Programming data in completion table.
+    Updates multiple existing entries in the completion table with Programming data based on serial_number and usid.
+    Sets programming to True and programming_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Programming data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Programming fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - programming: Boolean indicating if programming checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import ProgrammingSubmitSerializer
+            serializer = ProgrammingSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            programming = validated_data['programming']
+            
+            # Only proceed if programming is True
+            if not programming:
+                return Response(
+                    {'error': 'Programming checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            programming_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Programming section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find programming and programming_done_by field names
+            programming_field = None
+            programming_done_by_field = None
+            
+            # Try different possible field name patterns
+            programming_patterns = [
+                'programming_programming',
+                'programming',
+                'qc_programming',
+                'programming_done',
+                'programming_completed',
+                'programming_status'
+            ]
+            
+            for pattern in programming_patterns:
+                if pattern in all_field_names:
+                    programming_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            programming_done_by_patterns = [
+                'programming_programming_done_by',
+                'programming_done_by',
+                'qc_programming_done_by'
+            ]
+            
+            for pattern in programming_done_by_patterns:
+                if pattern in all_field_names:
+                    programming_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set programming field if it exists
+                    if programming_field:
+                        update_data[programming_field] = True
+                    
+                    # Set programming_done_by field if it exists
+                    if programming_done_by_field:
+                        update_data[programming_done_by_field] = programming_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Programming fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Programming data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'programming': True,
+                'programming_done_by': programming_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Programming data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class SectionEntryCountView(APIView):
     """
     GET API endpoint for counting entries in process for each section.
@@ -8596,7 +9056,7 @@ class SectionEntryCountView(APIView):
             # Define section order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             

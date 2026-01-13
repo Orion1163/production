@@ -9,9 +9,20 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class AdminSerializer(serializers.ModelSerializer):
+    role_name = serializers.SerializerMethodField()
+    role_display_name = serializers.SerializerMethodField()
+    
     class Meta:
         model = Admin
         fields = '__all__'
+    
+    def get_role_name(self, obj):
+        """Get the role name (superadmin or admin)."""
+        return obj.get_role_name()
+    
+    def get_role_display_name(self, obj):
+        """Get the display name for the role."""
+        return obj.get_role_display_name()
 
 
 class AdminLoginSerializer(serializers.Serializer):
@@ -504,6 +515,19 @@ class SprayingSubmitSerializer(serializers.Serializer):
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
     entries = SprayingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
     spraying = serializers.BooleanField(required=True, help_text='Spraying checkbox value')
+
+
+class ProgrammingEntrySerializer(serializers.Serializer):
+    """Serializer for a single Programming entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class ProgrammingSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Programming data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = ProgrammingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    programming = serializers.BooleanField(required=True, help_text='Programming checkbox value')
 
 
 class DispatchEntrySerializer(serializers.Serializer):

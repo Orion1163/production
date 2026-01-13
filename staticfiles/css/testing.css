@@ -1,0 +1,579 @@
+  .testing-container {
+      width: 100%;
+      height: 100%;
+  }
+
+  .testing-form-card {
+      width: 100%;
+      margin: 0 auto;
+      background: var(--card-bg, #1f202b);
+      border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+      border-radius: var(--radius-lg, 18px);
+      padding: 2.5rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+  }
+
+  .form-header {
+      margin-bottom: 2rem;
+      text-align: center;
+  }
+
+  .form-header p {
+      color: var(--text-muted, rgba(229, 231, 235, 0.8));
+      font-size: 0.95rem;
+      margin: 0;
+      line-height: 1.6;
+  }
+
+  .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+  }
+
+  .input-group {
+      position: relative;
+      animation: fadeInUp 0.6s ease-out;
+      animation-fill-mode: both;
+  }
+
+  .input-group:nth-child(1) {
+      animation-delay: 0.1s;
+  }
+
+  .input-group:nth-child(2) {
+      animation-delay: 0.2s;
+  }
+
+  @keyframes fadeInUp {
+      from {
+          opacity: 0;
+          transform: translateY(20px);
+      }
+
+      to {
+          opacity: 1;
+          transform: translateY(0);
+      }
+  }
+
+  .input-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--primary-muted, #a5adcb);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+  }
+
+  .input-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--primary, #8b5cf6);
+      transition: transform 0.3s ease;
+  }
+
+  .input-group:hover .input-icon {
+      transform: scale(1.1) rotate(5deg);
+  }
+
+  .input-field-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+  }
+
+  .input-field {
+      width: 100%;
+      padding: 1rem 1rem 1rem 3rem;
+      background: var(--surface, #2a2b38);
+      border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+      border-radius: var(--radius-sm, 10px);
+      color: var(--primary-strong, #f5f7fb);
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      outline: none;
+      box-sizing: border-box;
+  }
+
+  .input-field::placeholder {
+      color: var(--text-muted, rgba(229, 231, 235, 0.5));
+      transition: opacity 0.3s ease;
+  }
+
+  .input-field:focus::placeholder {
+      opacity: 0.6;
+  }
+
+  .input-field:focus {
+      border-color: var(--primary, #8b5cf6);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1), 0 4px 12px rgba(139, 92, 246, 0.15);
+      background: var(--card-bg, #1f202b);
+      transform: translateY(-2px);
+  }
+
+  .input-field:hover:not(:focus) {
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .input-field-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      color: var(--primary, #8b5cf6);
+      pointer-events: none;
+      transition: all 0.3s ease;
+      z-index: 1;
+  }
+
+  .input-field:focus~.input-field-icon {
+      color: var(--primary, #8b5cf6);
+      transform: translateY(-50%) scale(1.15);
+      filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.5));
+  }
+
+  .input-field:invalid:not(:placeholder-shown) {
+      border-color: #ef4444;
+  }
+
+  .input-field:valid:not(:placeholder-shown) {
+      border-color: #10b981;
+  }
+
+  .input-field[readonly] {
+      background: var(--surface, #2a2b38);
+      cursor: not-allowed;
+      opacity: 0.8;
+  }
+
+  .input-field[readonly]:focus {
+      border-color: var(--surface-border, rgba(255, 255, 255, 0.08));
+      box-shadow: none;
+      transform: none;
+  }
+
+  /* Textarea Styles */
+  textarea.input-field {
+      min-height: 120px;
+      resize: vertical;
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+  }
+
+  textarea.input-field~.input-field-icon {
+      top: 1rem;
+      transform: translateY(0);
+  }
+
+  /* Checkboxes Section Styles */
+  .checkboxes-section {
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+  }
+
+  .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+      margin: 2rem 0;
+  }
+
+  .checkboxes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+  }
+
+  /* Checkbox Styles */
+  .checkbox-group {
+      position: relative;
+      animation: fadeInUp 0.6s ease-out;
+      animation-fill-mode: both;
+  }
+
+  .checkbox-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+      padding: 1.25rem 1.5rem;
+      background: linear-gradient(135deg, var(--surface, #2a2b38) 0%, #252632 100%);
+      border: 2px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+      border-radius: var(--radius-sm, 12px);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      overflow: hidden;
+  }
+
+  .checkbox-wrapper::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+      transition: left 0.5s ease;
+  }
+
+  .checkbox-wrapper:hover::before {
+      left: 100%;
+  }
+
+  .checkbox-wrapper:hover {
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(139, 92, 246, 0.1);
+      transform: translateY(-2px);
+  }
+
+  .custom-checkbox {
+      position: absolute;
+      opacity: 0;
+      width: 28px;
+      height: 28px;
+      margin: 0;
+      cursor: pointer;
+      z-index: 2;
+      left: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+  }
+
+  .custom-checkbox-indicator {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      min-height: 28px;
+      background: var(--surface, #2a2b38);
+      border: 2.5px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+  }
+
+  .custom-checkbox-indicator::after {
+      content: '';
+      position: absolute;
+      width: 6px;
+      height: 12px;
+      border: solid var(--primary, #8b5cf6);
+      border-width: 0 3px 3px 0;
+      transform: rotate(45deg) scale(0);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: -2px;
+  }
+
+  .custom-checkbox:checked+.custom-checkbox-indicator {
+      background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+      border-color: var(--primary, #8b5cf6);
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2), 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+
+  .custom-checkbox:checked+.custom-checkbox-indicator::after {
+      transform: rotate(45deg) scale(1);
+      border-color: #ffffff;
+  }
+
+  .checkbox-label {
+      display: flex;
+      align-items: center;
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--primary-strong, #f5f7fb);
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+      transition: color 0.3s ease;
+  }
+
+  .checkbox-wrapper.checked {
+      border-color: var(--primary, #8b5cf6);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 6px 20px rgba(139, 92, 246, 0.25);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+      transform: translateY(-2px);
+  }
+
+  .checkbox-wrapper.checked .checkbox-label {
+      color: var(--primary, #8b5cf6);
+  }
+
+  /* Mode-specific containers */
+  .automatic-mode-container,
+  .manual-mode-container {
+      display: none;
+  }
+
+  .automatic-mode-container.active,
+  .manual-mode-container.active {
+      display: block;
+  }
+
+  /* Loading indicator */
+  .loading-indicator {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: var(--text-muted, rgba(229, 231, 235, 0.8));
+      padding: 2rem;
+      font-size: 0.95rem;
+      animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+
+      0%,
+      100% {
+          opacity: 1;
+      }
+
+      50% {
+          opacity: 0.5;
+      }
+  }
+
+  /* Submit Button Styles */
+  .submit-section {
+      display: flex;
+      justify-content: center;
+      margin-top: 2.5rem;
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+  }
+
+  .submit-btn {
+      background: linear-gradient(135deg, var(--primary, #8b5cf6) 0%, #6366f1 100%);
+      color: white;
+      border: none;
+      padding: 1rem 3rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm, 10px);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
+  }
+
+  .submit-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+  }
+
+  .submit-btn:hover::before {
+      width: 300px;
+      height: 300px;
+  }
+
+  .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  .submit-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+  }
+
+  .submit-btn span {
+      position: relative;
+      z-index: 1;
+  }
+
+  /* Serial Port Connection Buttons */
+  .serial-port-controls {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      margin-bottom: 2rem;
+      position: relative;
+      z-index: 5;
+      gap: 1.5rem;
+  }
+
+  .serial-btn-toggle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: var(--surface, #2a2b38);
+      color: var(--text-muted, rgba(229, 231, 235, 0.8));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 2px 0 rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+  }
+
+  .serial-btn-toggle:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      border-color: var(--primary, #8b5cf6);
+      color: var(--primary, #8b5cf6);
+  }
+
+  .serial-btn-toggle svg {
+      width: 24px;
+      height: 24px;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  }
+
+  /* Connected State */
+  .serial-btn-toggle.connected {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+      animation: connectedPulse 2s infinite;
+  }
+
+  .serial-btn-toggle.connected:hover {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+      animation: none;
+      transform: rotate(90deg) scale(1.05);
+  }
+
+  /* Toggle Icon Logic - handled by JS or CSS if structure permits */
+  /* Here we assume JS toggles 'display: none' on icons, but let's try CSS only for hover effect */
+  .serial-btn-toggle .disconnect-icon {
+      display: none;
+  }
+
+  .serial-btn-toggle.connected:hover .connect-icon {
+      display: none;
+  }
+
+  .serial-btn-toggle.connected:hover .disconnect-icon {
+      display: block;
+      transform: rotate(-90deg);
+      /* Counteract button rotation if we want icon upright, or let it rotate */
+  }
+
+  @keyframes connectedPulse {
+      0% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+      }
+
+      70% {
+          box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
+      }
+
+      100% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
+  }
+
+  .serial-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+  }
+
+  .serial-status {
+      text-align: left;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: var(--text-muted, rgba(229, 231, 235, 0.8));
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0;
+  }
+
+  .serial-status.connected {
+      color: #10b981;
+      text-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+  }
+
+  .serial-status.disconnected {
+      color: var(--text-muted, rgba(229, 231, 235, 0.6));
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+      .testing-form-card {
+          padding: 1.5rem;
+      }
+
+      .form-grid {
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+      }
+
+      .form-header p {
+          font-size: 0.9rem;
+      }
+
+      .serial-port-controls {
+          flex-direction: column;
+      }
+
+      .serial-btn {
+          width: 100%;
+          justify-content: center;
+      }
+  }
+
+  @media (max-width: 480px) {
+      .testing-form-card {
+          padding: 1rem;
+          border-radius: var(--radius-md, 14px);
+      }
+
+      .input-field {
+          padding: 0.875rem 0.875rem 0.875rem 2.75rem;
+          font-size: 0.95rem;
+      }
+
+      .input-label {
+          font-size: 0.85rem;
+      }
+
+      .submit-btn {
+          padding: 0.875rem 2rem;
+          font-size: 0.9rem;
+      }
+  }
+
+  @media (min-width: 769px) {
+      .form-grid {
+          grid-template-columns: repeat(2, 1fr);
+      }
+  }

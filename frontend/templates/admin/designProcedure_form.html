@@ -298,6 +298,42 @@
 
         <div class="workflow-item">
           <label class="checkbox-pill workflow-toggle">
+            <input type="checkbox" data-panel-target="programming" onchange="togglePanel(this)" />
+            Programming
+          </label>
+          <div class="detail-panel" data-panel="programming">
+            <div class="panel-title">Programming Defaults</div>
+            <div class="token-list">
+              <span class="token">Serial Number</span>
+              <span class="token">USID</span>
+            </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">
+                    +
+                  </button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
+                    +
+                  </button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="workflow-item">
+          <label class="checkbox-pill workflow-toggle">
             <input type="checkbox" data-panel-target="testing" onchange="togglePanel(this)" />
             Testing
           </label>

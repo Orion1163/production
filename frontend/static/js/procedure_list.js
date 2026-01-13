@@ -292,6 +292,7 @@
         'prod_qc': 'Production QC',
         'qc': 'QC',
         'qc_images': 'QC Images',
+        'programming': 'Programming',
         'testing': 'Testing',
         'glueing': 'Glueing',
         'cleaning': 'Cleaning',

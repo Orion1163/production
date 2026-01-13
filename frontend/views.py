@@ -172,6 +172,8 @@ def user_section_page(request, part_no, section):
         'leaded_qc': 'user/pages/leaded_qc.html',
         'prod_qc': 'user/pages/prod_qc.html',
         'qc': 'user/pages/qc.html',
+        'qc_images': 'user/pages/qc.html',  # QC Images uses same template as QC
+        'programming': 'user/pages/programming.html',
         'testing': 'user/pages/testing.html',
         'heat_run': 'user/pages/heat_run.html',
         'glueing': 'user/pages/glueing.html',

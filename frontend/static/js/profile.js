@@ -74,6 +74,21 @@
       profileName.textContent = `Admin #${admin.emp_id || 'N/A'}`;
     }
 
+    // Update role display based on role value
+    const profileRole = document.querySelector('.profile-role');
+    if (profileRole && admin.role_name) {
+      // Capitalize first letter
+      const roleDisplay = admin.role_name.charAt(0).toUpperCase() + admin.role_name.slice(1);
+      profileRole.textContent = roleDisplay;
+    }
+
+    // Update account type in the details card
+    const accountType = document.querySelector('.account-type');
+    if (accountType && admin.role_name) {
+      const roleDisplay = admin.role_name.charAt(0).toUpperCase() + admin.role_name.slice(1);
+      accountType.textContent = roleDisplay;
+    }
+
     // Update last login time (using current time as placeholder)
     const lastLogin = document.getElementById('last-login');
     if (lastLogin) {

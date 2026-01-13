@@ -15,11 +15,29 @@ class User(models.Model):
 
 
 class Admin(models.Model):
+    ROLE_CHOICES = [
+        (1, 'Super Admin'),
+        (2, 'Admin'),
+    ]
+    
     emp_id = models.IntegerField(unique=True)
     pin = models.IntegerField(max_length=4)
+    role = models.IntegerField(choices=ROLE_CHOICES, default=1)
 
     def __str__(self):
         return str(self.emp_id)
+    
+    def get_role_name(self):
+        """Get the role name based on role value."""
+        if self.role == 1:
+            return 'superadmin'
+        elif self.role == 2:
+            return 'admin'
+        return 'unknown'
+    
+    def get_role_display_name(self):
+        """Get the display name for the role."""
+        return dict(self.ROLE_CHOICES).get(self.role, 'Unknown')
 
 class ModelPart(models.Model):
     """
@@ -116,7 +134,7 @@ class PartProcedureDetail(models.Model):
         enabled = []
         sections = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
             'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
         ]
         
