@@ -1,0 +1,179 @@
+{% extends 'admin/layout/sidebar.html' %}
+{% load static %}
+
+{% block title %}Admin Management | Add New Admin{% endblock %}
+
+{% block heading %}{% endblock %}
+
+{% block content %}
+<div class="page-shell user-form-shell" style="padding: 0; gap: 0;">
+  <!-- Header Section -->
+  <div class="page-header"
+    style="padding: 1rem; margin-bottom: 0; border-bottom: 1px solid rgba(255,255,255,0.05); ">
+    <div>
+      <p class="page-eyebrow">Administration</p>
+      <h1 style="margin: 0; font-weight: 700; letter-spacing: -0.02em;">Account Creation</h1>
+    </div>
+ 
+  </div>
+
+  <div style="width: 100%;">
+    <section class="card procedure-form user-form-card" aria-label="Add admin form"
+      style="border: none; background: transparent; box-shadow: none; border-radius: 0; padding: 1rem 1rem;">
+      <div class="form-intro"
+        style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2rem; margin-bottom: 3rem;">
+        <div>
+          <p class="section-eyebrow" style="color: var(--primary);">Security Profile</p>
+          <h2 style="font-weight: 600; font-size: 1.75rem;">Add New Administrator</h2>
+
+        </div>
+      </div>
+
+      <form method="post" onsubmit="return validateForm()" class="admin-form"
+        data-redirect-url="{% url 'admin_management' %}">
+        {% csrf_token %}
+
+        <div class="form-section" style="background: transparent; border: none; padding: 0; box-shadow: none;">
+          <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 4rem;">
+            <!-- Employee ID Field -->
+            <div class="field-block">
+              <label for="employeeId"
+                style="font-weight: 500; color: var(--primary-muted); margin-bottom: 12px; font-size: 1rem;">Employee
+                ID</label>
+              <div style="position: relative;">
+                <input id="employeeId" name="employee_id" type="number" placeholder="Enter Employee ID" required
+                  style="padding-left: 48px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); height: 60px; font-size: 1.1rem; border-radius: 14px; width: 100%; color: white;" />
+                <svg
+                  style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; color: var(--primary); opacity: 0.7;"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+
+            </div>
+
+            <!-- PIN Field -->
+            <div class="field-block">
+              <label for="pin"
+                style="font-weight: 500; color: var(--primary-muted); margin-bottom: 12px; font-size: 1rem;">Security
+                PIN</label>
+              <div class="otp-container" style="gap: 16px;">
+                <input type="password" class="otp-input" maxlength="1" oninput="moveNext(this, 0)"
+                  onkeydown="handleBackspace(event, this, 0)" aria-label="PIN digit 1"
+                  style="width: 60px; height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; font-size: 1.5rem;" />
+                <input type="password" class="otp-input" maxlength="1" oninput="moveNext(this, 1)"
+                  onkeydown="handleBackspace(event, this, 1)" aria-label="PIN digit 2"
+                  style="width: 60px; height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; font-size: 1.5rem;" />
+                <input type="password" class="otp-input" maxlength="1" oninput="moveNext(this, 2)"
+                  onkeydown="handleBackspace(event, this, 2)" aria-label="PIN digit 3"
+                  style="width: 60px; height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; font-size: 1.5rem;" />
+                <input type="password" class="otp-input" maxlength="1" oninput="moveNext(this, 3)"
+                  onkeydown="handleBackspace(event, this, 3)" aria-label="PIN digit 4"
+                  style="width: 60px; height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; font-size: 1.5rem;" />
+
+                <button type="button" id="toggle-visibility" class="pin-visibility-btn" onclick="toggleVisibility()"
+                  aria-pressed="false" aria-label="Toggle PIN visibility"
+                  style="height: 60px; border-radius: 14px; width: 60px; padding: 0; background: rgba(255,255,255,0.05);">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width: 24px; height: 24px;">
+                    <path class="icon-eye-open"
+                      d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Zm11 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                    <path class="icon-eye-off" d="M2 3l20 18" />
+                  </svg>
+                </button>
+              </div>
+              <input type="hidden" id="pin" name="pin" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-footer"
+          style="padding-top: 3rem; margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05); gap: 20px; display: flex; justify-content: center; align-items: center;">
+          <a class="btn ghost" href="{% url 'admin_management' %}"
+            style="border-radius: 14px; padding: 14px 28px; font-weight: 500; font-size: 1rem;">
+            Cancel
+          </a>
+          <button type="submit" class="btn"
+            style="border-radius: 14px; padding: 14px 40px; background: linear-gradient(135deg, var(--primary), #7c3aed); box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4); font-size: 1rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              style="width: 20px; height: 20px;">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+            Create Admin Profile
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+
+<style>
+  .user-form-shell {
+    max-width: none !important;
+  }
+
+  .otp-input:focus {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.08) !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.25);
+    outline: none;
+    transform: translateY(-2px);
+  }
+
+  #employeeId:focus {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.08) !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.25);
+    outline: none;
+  }
+
+  /* Hide number input spinners */
+  #employeeId::-webkit-outer-spin-button,
+  #employeeId::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  #employeeId[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  #employeeId::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .btn.ghost:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  input {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Full section optimization */
+  @media (max-width: 768px) {
+    .page-header {
+      padding: 1.5rem !important;
+    }
+
+    .user-form-card {
+      padding: 2rem 1.5rem !important;
+    }
+
+    .form-row {
+      grid-template-columns: 1fr !important;
+      gap: 2.5rem !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/add_admin.js' %}" defer></script>
+<script src="{% static 'js/add_admin_form_submit.js' %}" defer></script>
+{% endblock %}

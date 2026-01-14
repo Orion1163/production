@@ -84,6 +84,14 @@ def create_new_user(request):
     """
     return render(request, 'admin/add_user_form.html')
 
+@admin_login_required
+@admin_role_required
+def admin_management(request):
+    """
+    Render the admin management page.
+    """
+    return render(request, 'admin/admin_management.html')
+
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 @ensure_csrf_cookie

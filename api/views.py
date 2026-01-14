@@ -236,6 +236,38 @@ class AdminProfileView(APIView):
             )
 
 
+class AdminListCreateView(APIView):
+    """
+    Handle listing all admins and creating a new admin profile.
+    """
+    
+    def get(self, request):
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        admins = Admin.objects.all()
+        serializer = AdminSerializer(admins, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        serializer = AdminSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class UserProfileView(APIView):
     """
     Get current user's profile details.

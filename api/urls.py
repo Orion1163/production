@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     UserDetailView, UserListCreateView, UserLoginView, AdminLoginView, AdminLogoutView, 
-    AdminProfileView, UserProfileView, ProductionProcedureCreateView, ModelPartListView,
+    AdminProfileView, AdminListCreateView, UserProfileView, ProductionProcedureCreateView, ModelPartListView,
     ProcedureDetailView, DashboardStatsView, DashboardChartDataView, UserModelListView,
     UserModelPartsView, UserPartSectionsView, KitVerificationView, SMDDataFetchView, SMDUpdateView,
     SMDQCDataFetchView, SMDQCUpdateView, PreFormingQCDataFetchView, PreFormingQCUpdateView,
@@ -24,6 +24,7 @@ urlpatterns = [
     path('admin/login/', AdminLoginView.as_view(), name='admin-login'),
     path('admin/logout/', AdminLogoutView.as_view(), name='admin-logout'),
     path('admin/profile/', AdminProfileView.as_view(), name='admin-profile'),
+    path('admins/', AdminListCreateView.as_view(), name='admin-list-create'),
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('production-procedure/', ProductionProcedureCreateView.as_view(), name='production-procedure-create'),
     path('model-parts/', ModelPartListView.as_view(), name='model-part-list'),
