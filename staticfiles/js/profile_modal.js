@@ -25,6 +25,7 @@
         11: 'Pre-Forming QC',
         12: 'Leaded QC',
         13: 'Production QC',
+        14: 'Programmer',
     };
 
     function getCookie(name) {
@@ -89,7 +90,13 @@
         // Map each role to its label and remove duplicates
         const mappedRoles = roles
             .map(role => mapRoleToLabel(role))
-            .filter(role => role && role.trim().length > 0);
+            .filter(role => {
+                // Ensure role is a string before calling trim
+                if (role == null) return false;
+                const roleStr = String(role);
+                return roleStr.trim().length > 0;
+            })
+            .map(role => String(role).trim()); // Convert to string and trim
         
         // Remove duplicates and sort
         return Array.from(new Set(mappedRoles)).sort();

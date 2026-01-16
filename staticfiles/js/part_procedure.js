@@ -51,6 +51,9 @@
         'qc_images': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm140-80h280L520-440 420-320l-60-80-60 80Zm-60-400h560v-80H280v80Z"/>
         </svg>`,
+        'programming': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
+            <path d="M320-240 80-480l240-240 57 57-184 184 184 183-57 56Zm320 0-57-57 184-183-184-184 57-56 240 240-240 240Zm-40-200-56-57 103-103-103-103 56-57 160 160-160 160Z"/>
+        </svg>`,
         'testing': `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e8eaed">
             <path d="M320-240 80-480l240-240 57 57-184 184 184 183-57 56Zm320 0-57-57 184-183-184-184 57-56 240 240-240 240Z"/>
         </svg>`,

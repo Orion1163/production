@@ -62,6 +62,32 @@ def admin_role_required(view_func):
     return wrapper
 
 
+def superadmin_required(view_func):
+    """
+    Decorator to check if user is a superadmin (admin_role = 1).
+    Only superadmins can access admin management functionality.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        admin_role = request.session.get('admin_role')
+        
+        # Check if user is logged in as admin and is superadmin (role = 1)
+        if not request.session.get('admin_logged_in', False) or admin_role != 1:
+            # If it's an AJAX request, return JSON error
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'error': 'Access denied',
+                    'message': 'Super Admin access required.'
+                }, status=403)
+            
+            # Otherwise redirect with error message
+            request.session['access_denied_message'] = 'Super Admin access required.'
+            return redirect('home')
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def section_required(view_func):
     """
     Decorator to check if user has access to a specific section.

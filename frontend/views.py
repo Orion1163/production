@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from functools import wraps
-from .decorators import admin_role_required
+from .decorators import admin_role_required, superadmin_required
 from .role_constants import get_accessible_sections, has_role_access
 
 
@@ -85,10 +85,11 @@ def create_new_user(request):
     return render(request, 'admin/add_user_form.html')
 
 @admin_login_required
-@admin_role_required
+@superadmin_required
 def admin_management(request):
     """
     Render the admin management page.
+    Only accessible to superadmins.
     """
     return render(request, 'admin/admin_management.html')
 
@@ -210,6 +211,8 @@ def logout(request):
         del request.session['admin_emp_id']
     if 'admin_logged_in' in request.session:
         del request.session['admin_logged_in']
+    if 'admin_role' in request.session:
+        del request.session['admin_role']
     if 'user_roles' in request.session:
         del request.session['user_roles']
     

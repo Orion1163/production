@@ -111,6 +111,8 @@ class AdminLoginView(APIView):
         # Store admin info in session
         request.session['admin_emp_id'] = admin.emp_id
         request.session['admin_logged_in'] = True
+        # Store actual admin role in session (1 = Super Admin, 2 = Admin)
+        request.session['admin_role'] = admin.role
         # Store admin role (Administrator = role 1) in session for role-based access control
         request.session['user_roles'] = [1]  # Administrator role
         
@@ -193,6 +195,10 @@ class AdminLogoutView(APIView):
             del request.session['admin_emp_id']
         if 'admin_logged_in' in request.session:
             del request.session['admin_logged_in']
+        if 'admin_role' in request.session:
+            del request.session['admin_role']
+        if 'user_roles' in request.session:
+            del request.session['user_roles']
         
         # Flush the session
         request.session.flush()
