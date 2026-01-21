@@ -191,7 +191,7 @@ def split_sections_by_qc(enabled_sections, procedure_config):
         tuple: (pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config)
     """
     pre_qc_sections_list = [
-        'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+        'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded',
         'leaded_qc', 'prod_qc'
     ]
     post_qc_sections_list = [

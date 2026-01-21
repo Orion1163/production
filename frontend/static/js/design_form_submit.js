@@ -67,6 +67,7 @@
     // List of all possible sections (matching the form HTML)
     const sections = [
       'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+      'leaded',
       'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
       'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
     ];
@@ -205,6 +206,7 @@
         'smd_qc': 'smd_qc_done_by',
         'pre_forming_qc': 'pre_forming_qc_done_by',
         'accessories_packing': 'accessories_packing_done_by',
+        'leaded': 'leaded_done_by',
         'leaded_qc': 'leaded_qc_done_by',
         'prod_qc': 'prodqc_done_by',
         'qc': 'qc_done_by',
@@ -265,6 +267,7 @@
           'smd_qc': 'SMD QC',
           'pre_forming_qc': 'Pre-Forming QC',
           'accessories_packing': 'Accessories Packing',
+          'leaded': 'Leaded',
           'leaded_qc': 'Leaded QC',
           'prod_qc': 'Production QC',
           'qc': 'QC',

@@ -168,8 +168,9 @@ def register_dynamic_model_in_admin(model_class, part_name):
                 'smd_qc',                 # 3. SMD QC (QC after SMD)
                 'pre_forming_qc',         # 4. Pre-Forming QC
                 'accessories_packing',    # 5. Accessories Packing
-                'leaded_qc',              # 6. Leaded QC
-                'prod_qc',                # 7. Production QC
+                'leaded',                 # 6. Leaded
+                'leaded_qc',              # 7. Leaded QC
+                'prod_qc',                # 8. Production QC
                 'qc',                     # 8. QC (general QC)
                 'testing',                # 9. Testing
                 'heat_run',               # 10. Heat Run
@@ -211,7 +212,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
             # Use production workflow order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
+                'leaded', 'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             # Process longer section names first to avoid conflicts
@@ -228,7 +229,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         # Use production workflow order
         section_order = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+            'leaded', 'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
             'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
         ]
         sorted_sections = sorted(section_order, key=len, reverse=True)
@@ -266,6 +267,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'smd_qc': 'SMD QC',
         'pre_forming_qc': 'Pre-Forming QC',
         'accessories_packing': 'Accessories Packing',
+        'leaded': 'Leaded',
         'leaded_qc': 'Leaded QC',
         'prod_qc': 'Production QC',
         'qc': 'QC',
@@ -287,8 +289,9 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'smd_qc',                 # 3. SMD QC
         'pre_forming_qc',         # 4. Pre-Forming QC
         'accessories_packing',    # 5. Accessories Packing
-        'leaded_qc',              # 6. Leaded QC
-        'prod_qc',                # 7. Production QC
+        'leaded',                 # 6. Leaded
+        'leaded_qc',              # 7. Leaded QC
+        'prod_qc',                # 8. Production QC
         'qc',                     # 8. QC
         'qc_images',              # 9. QC Images
         'programming',            # 10. Programming

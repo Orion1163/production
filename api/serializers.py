@@ -335,6 +335,20 @@ class LeadedQCUpdateSerializer(serializers.Serializer):
     leaded_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded QC')
 
 
+class LeadedDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Leaded data by Kit No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
+
+
+class LeadedUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Leaded data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    leaded_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded processing')
+
+
 class ProdQCDataFetchSerializer(serializers.Serializer):
     """Serializer for fetching Prod QC data by SO No"""
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')

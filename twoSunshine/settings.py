@@ -29,6 +29,13 @@ DEBUG = False
 ALLOWED_HOSTS = ['*']
 
 
+#USE_X_FORWARDED_HOST = True
+#SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://two.sunshineiotronics.com",
+    "http://www.two.sunshineiotronics.com",
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -66,7 +73,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'frontend.context_processors.admin_role',
-            ],
+             ],
         },
     },
 ]

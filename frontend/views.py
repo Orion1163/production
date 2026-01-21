@@ -178,6 +178,7 @@ def user_section_page(request, part_no, section):
         'smd_qc': 'user/pages/smd_qc.html',
         'pre_forming_qc': 'user/pages/pre_forming_qc.html',
         'accessories_packing': 'user/pages/accessories_packing.html',
+        'leaded': 'user/pages/leaded.html',
         'leaded_qc': 'user/pages/leaded_qc.html',
         'prod_qc': 'user/pages/prod_qc.html',
         'qc': 'user/pages/qc.html',
