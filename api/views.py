@@ -131,6 +131,21 @@ class UserLoginView(APIView):
     """
     Handle user login authentication for normal users.
     """
+    from django.views.decorators.csrf import ensure_csrf_cookie
+    from django.utils.decorators import method_decorator
+    
+    @method_decorator(ensure_csrf_cookie)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request):
+        """
+        GET request to ensure CSRF cookie is set.
+        """
+        return Response(
+            {'message': 'CSRF cookie set'}, 
+            status=status.HTTP_200_OK
+        )
     
     def post(self, request):
         emp_id = request.data.get('emp_id')
@@ -311,8 +326,59 @@ class ProductionProcedureCreateView(APIView):
     """
     Handle production procedure form submission.
     Creates ModelPart and PartProcedureDetail records.
+    Supports both POST (create) and PUT (update) methods.
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    def put(self, request, model_no):
+        """
+        Update existing procedure for a model.
+        """
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            # Parse the form data
+            data = {
+                'model_no': model_no,
+                'form_image': request.FILES.get('form_image'),
+                'qc_video': request.FILES.get('qc_video'),
+                'testing_video': request.FILES.get('testing_video'),
+                'parts': self._extract_parts_data(request)
+            }
+            
+            serializer = ProductionProcedureSerializer(data=data)
+            if serializer.is_valid():
+                result = serializer.update(model_no, serializer.validated_data)
+                
+                # Create/update database tables for dynamic models
+                import sys
+                
+                from api.dynamic_model_utils import ensure_all_dynamic_tables_exist
+                try:
+                    table_result = ensure_all_dynamic_tables_exist()
+                    # Add table creation info to response
+                    result['tables_created'] = len(table_result.get('created', []))
+                    result['tables_failed'] = len(table_result.get('failed', []))
+                    if table_result.get('failed'):
+                        result['table_errors'] = table_result.get('failed', [])
+                except Exception as e:
+                    import traceback
+                    traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+                
+                return Response(result, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def post(self, request):
         # Check if admin is logged in

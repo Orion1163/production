@@ -44,9 +44,22 @@ def design_procedure(request):
 @admin_role_required
 def design_procedure_create(request):
     """
-    Render the standalone form for creating/editing a procedure.
+    Render the standalone form for creating a procedure.
     """
     return render(request, 'admin/designProcedure_form.html')
+
+
+@admin_login_required
+@admin_role_required
+def design_procedure_edit(request, model_no):
+    """
+    Render the standalone form for editing a procedure.
+    """
+    context = {
+        'model_no': model_no,
+        'is_edit_mode': True
+    }
+    return render(request, 'admin/designProcedure_form.html', context)
 
 @admin_login_required
 @admin_role_required

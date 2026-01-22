@@ -17,7 +17,7 @@
       <p class="page-eyebrow">
         Production · Procedure Designer
       </p>
-      <h2 style="margin: 0">Add Production Procedure</h2>
+      <h2 style="margin: 0">{% if is_edit_mode %}Edit{% else %}Add{% endif %} Production Procedure</h2>
     </div>
     <a class="btn" href="{% url 'design_procedure' %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -102,7 +102,7 @@
       </div>
 
       <div class="submit-row">
-        <button class="btn" type="submit">Save Procedure</button>
+        <button class="btn" type="submit">{% if is_edit_mode %}Update{% else %}Save{% endif %} Procedure</button>
       </div>
     </form>
   </section>
@@ -673,5 +673,12 @@
 {% block extra_scripts %}
 <script src="{% static 'js/bom_api.js' %}" defer></script>
 <script src="{% static 'js/design.js' %}" defer></script>
+{% if is_edit_mode %}
+<script>
+  window.EDIT_MODE = true;
+  window.EDIT_MODEL_NO = '{{ model_no }}';
+</script>
+<script src="{% static 'js/design_form_edit.js' %}" defer></script>
+{% endif %}
 <script src="{% static 'js/design_form_submit.js' %}" defer></script>
 {% endblock %}

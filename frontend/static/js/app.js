@@ -305,6 +305,26 @@ startAutoRotation();
       }
     }
 
+    // Ensure CSRF cookie is set by making a GET request first
+    // This is a workaround for when the cookie isn't set on page load
+    async function ensureCsrfCookie() {
+      try {
+        await fetch('/api/v2/user/login/', {
+          method: 'GET',
+          credentials: 'include',
+        });
+      } catch (e) {
+        // Ignore errors - this is just to set the cookie
+      }
+    }
+    
+    // Try to ensure CSRF cookie is set when form is initialized
+    // Only do this if we don't have a token
+    const initialCsrfToken = getCsrfToken(userForm);
+    if (!initialCsrfToken) {
+      ensureCsrfCookie();
+    }
+    
     userForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -360,10 +380,13 @@ startAutoRotation();
         console.warn('CSRF token not found. Attempting to get from form input...');
         const csrfInput = userForm.querySelector('input[name="csrfmiddlewaretoken"]');
         if (csrfInput) {
-          console.log('Found CSRF token in form input');
+          console.log('Found CSRF token in form input:', csrfInput.value.substring(0, 10) + '...');
         } else {
           console.warn('CSRF token not found in form input either');
         }
+        console.warn('Available cookies:', document.cookie);
+      } else {
+        console.log('CSRF token found:', csrfToken.substring(0, 10) + '...');
       }
       
       const submitButton = userForm.querySelector('.sign-btn');
@@ -376,14 +399,22 @@ startAutoRotation();
           submitButton.value = 'Signing In...';
         }
 
+        // Build headers - try both header name variations
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+        
+        // Add CSRF token with correct header name
+        // Django expects X-CSRFToken (all uppercase) by default
+        if (csrfToken) {
+          headers['X-CSRFToken'] = csrfToken;
+        }
+
         const response = await fetch('/api/v2/user/login/', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRFToken': csrfToken || '',
-          },
-          credentials: 'same-origin', // Include cookies for session
+          headers: headers,
+          credentials: 'include', // Include cookies for session and CSRF
           body: JSON.stringify({
             emp_id: parseInt(empId, 10),
             pin: parseInt(pin, 10),

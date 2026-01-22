@@ -630,21 +630,41 @@ def register_dynamic_model_in_admin(model_class, part_name):
         # We only register it in Django admin here
         
         # Register the model - handle AlreadyRegistered gracefully
+        # Always unregister first if it exists, then register fresh
         try:
+            # Check if model is already registered and unregister it first
+            if model_class in admin.site._registry:
+                try:
+                    admin.site.unregister(model_class)
+                    import sys
+                    print(f"Unregistered existing {model_class.__name__} before re-registering", file=sys.stderr)
+                except Exception as e:
+                    import sys
+                    print(f"Warning: Could not unregister {model_class.__name__}: {e}", file=sys.stderr)
+            
+            # Register the model
             admin.site.register(model_class, DynamicModelAdmin)
+            import sys
+            print(f"Registered {model_class.__name__} in admin", file=sys.stderr)
         except AlreadyRegistered:
             # Model already registered, unregister and re-register to ensure it's up to date
             try:
                 admin.site.unregister(model_class)
                 admin.site.register(model_class, DynamicModelAdmin)
+                import sys
+                print(f"Re-registered {model_class.__name__} in admin", file=sys.stderr)
             except Exception as e:
-                pass
+                import sys
+                print(f"Error re-registering {model_class.__name__}: {e}", file=sys.stderr)
         except Exception as reg_error:
-            pass
             # Try to register directly in registry as fallback
             try:
                 admin.site._registry[model_class] = DynamicModelAdmin(model_class, admin.site)
-            except:
+                import sys
+                print(f"Registered {model_class.__name__} directly in registry", file=sys.stderr)
+            except Exception as e:
+                import sys
+                print(f"Error registering {model_class.__name__} in registry: {e}", file=sys.stderr)
                 pass
         
         # Force admin to recognize the model by updating its internal structures
@@ -658,9 +678,14 @@ def register_dynamic_model_in_admin(model_class, part_name):
             if hasattr(admin.site, '_app_dict'):
                 delattr(admin.site, '_app_dict')
             
-            # Also clear any per-request caches
+            # Clear URL pattern cache if it exists
+            if hasattr(admin.site, '_urls'):
+                delattr(admin.site, '_urls')
+            
+            # Force admin to rebuild its app list on next request
+            # Clear any lazy evaluation caches
             if hasattr(admin.site, '_registry'):
-                # Force admin to rebuild its app list on next request
+                # The registry is already updated, just need to clear derived caches
                 pass
             
             # Ensure model_name is set correctly (Django admin uses this for URLs)
@@ -697,7 +722,7 @@ def register_all_dynamic_models_in_admin():
     Register all existing dynamic models in Django admin.
     This should be called when Django admin loads.
     """
-    from .models import ModelPart
+    from .models import ModelPart, PartProcedureDetail
     
     registered_count = 0
     

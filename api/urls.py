@@ -27,6 +27,7 @@ urlpatterns = [
     path('admins/', AdminListCreateView.as_view(), name='admin-list-create'),
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('production-procedure/', ProductionProcedureCreateView.as_view(), name='production-procedure-create'),
+    path('production-procedure/<str:model_no>/', ProductionProcedureCreateView.as_view(), name='production-procedure-update'),
     path('model-parts/', ModelPartListView.as_view(), name='model-part-list'),
     path('procedure-detail/<str:model_no>/', ProcedureDetailView.as_view(), name='procedure-detail'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),

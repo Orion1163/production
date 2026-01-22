@@ -517,7 +517,8 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             in_process_model, completion_model = DynamicModelRegistry.get_both(part_name)
             return {'in_process': in_process_model, 'completion': completion_model}
         else:
-            # New config provided - unregister old models and create new ones
+            # New config provided - ALWAYS unregister old models and create new ones
+            # This ensures table structure is updated when config changes
             # Unregister both models and clean up from Django registry
             DynamicModelRegistry.unregister(part_name)
             
@@ -534,7 +535,9 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
                 if hasattr(api_models, completion_class):
                     delattr(api_models, completion_class)
             except Exception as e:
-                pass
+                import sys
+                import traceback
+                traceback.print_exception(*sys.exc_info(), file=sys.stderr)
     
     # Split sections into pre-QC and post-QC
     pre_qc_sections, post_qc_sections, pre_qc_config, post_qc_config = split_sections_by_qc(
@@ -677,6 +680,7 @@ def get_dynamic_part_model(part_name, table_type='in_process'):
 def ensure_dynamic_model_exists(part_name, enabled_sections, procedure_config=None):
     """
     Ensure dynamic models exist for a part. Create them if they don't.
+    If procedure_config is provided and models exist, recreate them with new config.
     
     Args:
         part_name (str): The part number/name
@@ -686,10 +690,24 @@ def ensure_dynamic_model_exists(part_name, enabled_sections, procedure_config=No
     Returns:
         dict: {'in_process': model_class, 'completion': model_class}
     """
+    # If procedure_config is provided, always recreate models to ensure structure matches
+    if procedure_config is not None:
+        # Check if models exist - if they do, we need to recreate them
+        existing_models = get_dynamic_part_model(part_name, None)
+        if existing_models[0] is not None or existing_models[1] is not None:
+            # Models exist - recreate them with new config
+            # Unregister first (this is already done in create_dynamic_part_model if needed)
+            models_dict = create_dynamic_part_model(part_name, enabled_sections, procedure_config)
+            return models_dict
+    
+    # Check if models already exist
     in_process_model, completion_model = get_dynamic_part_model(part_name, None)
     if in_process_model is None and completion_model is None:
+        # Models don't exist - create them
         models_dict = create_dynamic_part_model(part_name, enabled_sections, procedure_config)
         return models_dict
+    
+    # Models exist and no new config provided - return existing
     return {'in_process': in_process_model, 'completion': completion_model}
 
 

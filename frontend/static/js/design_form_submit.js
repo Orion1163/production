@@ -42,9 +42,9 @@
     if (submitButton) {
       submitButton.disabled = isSubmitting;
       if (isSubmitting) {
-        submitButton.textContent = 'Saving...';
+        submitButton.textContent = window.EDIT_MODE ? 'Updating...' : 'Saving...';
       } else {
-        submitButton.textContent = 'Save Procedure';
+        submitButton.textContent = window.EDIT_MODE ? 'Update Procedure' : 'Save Procedure';
       }
     }
 
@@ -556,12 +556,23 @@
     }
 
     const csrfToken = getCookie('csrftoken') || formData.get('csrfmiddlewaretoken');
+    const isEditMode = window.EDIT_MODE === true;
+    const modelNo = window.EDIT_MODEL_NO;
+    
+    // Determine API URL and method
+    let apiUrl = API_BASE_URL;
+    let method = 'POST';
+    
+    if (isEditMode && modelNo) {
+      apiUrl = `${API_BASE_URL}${modelNo}/`;
+      method = 'PUT';
+    }
 
     try {
       toggleSubmittingState(true);
 
-      const response = await fetch(API_BASE_URL, {
-        method: 'POST',
+      const response = await fetch(apiUrl, {
+        method: method,
         headers: {
           'X-CSRFToken': csrfToken || '',
         },
@@ -570,13 +581,13 @@
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.message || 'Failed to save procedure';
+        const errorMessage = errorData.error || errorData.message || `Failed to ${isEditMode ? 'update' : 'save'} procedure`;
         throw new Error(errorMessage);
       }
 
       const result = await response.json();
       
-      showSuccess(result.message || 'Procedure saved successfully!');
+      showSuccess(result.message || `Procedure ${isEditMode ? 'updated' : 'saved'} successfully!`);
 
       // Redirect after success
       setTimeout(() => {
@@ -584,8 +595,8 @@
       }, 1500);
 
     } catch (error) {
-      console.error('Failed to save procedure:', error);
-      showError(error.message || 'Unable to save procedure. Please try again.');
+      console.error(`Failed to ${isEditMode ? 'update' : 'save'} procedure:`, error);
+      showError(error.message || `Unable to ${isEditMode ? 'update' : 'save'} procedure. Please try again.`);
     } finally {
       toggleSubmittingState(false);
     }

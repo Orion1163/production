@@ -108,6 +108,25 @@
     tdAction.setAttribute('data-label', 'Action');
     const actionCell = document.createElement('div');
     actionCell.className = 'action-cell';
+    
+    // Edit button
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'icon-btn edit-btn';
+    editBtn.setAttribute('aria-label', `Edit ${procedure.model_no}`);
+    editBtn.addEventListener('click', () => {
+      window.location.href = `/production-procedure/edit/${procedure.model_no}/`;
+    });
+    
+    // Edit icon SVG
+    editBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    `;
+    
+    // View button
     const viewBtn = document.createElement('button');
     viewBtn.type = 'button';
     viewBtn.className = 'icon-btn view-btn';
@@ -124,6 +143,7 @@
       </svg>
     `;
     
+    actionCell.appendChild(editBtn);
     actionCell.appendChild(viewBtn);
     tdAction.appendChild(actionCell);
 

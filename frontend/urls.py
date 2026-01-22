@@ -14,6 +14,11 @@ urlpatterns = [
         name='design_procedure_create',
     ),
     path(
+        'production-procedure/edit/<str:model_no>/',
+        views.design_procedure_edit,
+        name='design_procedure_edit',
+    ),
+    path(
         'add-user/',
         views.add_user,
         name='add_user',
