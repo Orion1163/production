@@ -38,6 +38,9 @@
     11: 'Pre-Forming QC',
     12: 'Leaded QC',
     13: 'Production QC',
+    14: 'Programmer',
+    15: 'Accessories Packing',
+    16: 'Leaded',
   };
 
   const applyEditPinVisibilityState = (shouldShow) => {

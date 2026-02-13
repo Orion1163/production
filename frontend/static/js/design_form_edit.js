@@ -179,6 +179,8 @@
           if (sectionData.custom_fields && sectionData.custom_fields.length > 0) {
             sectionData.custom_fields.forEach(fieldObj => {
               const fieldName = typeof fieldObj === 'string' ? fieldObj : (fieldObj.name || fieldObj.label);
+              // Format field name: replace underscores with spaces and capitalize words
+              const formattedFieldName = fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
               const inputList = panel.querySelector('.panel-card .input-list');
               if (inputList && typeof addInputField === 'function') {
                 // Find the add button in the input panel
@@ -190,7 +192,7 @@
                   
                   const input = document.createElement('input');
                   input.type = 'text';
-                  input.value = fieldName;
+                  input.value = formattedFieldName;
                   input.required = true;
                   
                   const removeBtn = document.createElement('button');
@@ -209,12 +211,25 @@
             });
           }
 
-          // Add custom checkboxes
+          // Add custom checkboxes (filter out section titles that are automatically added)
           if (sectionData.custom_checkboxes && sectionData.custom_checkboxes.length > 0) {
-            sectionData.custom_checkboxes.forEach(checkboxObj => {
+            // Filter out checkboxes that match the section key (these are automatically added section titles)
+            const filteredCheckboxes = sectionData.custom_checkboxes.filter(checkboxObj => {
+              const checkboxName = typeof checkboxObj === 'string' 
+                ? checkboxObj 
+                : (checkboxObj.name || checkboxObj.label || '');
+              const checkboxNameLower = checkboxName.toLowerCase().replace(/\s+/g, '_');
+              const sectionKeyLower = sectionKey.toLowerCase();
+              // Exclude if checkbox name matches section key exactly
+              return checkboxNameLower !== sectionKeyLower;
+            });
+            
+            filteredCheckboxes.forEach(checkboxObj => {
               const checkboxName = typeof checkboxObj === 'string' 
                 ? checkboxObj 
                 : (checkboxObj.name || checkboxObj.label);
+              // Format checkbox name: replace underscores with spaces and capitalize words
+              const formattedCheckboxName = checkboxName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
               const checkboxList = panel.querySelector('.panel-card.accent .input-list');
               if (checkboxList && typeof addCheckboxField === 'function') {
                 // Find the add button in the checkbox panel
@@ -226,7 +241,7 @@
                   
                   const input = document.createElement('input');
                   input.type = 'text';
-                  input.value = checkboxName;
+                  input.value = formattedCheckboxName;
                   input.required = true;
                   
                   const removeBtn = document.createElement('button');
