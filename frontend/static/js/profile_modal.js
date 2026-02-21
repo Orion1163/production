@@ -36,47 +36,41 @@
         return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : '';
     }
 
+    function roleToString(role) {
+        if (role == null) return '';
+        if (typeof role === 'string') return role.trim();
+        if (typeof role === 'number') return String(role);
+        if (typeof role === 'object' && role !== null && typeof role.name === 'string') return role.name.trim();
+        if (typeof role === 'object' && role !== null && typeof role.role_name === 'string') return role.role_name.trim();
+        return String(role).trim();
+    }
+
     /**
      * Map role value to display name
      * Handles both numeric IDs and string names
      */
     function mapRoleToLabel(role) {
-        // If role is already a string and exists in values, return it
+        const str = roleToString(role);
+        if (!str) return '';
+
         if (typeof role === 'string') {
-            // Check if it's already a valid label
             const roleValues = Object.values(ROLE_LABELS);
-            if (roleValues.includes(role)) {
-                return role;
-            }
-            // Try to find by name (case-insensitive)
+            if (roleValues.includes(role)) return role;
             const found = Object.entries(ROLE_LABELS).find(
                 ([_, label]) => label.toLowerCase() === role.toLowerCase()
             );
-            if (found) {
-                return found[1];
-            }
-            // If it's a number as string, convert it
+            if (found) return found[1];
             const numRole = parseInt(role, 10);
-            if (!isNaN(numRole) && ROLE_LABELS[numRole]) {
-                return ROLE_LABELS[numRole];
-            }
-            // Return as-is if no mapping found
+            if (!isNaN(numRole) && ROLE_LABELS[numRole]) return ROLE_LABELS[numRole];
             return role;
         }
-        
-        // If role is a number, map it
-        if (typeof role === 'number' && ROLE_LABELS[role]) {
-            return ROLE_LABELS[role];
-        }
-        
-        // Fallback: try to convert to number and map
-        const numRole = parseInt(role, 10);
-        if (!isNaN(numRole) && ROLE_LABELS[numRole]) {
-            return ROLE_LABELS[numRole];
-        }
-        
-        // Return original if no mapping found
-        return role;
+
+        if (typeof role === 'number' && ROLE_LABELS[role]) return ROLE_LABELS[role];
+
+        const numRole = parseInt(str, 10);
+        if (!isNaN(numRole) && ROLE_LABELS[numRole]) return ROLE_LABELS[numRole];
+
+        return str;
     }
 
     /**
@@ -86,20 +80,11 @@
         if (!roles || !Array.isArray(roles) || roles.length === 0) {
             return [];
         }
-        
-        // Map each role to its label and remove duplicates
-        const mappedRoles = roles
+        const mapped = roles
             .map(role => mapRoleToLabel(role))
-            .filter(role => {
-                // Ensure role is a string before calling trim
-                if (role == null) return false;
-                const roleStr = String(role);
-                return roleStr.trim().length > 0;
-            })
-            .map(role => String(role).trim()); // Convert to string and trim
-        
-        // Remove duplicates and sort
-        return Array.from(new Set(mappedRoles)).sort();
+            .map(role => (typeof role === 'string' ? role : String(role || '')).trim())
+            .filter(str => str.length > 0);
+        return Array.from(new Set(mapped)).sort();
     }
 
     function createProfileModal() {
