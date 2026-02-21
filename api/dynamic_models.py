@@ -127,6 +127,22 @@ class DynamicModelRegistry:
                         pass
 
 
+def sanitize_field_name(name):
+    """
+    Sanitize a field name to be a valid Python identifier and DB column name.
+    Only [a-zA-Z0-9_] allowed; strip leading/trailing underscores; no leading digit.
+    """
+    if not name or not isinstance(name, str):
+        return 'field'
+    s = re.sub(r'[^a-zA-Z0-9_]', '_', str(name).strip())
+    s = re.sub(r'_+', '_', s).strip('_')
+    if not s:
+        return 'field'
+    if s[0].isdigit():
+        s = 'f_' + s
+    return s
+
+
 def sanitize_part_name(part_name):
     """
     Sanitize part name to be a valid Python class name and database table name.
@@ -269,10 +285,9 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             blank=True,
             null=True,
             verbose_name=label,
-            help_text=label
+            help_text=label,
+            unique=(common_field == 'usid')
         )
-        if common_field == 'usid':
-            fields[common_field].unique = True
         common_fields_added.add(common_field)
         field_metadata[common_field] = {
             'label': label,
@@ -302,40 +317,37 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             for field_obj in custom_fields:
                 # custom_fields is an array of objects with 'name' and 'label'
                 if isinstance(field_obj, dict):
-                    field_name = field_obj.get('name')
-                    field_label = field_obj.get('label', field_name)
+                    field_name_raw = field_obj.get('name')
+                    field_label = field_obj.get('label', field_name_raw)
                 else:
-                    # Fallback: if it's just a string, use it as name
-                    field_name = str(field_obj)
-                    field_label = field_name.replace('_', ' ').title()
-                
-                if not field_name or field_name in common_fields_added:
+                    field_name_raw = str(field_obj)
+                    field_label = field_name_raw.replace('_', ' ').title()
+                if not field_name_raw:
                     continue
-                if field_name == 'in-process_tag_number':
+                field_name = sanitize_field_name(field_name_raw)
+                if field_name in common_fields_added:
+                    continue
+                if field_name == 'in_process_tag_number':
                     continue
                 if field_name in added_field_names:
                     continue
-                
                 section_prefix = f"{section_name}_"
-                if field_name.startswith(section_prefix):
-                    prefixed_name = field_name
-                else:
-                    prefixed_name = f"{section_name}_{field_name}"
-                
-                section_fields[section_name][prefixed_name] = {
+                prefixed_name = f"{section_name}_{field_name}" if not field_name.startswith(section_prefix) else field_name
+                sanitized_key = sanitize_field_name(prefixed_name)
+                section_fields[section_name][sanitized_key] = {
                     'type': 'text',
-                    'label': field_label,  # Use the preserved label
+                    'label': field_label,
                     'original_name': field_name,
                     'section': section_name
                 }
-                field_metadata[prefixed_name] = {
-                    'label': field_label,  # Use the preserved label
+                field_metadata[sanitized_key] = {
+                    'label': field_label,
                     'original_name': field_name,
                     'section': section_name,
                     'is_common': False
                 }
                 added_field_names.add(field_name)
-                custom_input_field_names.add(prefixed_name)  # Track this as a custom input field
+                custom_input_field_names.add(sanitized_key)
             
             # Add default fields (text fields) with section prefix
             # These are fallback fields or fields from token-list
@@ -352,29 +364,24 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                     if 'test_message' not in default_fields:
                         default_fields.append('test_message')
             
-            for field_name in default_fields:
-                # Skip if already added as custom field
+            for field_name_raw in default_fields:
+                field_name = sanitize_field_name(field_name_raw)
                 if field_name in added_field_names:
                     continue
-                
                 if field_name in common_fields_added:
                     continue
-                if field_name == 'in-process_tag_number':
+                if field_name == 'in_process_tag_number':
                     continue
-                
                 section_prefix = f"{section_name}_"
-                if field_name.startswith(section_prefix):
-                    prefixed_name = field_name
-                else:
-                    prefixed_name = f"{section_name}_{field_name}"
-                
-                section_fields[section_name][prefixed_name] = {
+                prefixed_name = f"{section_name}_{field_name}" if not field_name.startswith(section_prefix) else field_name
+                sanitized_key = sanitize_field_name(prefixed_name)
+                section_fields[section_name][sanitized_key] = {
                     'type': 'text',
                     'label': field_name.replace('_', ' ').title(),
                     'original_name': field_name,
                     'section': section_name
                 }
-                field_metadata[prefixed_name] = {
+                field_metadata[sanitized_key] = {
                     'label': field_name.replace('_', ' ').title(),
                     'original_name': field_name,
                     'section': section_name,
@@ -385,22 +392,25 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
             # Add custom checkboxes (boolean fields) with section prefix
             custom_checkboxes = section_data.get('custom_checkboxes', [])
             for checkbox in custom_checkboxes:
-                field_name = checkbox.get('name')
-                field_label = checkbox.get('label', field_name)
-                if field_name:
-                    prefixed_name = f"{section_name}_{field_name}"
-                    section_fields[section_name][prefixed_name] = {
-                        'type': 'checkbox',
-                        'label': field_label,
-                        'original_name': field_name,
-                        'section': section_name
-                    }
-                    field_metadata[prefixed_name] = {
-                        'label': field_label,
-                        'original_name': field_name,
-                        'section': section_name,
-                        'is_common': False
-                    }
+                field_name_raw = checkbox.get('name')
+                field_label = checkbox.get('label', field_name_raw)
+                if not field_name_raw:
+                    continue
+                field_name = sanitize_field_name(field_name_raw)
+                prefixed_name = f"{section_name}_{field_name}"
+                sanitized_key = sanitize_field_name(prefixed_name)
+                section_fields[section_name][sanitized_key] = {
+                    'type': 'checkbox',
+                    'label': field_label,
+                    'original_name': field_name,
+                    'section': section_name
+                }
+                field_metadata[sanitized_key] = {
+                    'label': field_label,
+                    'original_name': field_name,
+                    'section': section_name,
+                    'is_common': False
+                }
         
         # Create fields for each section's fields
         # Track custom fields across all sections for summary logging
@@ -419,11 +429,10 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                     else:
                         field_name_base = str(field_obj)
                     if field_name_base:
+                        field_clean = sanitize_field_name(field_name_base)
                         section_prefix = f"{section_name}_"
-                        if field_name_base.startswith(section_prefix):
-                            section_custom_fields.add(field_name_base)
-                        else:
-                            section_custom_fields.add(f"{section_name}_{field_name_base}")
+                        prefixed = f"{section_name}_{field_clean}" if not field_clean.startswith(section_prefix) else field_clean
+                        section_custom_fields.add(sanitize_field_name(prefixed))
             
             for field_name, field_info in sorted(section_fields[section_name].items()):
                 meta = field_metadata.get(field_name, {})
@@ -450,8 +459,6 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
                     # Check if this is a custom input field
                     if field_name in section_custom_fields:
                         all_custom_input_fields.add(field_name)
-                
-                fields[field_name]._section = field_info.get('section', '')
     
     # Add timestamps
     fields['created_at'] = models.DateTimeField(auto_now_add=True)
@@ -483,16 +490,8 @@ def _create_single_dynamic_model(part_name, enabled_sections, procedure_config, 
     fields['__module__'] = 'api.models'
     fields['__qualname__'] = class_name
     
-    # Create the model class dynamically
+    # Create the model class dynamically (Meta already has app_label and verbose names)
     model_class = type(class_name, (models.Model,), fields)
-    
-    # Ensure the model is properly associated with the 'api' app
-    if hasattr(model_class._meta, 'app_label'):
-        model_class._meta.app_label = 'api'
-    else:
-        if hasattr(model_class, 'Meta'):
-            model_class.Meta.app_label = 'api'
-    
     return model_class
 
 
@@ -605,9 +604,6 @@ def create_dynamic_part_model(part_name, enabled_sections, procedure_config=None
             
             if should_add:
                 setattr(api_models, class_name, model_class)
-            
-            if not hasattr(app_config, 'models'):
-                app_config.models = api_models
         except Exception as e:
             pass
         

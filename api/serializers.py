@@ -493,6 +493,8 @@ class KitVerificationSerializer(serializers.Serializer):
     kit_quantity = serializers.IntegerField(required=True, help_text='Kit quantity')
     kit_verification = serializers.BooleanField(required=True, help_text='Kit verification status')
     so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom field values from procedure config')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox values from procedure config')
 
 
 class SMDDataFetchSerializer(serializers.Serializer):
@@ -507,6 +509,8 @@ class SMDUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class SMDQCDataFetchSerializer(serializers.Serializer):
@@ -521,6 +525,8 @@ class SMDQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class PreFormingQCDataFetchSerializer(serializers.Serializer):
@@ -535,6 +541,8 @@ class PreFormingQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     pre_forming_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Pre-Forming QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class LeadedQCDataFetchSerializer(serializers.Serializer):
@@ -549,6 +557,8 @@ class LeadedQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     leaded_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class LeadedDataFetchSerializer(serializers.Serializer):
@@ -563,6 +573,8 @@ class LeadedUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     leaded_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded processing')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class ProdQCDataFetchSerializer(serializers.Serializer):
@@ -578,6 +590,8 @@ class ProdQCUpdateSerializer(serializers.Serializer):
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     prodqc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Prod QC')
     production_qc = serializers.BooleanField(required=False, default=True, help_text='Alternative field name for Prod QC boolean')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class AccessoriesPackingDataFetchSerializer(serializers.Serializer):
@@ -592,6 +606,8 @@ class AccessoriesPackingUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     accessories_packing_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Accessories Packing')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class QCProcedureConfigSerializer(serializers.Serializer):

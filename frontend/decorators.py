@@ -41,11 +41,13 @@ def role_required(*allowed_roles):
 def admin_role_required(view_func):
     """
     Decorator to check if user is an administrator (role 1).
+    Allows any logged-in admin (admin_logged_in); otherwise checks user_roles for role 1.
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        if request.session.get('admin_logged_in', False):
+            return view_func(request, *args, **kwargs)
         user_roles = request.session.get('user_roles', [])
-        
         if not is_admin(user_roles):
             # If it's an AJAX request, return JSON error
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

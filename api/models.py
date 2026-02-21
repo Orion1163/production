@@ -202,11 +202,15 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
                     import sys
                     print(f"Warning: Could not unregister {model_class.__name__}: {e}", file=sys.stderr)
             
-            # Clear admin caches
-            if hasattr(admin.site, '_app_dict'):
-                delattr(admin.site, '_app_dict')
-            if hasattr(admin.site, '_registry'):
-                # Force rebuild on next request
+            try:
+                if hasattr(admin.site, '_app_dict'):
+                    delattr(admin.site, '_app_dict')
+            except (AttributeError, TypeError):
+                pass
+            try:
+                if hasattr(admin.site, '_urls'):
+                    delattr(admin.site, '_urls')
+            except (AttributeError, TypeError):
                 pass
         except Exception as e:
             import sys
@@ -299,25 +303,15 @@ def create_dynamic_model_on_save(sender, instance, created, **kwargs):
     # Run full registration to ensure all models are properly registered
     try:
         register_all_dynamic_models_in_admin()
-        
-        # Aggressively clear all admin caches to force rebuild
-        if hasattr(admin.site, '_app_dict'):
-            delattr(admin.site, '_app_dict')
-        
-        # Clear URL pattern cache - this is critical for admin to see new models
-        if hasattr(admin.site, '_urls'):
-            delattr(admin.site, '_urls')
-        
-        # Clear any lazy-loaded URL patterns
-        if hasattr(admin.site, 'urls'):
-            # Force rebuild of URLs on next access
-            if hasattr(admin.site.urls, 'url_patterns'):
-                # Clear the cached URL patterns
-                pass
-        
-        # Clear any other caches that might prevent admin from seeing new models
-        if hasattr(admin.site, '_registry'):
-            # Force admin to rebuild its internal structures
+        try:
+            if hasattr(admin.site, '_app_dict'):
+                delattr(admin.site, '_app_dict')
+        except (AttributeError, TypeError):
+            pass
+        try:
+            if hasattr(admin.site, '_urls'):
+                delattr(admin.site, '_urls')
+        except (AttributeError, TypeError):
             pass
         
         # Also clear Django's app registry cache if needed

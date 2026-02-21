@@ -1,12 +1,15 @@
 /**
  * Accessories Packing API Integration
- * Handles fetching Accessories Packing data when Kit No is entered and populates form fields
+ * Fetches Accessories Packing procedure config (custom_fields, custom_checkboxes), renders dynamic checkboxes,
+ * fetches data by Kit No, and submits update including custom data.
  */
 
 (() => {
   'use strict';
 
   const API_BASE_URL = '/api/v2/accessories-packing-data-fetch/';
+  const ACCESSORIES_PACKING_UPDATE_URL = '/api/v2/accessories-packing-update/';
+  const ACCESSORIES_PACKING_CONFIG_URL = '/api/v2/accessories-packing-procedure-config/';
 
   /**
    * Get CSRF token from cookies
@@ -92,6 +95,84 @@
     }
 
     return null;
+  }
+
+  async function fetchAccessoriesPackingConfig() {
+    const partNo = getPartNo();
+    if (!partNo) return null;
+    try {
+      const response = await fetch(`${ACCESSORIES_PACKING_CONFIG_URL}${partNo}/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching Accessories Packing config:', error);
+      return null;
+    }
+  }
+
+  function createCheckboxField(checkboxConfig, index) {
+    const checkboxName = checkboxConfig.name || `custom_checkbox_${index}`;
+    const checkboxLabel = checkboxConfig.label || checkboxName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (checkboxName.toLowerCase() === 'accessories_packing') return null;
+
+    const checkboxGroup = document.createElement('div');
+    checkboxGroup.className = 'checkbox-group';
+    const checkboxWrapper = document.createElement('div');
+    checkboxWrapper.className = 'checkbox-wrapper';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = checkboxName;
+    checkbox.name = checkboxName;
+    checkbox.className = 'custom-checkbox';
+    checkbox.value = 'true';
+    const checkboxIndicator = document.createElement('span');
+    checkboxIndicator.className = 'custom-checkbox-indicator';
+    const label = document.createElement('label');
+    label.className = 'checkbox-label';
+    label.setAttribute('for', checkboxName);
+    label.appendChild(document.createTextNode(checkboxLabel));
+    checkboxWrapper.appendChild(checkbox);
+    checkboxWrapper.appendChild(checkboxIndicator);
+    checkboxWrapper.appendChild(label);
+    checkboxGroup.appendChild(checkboxWrapper);
+
+    checkboxWrapper.addEventListener('click', function (e) {
+      if (e.target === checkboxWrapper || e.target === checkboxIndicator) {
+        e.preventDefault();
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    checkbox.addEventListener('change', function () {
+      checkboxWrapper.classList.toggle('checked', this.checked);
+    });
+    return checkboxGroup;
+  }
+
+  function renderDynamicCheckboxes(config) {
+    const checkboxesSection = document.getElementById('accessoriesPackingCheckboxesSection');
+    const checkboxesGrid = document.getElementById('accessoriesPackingCheckboxesGrid');
+    if (!checkboxesSection || !checkboxesGrid) return;
+    checkboxesGrid.innerHTML = '';
+    if (!config || !config.enabled) {
+      checkboxesSection.style.display = 'none';
+      return;
+    }
+    const customCheckboxes = config.custom_checkboxes || [];
+    const filtered = customCheckboxes.filter(cb => (cb.name || '').toLowerCase() !== 'accessories_packing');
+    if (filtered.length > 0) {
+      checkboxesSection.style.display = 'block';
+      filtered.forEach((cb, i) => {
+        const el = createCheckboxField(cb, i);
+        if (el) checkboxesGrid.appendChild(el);
+      });
+    } else {
+      checkboxesSection.style.display = 'none';
+    }
   }
 
   /**
@@ -307,6 +388,16 @@
       return;
     }
 
+    const accessoriesPackingCheckboxesSection = document.getElementById('accessoriesPackingCheckboxesSection');
+    const accessoriesPackingCheckboxes = document.querySelectorAll('#accessoriesPackingCheckboxesGrid .custom-checkbox');
+    if (accessoriesPackingCheckboxesSection && accessoriesPackingCheckboxesSection.style.display !== 'none' && accessoriesPackingCheckboxes.length > 0) {
+      const allChecked = Array.prototype.every.call(accessoriesPackingCheckboxes, function (cb) { return cb.checked; });
+      if (!allChecked) {
+        showToast('Please check all required checkboxes before submitting.', 'error');
+        return;
+      }
+    }
+
     const submitButton = form.querySelector('button[type="submit"]');
     const originalButtonText = submitButton ? submitButton.querySelector('span').textContent : 'Forward to Next Section';
 
@@ -351,21 +442,35 @@
         throw new Error('User information not found. Please login again.');
       }
 
-      // Get CSRF token
       const csrfToken = getCookie('csrftoken');
 
-      // Prepare payload
+      const customFields = {};
+      const customCheckboxes = {};
+      const accessoriesPackingForm = document.getElementById('accessoriesPackingForm');
+      if (accessoriesPackingForm) {
+        accessoriesPackingForm.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (input) {
+          const name = input.name || input.id;
+          if (name && !['kitNo', 'soNo', 'accessoriesPackingAvailableQuantity', 'forwardingQuantity'].includes(name)) {
+            const val = input.value != null ? input.value.trim() : '';
+            if (name) customFields[name] = val;
+          }
+        });
+        accessoriesPackingForm.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+          const name = checkbox.name || checkbox.id;
+          if (name) customCheckboxes[name] = checkbox.checked;
+        });
+      }
+
       const payload = {
         part_no: partNo,
         kit_no: kitNo,
         forwarding_quantity: forwardingQuantity,
-        accessories_packing_done_by: empId.toString(), // Convert to string
+        accessories_packing_done_by: empId.toString(),
+        custom_fields: customFields,
+        custom_checkboxes: customCheckboxes,
       };
 
-      // API endpoint
-      const API_ENDPOINT = '/api/v2/accessories-packing-update/';
-
-      const response = await fetch(API_ENDPOINT, {
+      const response = await fetch(ACCESSORIES_PACKING_UPDATE_URL, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -384,18 +489,15 @@
       const result = await response.json();
       showToast(result.message || 'Accessories Packing data updated successfully!', 'success');
 
-      // Reset form after successful submission
       form.reset();
+      if (soNoInput) soNoInput.value = '';
+      if (accessoriesPackingAvailableQuantityInput) accessoriesPackingAvailableQuantityInput.value = '';
+      document.querySelectorAll('#accessoriesPackingCheckboxesGrid .custom-checkbox').forEach(function (cb) {
+        cb.checked = false;
+        const wrapper = cb.closest('.checkbox-wrapper');
+        if (wrapper) wrapper.classList.remove('checked');
+      });
 
-      // Clear all readonly fields as well
-      if (soNoInput) {
-        soNoInput.value = '';
-      }
-      if (accessoriesPackingAvailableQuantityInput) {
-        accessoriesPackingAvailableQuantityInput.value = '';
-      }
-
-      // Update submit button state
       updateSubmitButtonState();
 
       // Optional: Show info about next section update
@@ -438,7 +540,13 @@
       return;
     }
 
-    // Attach click event listener to search button
+    const partNo = getPartNo();
+    if (partNo) {
+      fetchAccessoriesPackingConfig().then(function (config) {
+        if (config) renderDynamicCheckboxes(config);
+      });
+    }
+
     searchBtn.addEventListener('click', handleSearchClick);
 
     // Attach Enter key press listener to Kit No input

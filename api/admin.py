@@ -241,8 +241,8 @@ def register_dynamic_model_in_admin(model_class, part_name):
                     section_map[section].append(field_name)
                     break
     
-    # Build list_display - include common fields first, then some dynamic fields
-    list_display = ['id'] + common_fields + dynamic_fields[:5] + ['created_at']
+    # Build list_display - include common fields first, then dynamic fields (so custom kit/prod_qc fields show)
+    list_display = ['id'] + common_fields + dynamic_fields[:20] + ['created_at']
     
     # Build search fields - include common fields and dynamic text fields
     search_fields = common_fields + [f for f in dynamic_fields if not f.startswith('_')][:7]
@@ -606,24 +606,6 @@ def register_dynamic_model_in_admin(model_class, part_name):
         except:
             pass
         
-        # Ensure model has correct app_label and is properly configured
-        if not hasattr(model_class._meta, 'app_label') or model_class._meta.app_label != 'api':
-            model_class._meta.app_label = 'api'
-        
-        # Set model_name if not set (needed for admin URLs)
-        # Django admin uses the lowercase class name for URLs, not the table name
-        # So we need to ensure model_name matches the lowercase class name
-        if not hasattr(model_class._meta, 'model_name'):
-            # Use the lowercase class name for model_name (this is what Django admin uses for URLs)
-            class_name_lower = model_class.__name__.lower()
-            model_class._meta.model_name = class_name_lower
-        
-        # Ensure verbose_name is set (this is what shows in admin index)
-        if not hasattr(model_class._meta, 'verbose_name') or not model_class._meta.verbose_name:
-            model_class._meta.verbose_name = part_name
-        if not hasattr(model_class._meta, 'verbose_name_plural') or not model_class._meta.verbose_name_plural:
-            model_class._meta.verbose_name_plural = f'{part_name} Entries'
-        
         # Note: Model should already be in Django's app registry from create_dynamic_part_model
         # We don't add it here to avoid duplicates - the model registration in 
         # django_apps.all_models and api.models happens in dynamic_models.py
@@ -673,36 +655,16 @@ def register_dynamic_model_in_admin(model_class, part_name):
             if model_class not in admin.site._registry:
                 admin.site._registry[model_class] = DynamicModelAdmin(model_class, admin.site)
             
-            # Clear admin's app_dict cache to force rebuild on next request
-            # This ensures the model appears in admin index immediately
-            if hasattr(admin.site, '_app_dict'):
-                delattr(admin.site, '_app_dict')
-            
-            # Clear URL pattern cache if it exists
-            if hasattr(admin.site, '_urls'):
-                delattr(admin.site, '_urls')
-            
-            # Force admin to rebuild its app list on next request
-            # Clear any lazy evaluation caches
-            if hasattr(admin.site, '_registry'):
-                # The registry is already updated, just need to clear derived caches
+            try:
+                if hasattr(admin.site, '_app_dict'):
+                    delattr(admin.site, '_app_dict')
+            except (AttributeError, TypeError):
                 pass
-            
-            # Ensure model_name is set correctly (Django admin uses this for URLs)
-            if not hasattr(model_class._meta, 'model_name') or not model_class._meta.model_name:
-                model_class._meta.model_name = model_class.__name__.lower()
-            
-            # Verify the model is in Django's app registry with the correct key
-            from django.apps import apps as django_apps
-            model_key = model_class.__name__.lower()
-            if 'api' in django_apps.all_models and model_key in django_apps.all_models['api']:
-                # Model is registered correctly
+            try:
+                if hasattr(admin.site, '_urls'):
+                    delattr(admin.site, '_urls')
+            except (AttributeError, TypeError):
                 pass
-            else:
-                # Re-register in app registry
-                if 'api' not in django_apps.all_models:
-                    django_apps.all_models['api'] = {}
-                django_apps.all_models['api'][model_key] = model_class
         except Exception as e:
             pass
         
