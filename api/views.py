@@ -1137,14 +1137,12 @@ class KitVerificationView(APIView):
                             if isinstance(checkbox_value, str):
                                 checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
                             entry_data[model_field] = bool(checkbox_value)
-            except PartProcedureDetail.DoesNotExist:
+            except (PartProcedureDetail.DoesNotExist, Exception):
                 pass
-            except Exception:
-                pass
-            
+
             # Debug: Log what we're trying to insert
             import sys
-            
+
             # Also try to get field names from the database table directly
             try:
                 from django.db import connection
@@ -1154,7 +1152,7 @@ class KitVerificationView(APIView):
                     db_columns = [row[1] for row in cursor.fetchall()]
             except Exception as e:
                 pass
-            
+
             # Check if we found the critical fields (kit_no and so_no)
             missing_fields = []
             has_kit_no = any('kit_no' in k or 'kit_no' == k for k in entry_data.keys())
