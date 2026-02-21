@@ -28,16 +28,16 @@ class Admin(models.Model):
         return str(self.emp_id)
     
     def get_role_name(self):
-        """Get the role name based on role value."""
-        if self.role == 1:
+        role_val = getattr(self, 'role', 1)
+        if role_val == 1:
             return 'superadmin'
-        elif self.role == 2:
+        elif role_val == 2:
             return 'admin'
         return 'unknown'
-    
+
     def get_role_display_name(self):
-        """Get the display name for the role."""
-        return dict(self.ROLE_CHOICES).get(self.role, 'Unknown')
+        role_val = getattr(self, 'role', 1)
+        return dict(self.ROLE_CHOICES).get(role_val, 'Unknown')
 
 class ModelPart(models.Model):
     """

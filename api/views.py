@@ -112,10 +112,11 @@ class AdminLoginView(APIView):
         # Store admin info in session
         request.session['admin_emp_id'] = admin.emp_id
         request.session['admin_logged_in'] = True
-        # Store actual admin role in session (1 = Super Admin, 2 = Admin)
-        request.session['admin_role'] = admin.role
-        # Store admin role (Administrator = role 1) in session for role-based access control
-        request.session['user_roles'] = [1]  # Administrator role
+        admin_role_value = getattr(admin, 'role', 1)
+        if admin_role_value not in (1, 2):
+            admin_role_value = 1
+        request.session['admin_role'] = admin_role_value
+        request.session['user_roles'] = [1]
         
         # Return admin data
         serializer = AdminSerializer(admin)
