@@ -1,4 +1,5 @@
 from .models import User, Admin, ModelPart, PartProcedureDetail, USIDCounter
+from .dynamic_models import sanitize_field_name
 from .serializers import (
     UserSerializer, AdminSerializer, ProductionProcedureSerializer, 
     ModelPartGroupSerializer, ProcedureDetailSerializer, PartProcedureDetailSerializer,
@@ -111,6 +112,8 @@ class AdminLoginView(APIView):
         # Store admin info in session
         request.session['admin_emp_id'] = admin.emp_id
         request.session['admin_logged_in'] = True
+        # Store actual admin role in session (1 = Super Admin, 2 = Admin)
+        request.session['admin_role'] = admin.role
         # Store admin role (Administrator = role 1) in session for role-based access control
         request.session['user_roles'] = [1]  # Administrator role
         
@@ -129,6 +132,21 @@ class UserLoginView(APIView):
     """
     Handle user login authentication for normal users.
     """
+    from django.views.decorators.csrf import ensure_csrf_cookie
+    from django.utils.decorators import method_decorator
+    
+    @method_decorator(ensure_csrf_cookie)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request):
+        """
+        GET request to ensure CSRF cookie is set.
+        """
+        return Response(
+            {'message': 'CSRF cookie set'}, 
+            status=status.HTTP_200_OK
+        )
     
     def post(self, request):
         emp_id = request.data.get('emp_id')
@@ -193,6 +211,10 @@ class AdminLogoutView(APIView):
             del request.session['admin_emp_id']
         if 'admin_logged_in' in request.session:
             del request.session['admin_logged_in']
+        if 'admin_role' in request.session:
+            del request.session['admin_role']
+        if 'user_roles' in request.session:
+            del request.session['user_roles']
         
         # Flush the session
         request.session.flush()
@@ -236,6 +258,38 @@ class AdminProfileView(APIView):
             )
 
 
+class AdminListCreateView(APIView):
+    """
+    Handle listing all admins and creating a new admin profile.
+    """
+    
+    def get(self, request):
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        admins = Admin.objects.all()
+        serializer = AdminSerializer(admins, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        serializer = AdminSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class UserProfileView(APIView):
     """
     Get current user's profile details.
@@ -273,8 +327,63 @@ class ProductionProcedureCreateView(APIView):
     """
     Handle production procedure form submission.
     Creates ModelPart and PartProcedureDetail records.
+    Supports both POST (create) and PUT (update) methods.
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    def put(self, request, model_no):
+        """
+        Update existing procedure for a model.
+        """
+        # Check if admin is logged in
+        if not request.session.get('admin_logged_in', False):
+            return Response(
+                {'error': 'Not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            # Parse the form data
+            data = {
+                'model_no': model_no,
+                'form_image': request.FILES.get('form_image'),
+                'qc_video': request.FILES.get('qc_video'),
+                'testing_video': request.FILES.get('testing_video'),
+                'parts': self._extract_parts_data(request)
+            }
+            
+            serializer = ProductionProcedureSerializer(data=data)
+            if serializer.is_valid():
+                result = serializer.update(model_no, serializer.validated_data)
+                
+                # Create/update database tables for dynamic models
+                import sys
+                
+                from api.dynamic_model_utils import ensure_all_dynamic_tables_exist
+                try:
+                    table_result = ensure_all_dynamic_tables_exist()
+                    # Add table creation info to response
+                    result['tables_created'] = len(table_result.get('created', []))
+                    result['tables_failed'] = len(table_result.get('failed', []))
+                    if table_result.get('failed'):
+                        result['table_errors'] = table_result.get('failed', [])
+                except Exception as e:
+                    import traceback
+                    traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+                
+                return Response(result, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            import traceback
+            err_detail = str(e)
+            if "can't set attribute" in err_detail.lower():
+                err_detail = f"{err_detail}\n{traceback.format_exc()}"
+            return Response(
+                {'error': err_detail},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def post(self, request):
         # Check if admin is logged in
@@ -985,9 +1094,55 @@ class KitVerificationView(APIView):
             if kit_verification_field:
                 entry_data[kit_verification_field] = kit_verification_value
             
+            custom_fields = validated_data.get('custom_fields') or {}
+            custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+                kit_config = procedure_config.get('kit', {})
+                kit_custom_fields = kit_config.get('custom_fields', [])
+                kit_custom_checkboxes = kit_config.get('custom_checkboxes', [])
+                
+                for field_config in kit_custom_fields:
+                    field_name = field_config.get('name')
+                    if field_name:
+                        prefixed_field_name = f"kit_{field_name}" if not field_name.startswith('kit_') else field_name
+                        model_field = None
+                        if prefixed_field_name in all_field_names:
+                            model_field = prefixed_field_name
+                        elif field_name in all_field_names:
+                            model_field = field_name
+                        else:
+                            sanitized = sanitize_field_name(prefixed_field_name)
+                            if sanitized in all_field_names:
+                                model_field = sanitized
+                        if model_field:
+                            entry_data[model_field] = custom_fields.get(field_name, '')
+                
+                for checkbox_config in kit_custom_checkboxes:
+                    checkbox_name = checkbox_config.get('name')
+                    if checkbox_name and checkbox_name.lower() != 'kit':
+                        prefixed_checkbox_name = f"kit_{checkbox_name}" if not checkbox_name.startswith('kit_') else checkbox_name
+                        model_field = None
+                        if prefixed_checkbox_name in all_field_names:
+                            model_field = prefixed_checkbox_name
+                        elif checkbox_name in all_field_names:
+                            model_field = checkbox_name
+                        else:
+                            sanitized = sanitize_field_name(prefixed_checkbox_name)
+                            if sanitized in all_field_names:
+                                model_field = sanitized
+                        if model_field:
+                            checkbox_value = custom_checkboxes.get(checkbox_name, False)
+                            if isinstance(checkbox_value, str):
+                                checkbox_value = checkbox_value.lower() in ('true', '1', 'yes', 'on')
+                            entry_data[model_field] = bool(checkbox_value)
+            except (PartProcedureDetail.DoesNotExist, Exception):
+                pass
+
             # Debug: Log what we're trying to insert
             import sys
-            
+
             # Also try to get field names from the database table directly
             try:
                 from django.db import connection
@@ -996,7 +1151,8 @@ class KitVerificationView(APIView):
                     cursor.execute(f"PRAGMA table_info({table_name})")
                     db_columns = [row[1] for row in cursor.fetchall()]
             except Exception as e:
-            
+                pass
+
             # Check if we found the critical fields (kit_no and so_no)
             missing_fields = []
             has_kit_no = any('kit_no' in k or 'kit_no' == k for k in entry_data.keys())
@@ -1025,7 +1181,7 @@ class KitVerificationView(APIView):
                             """, [table_name])
                             db_columns = [row[0] for row in cursor.fetchall()]
                 except Exception as e:
-                    import sys
+                    pass
                 
                 return Response(
                     {
@@ -1107,7 +1263,7 @@ class KitVerificationView(APIView):
                     
                     # Find the available_quantity field for the next section in the SAME in_process model
                     # Since both kit and next section (if pre-QC) are in the same in_process table
-                    pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                    pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                     
                     if next_section_name in pre_qc_sections:
                         # Next section is also in in_process table, so we can add its field to the same entry
@@ -1149,8 +1305,7 @@ class KitVerificationView(APIView):
                     
             except Exception as next_section_error:
                 # Log error but don't fail the main kit verification
-                import sys
-                import traceback
+                pass
             
             # Create the entry in the in_process table (with both kit verification data and next section's available_quantity)
             try:
@@ -1168,6 +1323,7 @@ class KitVerificationView(APIView):
                         value = getattr(entry, field_name, None)
                         entry_values[field_name] = value
                     except Exception as e:
+                        pass
                 
                 # Check if critical fields have values
                 critical_fields_empty = []
@@ -1176,7 +1332,9 @@ class KitVerificationView(APIView):
                         critical_fields_empty.append(field_name)
                 
                 if critical_fields_empty:
+                    pass
                 else:
+                    pass
                 
                 # Prepare response data
                 response_data = {
@@ -1526,29 +1684,33 @@ class SMDUpdateView(APIView):
                 
                 return None
             
-            # Find SO No field
-            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
-            if not so_no_field:
+            # Find Kit No field (used to find the entry - request sends kit_no)
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
                 return Response(
-                    {'error': 'SO No field not found in the in_process table'},
+                    {'error': 'Kit No field not found in the in_process table'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find entry by SO No
+            # Find SO No field (optional - used to include so_no in response)
+            so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+            
+            # Find entry by Kit No
             try:
-                filter_dict = {so_no_field: so_no}
+                filter_dict = {kit_no_field: kit_no}
                 entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
                 
                 if not entries.exists():
                     return Response(
                         {
-                            'error': f'No entry found for SO No: {so_no}',
-                            'message': 'No entry found for this Sales Order Number'
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
                         },
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
                 entry = entries.first()
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
                 
                 # Find smd_available_quantity field
                 smd_available_quantity_field = find_field_name([
@@ -1609,7 +1771,7 @@ class SMDUpdateView(APIView):
                         next_section_name = enabled_sections[smd_index + 1]
                         
                         # Check if next section is in pre_qc_sections (same in_process table)
-                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                         
                         if next_section_name in pre_qc_sections:
                             # Next section is also in in_process table, so we can update its field in the same entry
@@ -1634,8 +1796,7 @@ class SMDUpdateView(APIView):
                                         next_section_available_quantity_field = field_name
                                         break
                 except Exception as next_section_error:
-                    import sys
-                    import traceback
+                    pass
                 
                 # Find smd and smd_done_by fields
                 smd_field = find_field_name(['smd', 'smd_verification', 'smd_smd', 'smd_smd_verification'])
@@ -1671,6 +1832,44 @@ class SMDUpdateView(APIView):
                     new_next_section_quantity = current_next_section_quantity + forwarding_quantity
                     update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
                 
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    smd_config = procedure_config.get('smd', {})
+                    smd_custom_fields = smd_config.get('custom_fields', [])
+                    smd_custom_checkboxes = smd_config.get('custom_checkboxes', [])
+                    for field_config in smd_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"smd_{field_name}" if not field_name.startswith('smd_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in smd_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'smd':
+                            prefixed = f"smd_{checkbox_name}" if not checkbox_name.startswith('smd_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
                 # Update the entry
                 for field_name, value in update_data.items():
                     setattr(entry, field_name, value)
@@ -1678,10 +1877,14 @@ class SMDUpdateView(APIView):
                 entry.save()
                 
                 # Prepare response
+                msg = f'SMD data updated successfully for Kit No: {kit_no}'
+                if so_no is not None and str(so_no).strip():
+                    msg += f' (SO No: {so_no})'
                 response_data = {
-                    'message': f'SMD data updated successfully for SO No: {so_no}',
+                    'message': msg,
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_smd_available_quantity': current_smd_available_quantity,
                     'new_smd_available_quantity': new_smd_available_quantity,
@@ -2014,6 +2217,9 @@ class SMDQCUpdateView(APIView):
                 
                 entry = entries.first()
                 
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
+                
                 # Find smd_qc_available_quantity field
                 smd_qc_available_quantity_field = find_field_name([
                     'smd_qc_available_quantity',
@@ -2073,7 +2279,7 @@ class SMDQCUpdateView(APIView):
                         next_section_name = enabled_sections[smd_qc_index + 1]
                         
                         # Check if next section is in pre_qc_sections (same in_process table)
-                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                         
                         if next_section_name in pre_qc_sections:
                             # Next section is also in in_process table, so we can update its field in the same entry
@@ -2098,8 +2304,7 @@ class SMDQCUpdateView(APIView):
                                         next_section_available_quantity_field = field_name
                                         break
                 except Exception as next_section_error:
-                    import sys
-                    import traceback
+                    pass
                 
                 # Find smd_qc and smd_qc_done_by fields
                 smd_qc_field = find_field_name(['smd_qc', 'smd_qc_verification', 'smd_qc_smd_qc', 'smd_qc_smd_qc_verification'])
@@ -2135,6 +2340,44 @@ class SMDQCUpdateView(APIView):
                     new_next_section_quantity = current_next_section_quantity + forwarding_quantity
                     update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
                 
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    smd_qc_config = procedure_config.get('smd_qc', {})
+                    smd_qc_custom_fields = smd_qc_config.get('custom_fields', [])
+                    smd_qc_custom_checkboxes = smd_qc_config.get('custom_checkboxes', [])
+                    for field_config in smd_qc_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"smd_qc_{field_name}" if not field_name.startswith('smd_qc_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in smd_qc_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'smd_qc':
+                            prefixed = f"smd_qc_{checkbox_name}" if not checkbox_name.startswith('smd_qc_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
                 # Update the entry
                 for field_name, value in update_data.items():
                     setattr(entry, field_name, value)
@@ -2143,9 +2386,10 @@ class SMDQCUpdateView(APIView):
                 
                 # Prepare response
                 response_data = {
-                    'message': f'SMD QC data updated successfully for SO No: {so_no}',
+                    'message': f'SMD QC data updated successfully for Kit No: {kit_no}',
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_smd_qc_available_quantity': current_smd_qc_available_quantity,
                     'new_smd_qc_available_quantity': new_smd_qc_available_quantity,
@@ -2465,6 +2709,9 @@ class PreFormingQCUpdateView(APIView):
                 
                 entry = entries.first()
                 
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
+                
                 # Find pre_forming_qc_available_quantity field
                 pre_forming_qc_available_quantity_field = find_field_name([
                     'pre_forming_qc_available_quantity',
@@ -2525,7 +2772,7 @@ class PreFormingQCUpdateView(APIView):
                         next_section_name = enabled_sections[pre_forming_qc_index + 1]
                         
                         # Check if next section is in pre_qc_sections (same in_process table)
-                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                         
                         if next_section_name in pre_qc_sections:
                             # Next section is also in in_process table, so we can update its field in the same entry
@@ -2587,6 +2834,44 @@ class PreFormingQCUpdateView(APIView):
                     new_next_section_quantity = current_next_section_quantity + forwarding_quantity
                     update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
                 
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    pre_forming_qc_config = procedure_config.get('pre_forming_qc', {})
+                    pf_qc_custom_fields = pre_forming_qc_config.get('custom_fields', [])
+                    pf_qc_custom_checkboxes = pre_forming_qc_config.get('custom_checkboxes', [])
+                    for field_config in pf_qc_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"pre_forming_qc_{field_name}" if not field_name.startswith('pre_forming_qc_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in pf_qc_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'pre_forming_qc':
+                            prefixed = f"pre_forming_qc_{checkbox_name}" if not checkbox_name.startswith('pre_forming_qc_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
                 # Update the entry
                 for field_name, value in update_data.items():
                     setattr(entry, field_name, value)
@@ -2595,9 +2880,10 @@ class PreFormingQCUpdateView(APIView):
                 
                 # Prepare response
                 response_data = {
-                    'message': f'Pre-Forming QC data updated successfully for SO No: {so_no}',
+                    'message': f'Pre-Forming QC data updated successfully for Kit No: {kit_no}',
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_pre_forming_qc_available_quantity': current_pre_forming_qc_available_quantity,
                     'new_pre_forming_qc_available_quantity': new_pre_forming_qc_available_quantity,
@@ -2917,6 +3203,9 @@ class LeadedQCUpdateView(APIView):
                 
                 entry = entries.first()
                 
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
+                
                 # Find leaded_qc_available_quantity field
                 leaded_qc_available_quantity_field = find_field_name([
                     'leaded_qc_available_quantity',
@@ -2977,7 +3266,7 @@ class LeadedQCUpdateView(APIView):
                         next_section_name = enabled_sections[leaded_qc_index + 1]
                         
                         # Check if next section is in pre_qc_sections (same in_process table)
-                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                         
                         if next_section_name in pre_qc_sections:
                             # Next section is also in in_process table, so we can update its field in the same entry
@@ -3039,6 +3328,44 @@ class LeadedQCUpdateView(APIView):
                     new_next_section_quantity = current_next_section_quantity + forwarding_quantity
                     update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
                 
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    leaded_qc_config = procedure_config.get('leaded_qc', {})
+                    lqc_custom_fields = leaded_qc_config.get('custom_fields', [])
+                    lqc_custom_checkboxes = leaded_qc_config.get('custom_checkboxes', [])
+                    for field_config in lqc_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"leaded_qc_{field_name}" if not field_name.startswith('leaded_qc_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in lqc_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'leaded_qc':
+                            prefixed = f"leaded_qc_{checkbox_name}" if not checkbox_name.startswith('leaded_qc_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
                 # Update the entry
                 for field_name, value in update_data.items():
                     setattr(entry, field_name, value)
@@ -3047,9 +3374,10 @@ class LeadedQCUpdateView(APIView):
                 
                 # Prepare response
                 response_data = {
-                    'message': f'Leaded QC data updated successfully for SO No: {so_no}',
+                    'message': f'Leaded QC data updated successfully for Kit No: {kit_no}',
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_leaded_qc_available_quantity': current_leaded_qc_available_quantity,
                     'new_leaded_qc_available_quantity': new_leaded_qc_available_quantity,
@@ -3090,6 +3418,522 @@ class LeadedQCUpdateView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+
+class LeadedDataFetchView(APIView):
+    """
+    GET API endpoint for fetching Leaded data by Kit No.
+    Returns so_no and leaded_available_quantity (from accessories_packing_available_quantity) for a given Kit No.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def get(self, request):
+        """
+        Fetch Leaded data by Kit No and part_no.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - kit_no: Kit Number (required)
+        
+        Returns:
+        - so_no: Sales Order Number
+        - leaded_available_quantity: Leaded available quantity (from accessories_packing_available_quantity)
+        """
+        try:
+            # Get query parameters
+            part_no = request.query_params.get('part_no')
+            kit_no = request.query_params.get('kit_no')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not kit_no:
+                return Response(
+                    {'error': 'kit_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
+                return Response(
+                    {'error': 'Kit No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query the in_process table for entries matching the Kit No
+            try:
+                filter_dict = {kit_no_field: kit_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Find SO No field
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                
+                # Find accessories_packing_available_quantity field (source for leaded)
+                accessories_packing_available_quantity_field = find_field_name([
+                    'accessories_packing_available_quantity',
+                    'accessories_packing_availablequantity',
+                    'accessories_packing_available_quantity_',
+                    'accessoriespacking_available_quantity',
+                ])
+                
+                # Also check for leaded_available_quantity (in case it already exists from previous processing)
+                leaded_available_quantity_field = find_field_name([
+                    'leaded_available_quantity',
+                    'leaded_availablequantity',
+                    'leaded_available_quantity_',
+                ])
+                
+                # Extract values from the entry
+                response_data = {}
+                
+                if so_no_field:
+                    so_no_value = getattr(entry, so_no_field, None)
+                    response_data['so_no'] = str(so_no_value) if so_no_value is not None else ''
+                else:
+                    response_data['so_no'] = ''
+                
+                # Get leaded_available_quantity (prefer existing leaded_available_quantity, otherwise use accessories_packing_available_quantity)
+                leaded_available_quantity_value = None
+                
+                if leaded_available_quantity_field:
+                    leaded_available_quantity_value = getattr(entry, leaded_available_quantity_field, None)
+                
+                # If leaded_available_quantity doesn't exist or is empty, use accessories_packing_available_quantity
+                if (leaded_available_quantity_value is None or leaded_available_quantity_value == '' or leaded_available_quantity_value == 0) and accessories_packing_available_quantity_field:
+                    leaded_available_quantity_value = getattr(entry, accessories_packing_available_quantity_field, None)
+                
+                if leaded_available_quantity_value is not None:
+                    response_data['leaded_available_quantity'] = str(leaded_available_quantity_value) if leaded_available_quantity_value != '' else ''
+                else:
+                    response_data['leaded_available_quantity'] = ''
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error querying in_process table: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class LeadedUpdateView(APIView):
+    """
+    PUT/PATCH API endpoint for updating Leaded data with forwarding quantity.
+    Updates leaded_available_quantity and next section's (leaded_qc) available_quantity in the same entry.
+    """
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    
+    def put(self, request):
+        """
+        Update Leaded data with forwarding quantity.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - kit_no: Kit Number (required)
+        - forwarding_quantity: Quantity to forward to next section (required)
+        - leaded_done_by: Person who did the Leaded processing (required)
+        
+        Logic:
+        - Finds entry by kit_no
+        - Updates leaded_available_quantity = current - forwarding_quantity
+        - Updates leaded_qc_available_quantity = forwarding_quantity (in same entry)
+        """
+        try:
+            # Validate serializer
+            from .serializers import LeadedUpdateSerializer
+            serializer = LeadedUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            kit_no = validated_data['kit_no']
+            forwarding_quantity = validated_data['forwarding_quantity']
+            leaded_done_by = validated_data['leaded_done_by']
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic in_process model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            in_process_model = get_or_create_part_data_model(
+                part_no,
+                table_type='in_process'
+            )
+            
+            if in_process_model is None:
+                return Response(
+                    {'error': f'In-process model not found for part {part_no}. Please ensure the part has a procedure configuration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the model
+            all_field_names = [f.name for f in in_process_model._meta.fields]
+            
+            # Helper function to find field name
+            def find_field_name(possible_names):
+                # First try exact match
+                for name in possible_names:
+                    if name in all_field_names:
+                        return name
+                    try:
+                        in_process_model._meta.get_field(name)
+                        return name
+                    except:
+                        pass
+                
+                # If no exact match, try partial matching (case-insensitive)
+                for name in possible_names:
+                    for field_name in all_field_names:
+                        field_lower = field_name.lower()
+                        name_lower = name.lower()
+                        if field_lower.replace('_', '') == name_lower.replace('_', ''):
+                            return field_name
+                        if name_lower in field_lower or field_lower in name_lower:
+                            return field_name
+                
+                return None
+            
+            # Find Kit No field
+            kit_no_field = find_field_name(['kit_no', 'kit_kit_no', 'kit_no_kit'])
+            if not kit_no_field:
+                return Response(
+                    {'error': 'Kit No field not found in the in_process table'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find entry by Kit No
+            try:
+                filter_dict = {kit_no_field: kit_no}
+                entries = in_process_model.objects.filter(**filter_dict).order_by('-id')
+                
+                if not entries.exists():
+                    return Response(
+                        {
+                            'error': f'No entry found for Kit No: {kit_no}',
+                            'message': 'No entry found for this Kit Number'
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                entry = entries.first()
+                
+                # Get SO No for response
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = None
+                if so_no_field:
+                    so_no = getattr(entry, so_no_field, None)
+                
+                # Find leaded_available_quantity field
+                leaded_available_quantity_field = find_field_name([
+                    'leaded_available_quantity',
+                    'leaded_availablequantity',
+                    'leaded_available_quantity_',
+                ])
+                
+                # If leaded_available_quantity doesn't exist, try to get from accessories_packing_available_quantity
+                if not leaded_available_quantity_field:
+                    accessories_packing_available_quantity_field = find_field_name([
+                        'accessories_packing_available_quantity',
+                        'accessories_packing_availablequantity',
+                        'accessories_packing_available_quantity_',
+                        'accessoriespacking_available_quantity',
+                    ])
+                    if accessories_packing_available_quantity_field:
+                        # Use accessories_packing_available_quantity as the source
+                        leaded_available_quantity_field = accessories_packing_available_quantity_field
+                
+                if not leaded_available_quantity_field:
+                    return Response(
+                        {'error': 'Leaded available quantity field not found in the in_process table'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current leaded_available_quantity
+                current_leaded_available_quantity = getattr(entry, leaded_available_quantity_field, None)
+                
+                # Convert to integer if it's a string
+                try:
+                    if isinstance(current_leaded_available_quantity, str):
+                        current_leaded_available_quantity = int(current_leaded_available_quantity) if current_leaded_available_quantity else 0
+                    elif current_leaded_available_quantity is None:
+                        current_leaded_available_quantity = 0
+                    else:
+                        current_leaded_available_quantity = int(current_leaded_available_quantity)
+                except (ValueError, TypeError):
+                    current_leaded_available_quantity = 0
+                
+                # Validate forwarding quantity
+                if forwarding_quantity > current_leaded_available_quantity:
+                    return Response(
+                        {
+                            'error': f'Forwarding quantity ({forwarding_quantity}) cannot be greater than available quantity ({current_leaded_available_quantity})'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Calculate new leaded_available_quantity
+                new_leaded_available_quantity = current_leaded_available_quantity - forwarding_quantity
+                
+                # Get enabled sections to find the actual next section after leaded (not hardcoded leaded_qc)
+                next_section_name = None
+                next_section_available_quantity_field = None
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    enabled_sections = procedure_detail.get_enabled_sections()
+                    leaded_index = next((i for i, s in enumerate(enabled_sections) if s == 'leaded'), None)
+                    if leaded_index is not None and leaded_index + 1 < len(enabled_sections):
+                        next_section_name = enabled_sections[leaded_index + 1]
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
+                        if next_section_name in pre_qc_sections:
+                            possible_field_names = [
+                                f'{next_section_name}_available_quantity',
+                                'available_quantity',
+                                f'{next_section_name}_availablequantity',
+                                'availablequantity',
+                            ]
+                            for fn in possible_field_names:
+                                if fn in all_field_names:
+                                    next_section_available_quantity_field = fn
+                                    break
+                            if not next_section_available_quantity_field:
+                                for fn in all_field_names:
+                                    fl = fn.lower()
+                                    if 'available' in fl and 'quantity' in fl and next_section_name.lower() in fl:
+                                        next_section_available_quantity_field = fn
+                                        break
+                except Exception:
+                    pass
+                
+                # Find leaded and leaded_done_by fields (include variants used by dynamic model)
+                leaded_field = find_field_name(['leaded', 'leaded_verification', 'leaded_leaded', 'leaded_leaded_verification'])
+                leaded_done_by_field = find_field_name([
+                    'leaded_done_by', 'leaded_leaded_done_by', 'leaded_done_by_',
+                    'leaded_leaded_done_by_',
+                ])
+                
+                # Update the entry
+                update_data = {}
+                
+                # Update leaded_available_quantity. We must only write to a dedicated leaded field, never overwrite accessories_packing_available_quantity.
+                separate_leaded_field = find_field_name(['leaded_available_quantity', 'leaded_availablequantity', 'leaded_available_quantity_'])
+                if separate_leaded_field:
+                    update_data[separate_leaded_field] = str(new_leaded_available_quantity)
+                elif leaded_available_quantity_field and 'accessories_packing' in leaded_available_quantity_field.lower():
+                    # We read from accessories_packing (leaded_available_quantity doesn't exist) - cannot write back without corrupting accessories_packing
+                    return Response(
+                        {'error': "leaded_available_quantity field not found in the in-process table. Please ensure the Leaded section has 'Available Quantity' in its default fields in the Design Procedure, then re-save the procedure."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                elif leaded_available_quantity_field:
+                    update_data[leaded_available_quantity_field] = str(new_leaded_available_quantity)
+                
+                # Add leaded boolean field (set to True)
+                if leaded_field:
+                    update_data[leaded_field] = True
+                
+                # Add leaded_done_by field
+                if leaded_done_by_field:
+                    update_data[leaded_done_by_field] = str(leaded_done_by)
+                
+                # Add next enabled section's available_quantity (forwarding_quantity)
+                if next_section_available_quantity_field:
+                    current_next = getattr(entry, next_section_available_quantity_field, None)
+                    try:
+                        if isinstance(current_next, str):
+                            current_next = int(current_next) if current_next else 0
+                        elif current_next is None:
+                            current_next = 0
+                        else:
+                            current_next = int(current_next)
+                    except (ValueError, TypeError):
+                        current_next = 0
+                    update_data[next_section_available_quantity_field] = str(current_next + forwarding_quantity)
+                
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    leaded_config = procedure_config.get('leaded', {})
+                    leaded_custom_fields = leaded_config.get('custom_fields', [])
+                    leaded_custom_checkboxes = leaded_config.get('custom_checkboxes', [])
+                    for field_config in leaded_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"leaded_{field_name}" if not field_name.startswith('leaded_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in leaded_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'leaded':
+                            prefixed = f"leaded_{checkbox_name}" if not checkbox_name.startswith('leaded_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
+                # Update the entry
+                for field_name, value in update_data.items():
+                    setattr(entry, field_name, value)
+                
+                entry.save()
+                
+                # Prepare response
+                response_data = {
+                    'message': f'Leaded data updated successfully for Kit No: {kit_no}',
+                    'part_no': part_no,
+                    'kit_no': kit_no,
+                    'forwarding_quantity': forwarding_quantity,
+                    'previous_leaded_available_quantity': current_leaded_available_quantity,
+                    'new_leaded_available_quantity': new_leaded_available_quantity,
+                    'leaded_done_by': leaded_done_by,
+                    'leaded': True,  # Leaded is marked as done
+                    'updated_fields': list(update_data.keys())
+                }
+                
+                if so_no:
+                    response_data['so_no'] = str(so_no)
+                
+                if next_section_name and next_section_available_quantity_field:
+                    response_data['next_section'] = {
+                        'section': next_section_name,
+                        'available_quantity_added': forwarding_quantity,
+                        'field_name': next_section_available_quantity_field
+                    }
+                
+                return Response(
+                    response_data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error updating entry: {str(e)}',
+                        'details': traceback.format_exc()
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 
@@ -3372,6 +4216,9 @@ class ProdQCUpdateView(APIView):
                 
                 entry = entries.first()
                 
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
+                
                 # Find prod_qc_available_quantity field
                 prod_qc_available_quantity_field = find_field_name([
                     'prod_qc_available_quantity',
@@ -3495,15 +4342,18 @@ class ProdQCUpdateView(APIView):
                         if isinstance(field_obj, models.BooleanField):
                             update_data[production_qc_field] = bool(production_qc)  # Use value from payload, ensure it's a Python boolean
                         else:
+                            pass
                     except Exception as e:
                         # If we can't verify the field type, log and skip setting it
                         pass
                 else:
+                    pass
                 
                 # Add prodqc_done_by field
                 if prodqc_done_by_field:
                     update_data[prodqc_done_by_field] = str(prodqc_done_by)
                 else:
+                    pass
                 
                 
                 # Add forwarding quantity to readyfor_production field if found
@@ -3537,6 +4387,44 @@ class ProdQCUpdateView(APIView):
                         # If we can't verify the field, skip it to avoid errors
                         import sys
                         readyfor_production_field = None
+                
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    prod_qc_config = procedure_config.get('prod_qc', {})
+                    pqc_custom_fields = prod_qc_config.get('custom_fields', [])
+                    pqc_custom_checkboxes = prod_qc_config.get('custom_checkboxes', [])
+                    for field_config in pqc_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"prod_qc_{field_name}" if not field_name.startswith('prod_qc_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in pqc_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() not in ('prod_qc', 'production_qc'):
+                            prefixed = f"prod_qc_{checkbox_name}" if not checkbox_name.startswith('prod_qc_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
                 
                 # Before updating, verify all fields in update_data are correct types
                 from django.db import models
@@ -3574,6 +4462,7 @@ class ProdQCUpdateView(APIView):
                     try:
                         setattr(entry, field_name, value)
                     except Exception as e:
+                        pass
                 
                 try:
                     entry.save()
@@ -3583,9 +4472,10 @@ class ProdQCUpdateView(APIView):
                 
                 # Prepare response
                 response_data = {
-                    'message': f'Prod QC data updated successfully for SO No: {so_no}',
+                    'message': f'Prod QC data updated successfully for Kit No: {kit_no}',
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_prod_qc_available_quantity': current_prod_qc_available_quantity,
                     'new_prod_qc_available_quantity': new_prod_qc_available_quantity,
@@ -3917,6 +4807,9 @@ class AccessoriesPackingUpdateView(APIView):
                 
                 entry = entries.first()
                 
+                so_no_field = find_field_name(['so_no', 'kit_so_no', 'so_no_kit', 'so_no_'])
+                so_no = getattr(entry, so_no_field, None) if so_no_field else None
+                
                 # Find accessories_packing_available_quantity field
                 accessories_packing_available_quantity_field = find_field_name([
                     'accessories_packing_available_quantity',
@@ -3989,7 +4882,7 @@ class AccessoriesPackingUpdateView(APIView):
                         next_section_name = enabled_sections[accessories_packing_index + 1]
                         
                         # Check if next section is in pre_qc_sections (same in_process table)
-                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                        pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                         
                         if next_section_name in pre_qc_sections:
                             # Next section is also in in_process table, so we can update its field in the same entry
@@ -4083,6 +4976,44 @@ class AccessoriesPackingUpdateView(APIView):
                         new_next_section_quantity = current_next_section_quantity + forwarding_quantity
                         update_data[next_section_available_quantity_field] = str(new_next_section_quantity)
                 
+                custom_fields = validated_data.get('custom_fields') or {}
+                custom_checkboxes = validated_data.get('custom_checkboxes') or {}
+                try:
+                    procedure_detail = model_part.procedure_detail
+                    procedure_config = procedure_detail.procedure_config
+                    ap_config = procedure_config.get('accessories_packing', {})
+                    ap_custom_fields = ap_config.get('custom_fields', [])
+                    ap_custom_checkboxes = ap_config.get('custom_checkboxes', [])
+                    for field_config in ap_custom_fields:
+                        field_name = field_config.get('name')
+                        if field_name:
+                            prefixed = f"accessories_packing_{field_name}" if not field_name.startswith('accessories_packing_') else field_name
+                            model_field = prefixed if prefixed in all_field_names else (field_name if field_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                update_data[model_field] = custom_fields.get(field_name, '')
+                    for checkbox_config in ap_custom_checkboxes:
+                        checkbox_name = checkbox_config.get('name')
+                        if checkbox_name and checkbox_name.lower() != 'accessories_packing':
+                            prefixed = f"accessories_packing_{checkbox_name}" if not checkbox_name.startswith('accessories_packing_') else checkbox_name
+                            model_field = prefixed if prefixed in all_field_names else (checkbox_name if checkbox_name in all_field_names else None)
+                            if not model_field:
+                                sanitized = sanitize_field_name(prefixed)
+                                if sanitized in all_field_names:
+                                    model_field = sanitized
+                            if model_field:
+                                cb_val = custom_checkboxes.get(checkbox_name, False)
+                                if isinstance(cb_val, str):
+                                    cb_val = cb_val.lower() in ('true', '1', 'yes', 'on')
+                                update_data[model_field] = bool(cb_val)
+                except PartProcedureDetail.DoesNotExist:
+                    pass
+                except Exception:
+                    pass
+                
                 # Update the entry
                 for field_name, value in update_data.items():
                     setattr(entry, field_name, value)
@@ -4091,9 +5022,10 @@ class AccessoriesPackingUpdateView(APIView):
                 
                 # Prepare response
                 response_data = {
-                    'message': f'Accessories Packing data updated successfully for SO No: {so_no}',
+                    'message': f'Accessories Packing data updated successfully for Kit No: {kit_no}',
                     'part_no': part_no,
-                    'so_no': so_no,
+                    'kit_no': kit_no,
+                    'so_no': str(so_no) if so_no is not None else '',
                     'forwarding_quantity': forwarding_quantity,
                     'previous_accessories_packing_available_quantity': current_accessories_packing_available_quantity,
                     'new_accessories_packing_available_quantity': new_accessories_packing_available_quantity,
@@ -4185,6 +5117,356 @@ class QCProcedureConfigView(APIView):
             }
             
             # Serialize and return
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            return Response(
+                {
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SMDProcedureConfigView(APIView):
+    """
+    Get SMD procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the smd section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            smd_config = procedure_config.get('smd', {})
+            custom_fields = smd_config.get('custom_fields', [])
+            custom_checkboxes = smd_config.get('custom_checkboxes', [])
+            enabled = smd_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SMDQCProcedureConfigView(APIView):
+    """
+    Get SMD QC procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the smd_qc section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            smd_qc_config = procedure_config.get('smd_qc', {})
+            custom_fields = smd_qc_config.get('custom_fields', [])
+            custom_checkboxes = smd_qc_config.get('custom_checkboxes', [])
+            enabled = smd_qc_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PreFormingQCProcedureConfigView(APIView):
+    """
+    Get Pre-Forming QC procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the pre_forming_qc section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            pre_forming_qc_config = procedure_config.get('pre_forming_qc', {})
+            custom_fields = pre_forming_qc_config.get('custom_fields', [])
+            custom_checkboxes = pre_forming_qc_config.get('custom_checkboxes', [])
+            enabled = pre_forming_qc_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AccessoriesPackingProcedureConfigView(APIView):
+    """
+    Get Accessories Packing procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the accessories_packing section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            ap_config = procedure_config.get('accessories_packing', {})
+            custom_fields = ap_config.get('custom_fields', [])
+            custom_checkboxes = ap_config.get('custom_checkboxes', [])
+            enabled = ap_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeadedProcedureConfigView(APIView):
+    """
+    Get Leaded procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the leaded section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            leaded_config = procedure_config.get('leaded', {})
+            custom_fields = leaded_config.get('custom_fields', [])
+            custom_checkboxes = leaded_config.get('custom_checkboxes', [])
+            enabled = leaded_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeadedQCProcedureConfigView(APIView):
+    """
+    Get Leaded QC procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the leaded_qc section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            leaded_qc_config = procedure_config.get('leaded_qc', {})
+            custom_fields = leaded_qc_config.get('custom_fields', [])
+            custom_checkboxes = leaded_qc_config.get('custom_checkboxes', [])
+            enabled = leaded_qc_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProdQCProcedureConfigView(APIView):
+    """
+    Get Production QC (Prod QC) procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the prod_qc section of procedure_config.
+    """
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {'part_no': part_no, 'custom_fields': [], 'custom_checkboxes': [], 'enabled': False},
+                    status=status.HTTP_200_OK
+                )
+            prod_qc_config = procedure_config.get('prod_qc', {})
+            custom_fields = prod_qc_config.get('custom_fields', [])
+            custom_checkboxes = prod_qc_config.get('custom_checkboxes', [])
+            enabled = prod_qc_config.get('enabled', False)
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            serializer = QCProcedureConfigSerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response(
+                {'error': str(e), 'details': traceback.format_exc()},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class KitProcedureConfigView(APIView):
+    """
+    Get Kit procedure configuration for a specific part_no.
+    Returns custom_fields and custom_checkboxes from the kit section of procedure_config.
+    """
+    
+    def get(self, request, part_no):
+        try:
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            try:
+                procedure_detail = model_part.procedure_detail
+                procedure_config = procedure_detail.procedure_config
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'part_no': part_no,
+                        'custom_fields': [],
+                        'custom_checkboxes': [],
+                        'enabled': False
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            kit_config = procedure_config.get('kit', {})
+            custom_fields = kit_config.get('custom_fields', [])
+            custom_checkboxes = kit_config.get('custom_checkboxes', [])
+            enabled = kit_config.get('enabled', False)
+            
+            response_data = {
+                'part_no': part_no,
+                'custom_fields': custom_fields,
+                'custom_checkboxes': custom_checkboxes,
+                'enabled': enabled
+            }
+            
             serializer = QCProcedureConfigSerializer(response_data)
             return Response(serializer.data, status=status.HTTP_200_OK)
             
@@ -6037,7 +7319,7 @@ class TestingSerialNumberSearchView(APIView):
             # All possible section names
             all_sections = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             
@@ -6083,7 +7365,7 @@ class TestingSerialNumberSearchView(APIView):
             # Define section order - sections before testing
             sections_before_testing = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming'
             ]
             
             # Check that all enabled sections before testing have their checkboxes set to true
@@ -6313,7 +7595,7 @@ class HeatRunSerialNumberSearchView(APIView):
             # Define sections before heat_run (in order)
             sections_before_heat_run = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing'
             ]
             
             # Check that all enabled sections before heat_run have their checkboxes set to true
@@ -6768,7 +8050,7 @@ class CleaningSerialNumberSearchView(APIView):
             # Define sections before cleaning (in order, including heat_run)
             sections_before_cleaning = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run'
             ]
             
             # Check that all enabled sections before cleaning have their checkboxes set to true
@@ -7003,7 +8285,7 @@ class GlueingSerialNumberSearchView(APIView):
             # Define sections before glueing (in order, including heat_run but not cleaning)
             sections_before_glueing = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run'
             ]
             
             # Check that all enabled sections before glueing have their checkboxes set to true
@@ -7238,7 +8520,7 @@ class SprayingSerialNumberSearchView(APIView):
             # Define sections before spraying (in order, including cleaning)
             sections_before_spraying = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run', 'glueing', 'cleaning'
             ]
             
             # Check that all enabled sections before spraying have their checkboxes set to true
@@ -7473,7 +8755,7 @@ class DispatchSerialNumberSearchView(APIView):
             # 🎯 Define sections before dispatch (all sections except dispatch itself)
             sections_before_dispatch = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying'
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing', 'heat_run', 'glueing', 'cleaning', 'spraying'
             ]
             
             # ✅ Check that all enabled sections before dispatch have their checkboxes set to true
@@ -8253,9 +9535,9 @@ class QCImagesSerialNumberSearchView(APIView):
                         continue
             
             # Check that sections after qc_images are not completed
-            # Sections after qc_images: testing, heat_run, cleaning, glueing, spraying, dispatch
+            # Sections after qc_images: programming, testing, heat_run, cleaning, glueing, spraying, dispatch
             sections_after_qc_images = [
-                'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
+                'programming', 'testing', 'heat_run', 'cleaning', 'glueing', 'spraying', 'dispatch'
             ]
             
             for section in sections_after_qc_images:
@@ -8510,6 +9792,466 @@ class QCImagesSubmitView(APIView):
             )
 
 
+class ProgrammingSerialNumberSearchView(APIView):
+    """
+    GET API endpoint to search for serial number in completion table and return USID.
+    Only returns USID if all previous enabled sections (before programming, including qc_images) have their checkboxes set to true.
+    """
+    
+    def get(self, request):
+        """
+        Search for serial number and return USID if conditions are met.
+        
+        Query parameters:
+        - part_no: Part number (required)
+        - serial_number: Serial Number/Tag No. (required)
+        
+        Returns:
+        - usid: USID string if found and conditions met
+        - error: Error message if not found or conditions not met
+        """
+        try:
+            part_no = request.query_params.get('part_no')
+            serial_number = request.query_params.get('serial_number')
+            
+            if not part_no:
+                return Response(
+                    {'error': 'part_no is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not serial_number:
+                return Response(
+                    {'error': 'serial_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {
+                        'error': 'Completion model not configured for this part',
+                        'message': 'No completion table found'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Try to find entry by serial_number
+            # Check common field names for serial number
+            serial_field_names = ['serial_number', 'qc_serial_number', 'tag_no', 'in-process_tag_number']
+            entry = None
+            
+            for field_name in serial_field_names:
+                if field_name in all_field_names:
+                    try:
+                        entry = completion_model.objects.filter(**{field_name: serial_number}).first()
+                        if entry:
+                            break
+                    except Exception as e:
+                        import sys
+                        continue
+            
+            # If entry doesn't exist, return error
+            if not entry:
+                return Response(
+                    {
+                        'error': 'Serial number not found',
+                        'message': f'Serial number {serial_number} not found in database'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get procedure config to know which sections are enabled
+            try:
+                procedure_detail = model_part.procedure_detail
+                enabled_sections = procedure_detail.get_enabled_sections()
+            except PartProcedureDetail.DoesNotExist:
+                return Response(
+                    {
+                        'error': 'Procedure configuration not found',
+                        'message': 'Cannot verify section checkboxes'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Define sections before programming (in order, including qc_images)
+            sections_before_programming = [
+                'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images'
+            ]
+            
+            # Check that all enabled sections before programming have their checkboxes set to true
+            for section in sections_before_programming:
+                # Skip if this section is not enabled
+                if section not in enabled_sections:
+                    continue
+                
+                # Try different field name patterns for this section checkbox
+                section_patterns = [
+                    f'{section}_{section}',  # e.g., qc_images_qc_images, qc_qc
+                    f'{section}',  # e.g., qc_images, qc
+                    f'qc_{section}',  # e.g., qc_qc_images
+                    f'{section}_done',
+                    f'{section}_completed',
+                    f'{section}_status'
+                ]
+                
+                section_checkbox_found = False
+                section_checkbox_true = False
+                
+                for pattern in section_patterns:
+                    if pattern in all_field_names:
+                        try:
+                            section_value = getattr(entry, pattern, None)
+                            section_checkbox_found = True
+                            
+                            # Check if it's a boolean True or string 'true' or '1'
+                            if isinstance(section_value, bool):
+                                section_checkbox_true = section_value
+                            elif isinstance(section_value, str):
+                                section_checkbox_true = section_value.lower() in ('true', '1', 'yes', 'on')
+                            elif isinstance(section_value, (int, float)):
+                                section_checkbox_true = bool(section_value)
+                            
+                            break  # Found the field, no need to check other patterns
+                        except Exception:
+                            continue
+                
+                # If checkbox field found but not set to true, return error
+                if section_checkbox_found and not section_checkbox_true:
+                    return Response(
+                        {
+                            'error': 'Previous sections not completed',
+                            'message': f'Section "{section}" must be completed before Programming. Please complete all previous sections first.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check that programming section itself is not already completed
+            programming_patterns = [
+                'programming_programming',
+                'programming',
+                'qc_programming',
+                'programming_done',
+                'programming_completed',
+                'programming_status'
+            ]
+            
+            for pattern in programming_patterns:
+                if pattern in all_field_names:
+                    try:
+                        programming_value = getattr(entry, pattern, None)
+                        programming_completed = False
+                        if isinstance(programming_value, bool):
+                            programming_completed = programming_value
+                        elif isinstance(programming_value, str):
+                            programming_completed = programming_value.lower() in ('true', '1', 'yes', 'on')
+                        elif isinstance(programming_value, (int, float)):
+                            programming_completed = bool(programming_value)
+                        
+                        if programming_completed:
+                            return Response(
+                                {
+                                    'error': 'Programming already completed',
+                                    'message': f'Programming has already been completed for serial number {serial_number}'
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        break
+                    except Exception:
+                        continue
+            
+            # Get USID from entry
+            usid_field_names = ['usid', 'qc_usid', 'unique_serial_id']
+            usid = None
+            
+            for field_name in usid_field_names:
+                if field_name in all_field_names:
+                    try:
+                        usid = getattr(entry, field_name, None)
+                        if usid:
+                            break
+                    except Exception:
+                        continue
+            
+            if not usid:
+                return Response(
+                    {
+                        'error': 'USID not found',
+                        'message': f'USID not found for serial number {serial_number}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response with USID
+            return Response(
+                {
+                    'usid': str(usid),
+                    'serial_number': serial_number,
+                    'part_no': part_no,
+                    'message': 'Serial number found and ready for Programming'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to search serial number',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProgrammingSubmitView(APIView):
+    """
+    PUT API endpoint for updating Programming data in completion table.
+    Updates multiple existing entries in the completion table with Programming data based on serial_number and usid.
+    Sets programming to True and programming_done_by to the current user's emp_id for all entries.
+    """
+    
+    def put(self, request):
+        """
+        Update Programming data in completion table for multiple entries.
+        Finds existing entries by serial_number and usid, then updates Programming fields.
+        
+        Expected data:
+        - part_no: Part number (required)
+        - entries: List of objects with serial_number and usid (required)
+        - programming: Boolean indicating if programming checkbox is checked (required)
+        """
+        try:
+            # Validate serializer
+            from .serializers import ProgrammingSubmitSerializer
+            serializer = ProgrammingSubmitSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validated_data = serializer.validated_data
+            part_no = validated_data['part_no']
+            entries = validated_data['entries']
+            programming = validated_data['programming']
+            
+            # Only proceed if programming is True
+            if not programming:
+                return Response(
+                    {'error': 'Programming checkbox must be checked to submit data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate entries list
+            if not entries or len(entries) == 0:
+                return Response(
+                    {'error': 'At least one entry with serial_number and usid is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user emp_id from session
+            user_emp_id = request.session.get('user_emp_id')
+            if not user_emp_id:
+                return Response(
+                    {'error': 'User not authenticated. Please log in.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Convert emp_id to string for consistency
+            programming_done_by = str(user_emp_id)
+            
+            # Verify that the part exists
+            try:
+                model_part = ModelPart.objects.get(part_no=part_no)
+            except ModelPart.DoesNotExist:
+                return Response(
+                    {'error': f'Part {part_no} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create the dynamic completion model for this part
+            from .dynamic_model_utils import get_or_create_part_data_model
+            
+            completion_model = get_or_create_part_data_model(
+                part_no,
+                table_type='completion'
+            )
+            
+            if completion_model is None:
+                return Response(
+                    {'error': f'Completion model not found for part {part_no}. Please ensure the part has a procedure configuration with Programming section enabled.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get all field names from the completion model
+            all_field_names = [f.name for f in completion_model._meta.fields]
+            
+            # Find programming and programming_done_by field names
+            programming_field = None
+            programming_done_by_field = None
+            
+            # Try different possible field name patterns
+            programming_patterns = [
+                'programming_programming',
+                'programming',
+                'qc_programming',
+                'programming_done',
+                'programming_completed',
+                'programming_status'
+            ]
+            
+            for pattern in programming_patterns:
+                if pattern in all_field_names:
+                    programming_field = pattern
+                    break
+            
+            # Try different possible field name patterns for done_by
+            programming_done_by_patterns = [
+                'programming_programming_done_by',
+                'programming_done_by',
+                'qc_programming_done_by'
+            ]
+            
+            for pattern in programming_done_by_patterns:
+                if pattern in all_field_names:
+                    programming_done_by_field = pattern
+                    break
+            
+            # Process each entry
+            updated_entries = []
+            failed_entries = []
+            
+            for entry_data in entries:
+                serial_number = entry_data['serial_number']
+                usid = entry_data['usid']
+                
+                try:
+                    # Find existing entry by serial_number and usid
+                    try:
+                        entry = completion_model.objects.get(
+                            serial_number=serial_number,
+                            usid=usid
+                        )
+                    except completion_model.DoesNotExist:
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': f'Entry not found for serial number {serial_number} and USID {usid}'
+                        })
+                        continue
+                    except completion_model.MultipleObjectsReturned:
+                        # If multiple entries exist, get the most recent one
+                        entry = completion_model.objects.filter(
+                            serial_number=serial_number,
+                            usid=usid
+                        ).order_by('-created_at').first()
+                    
+                    # Prepare update data
+                    update_data = {}
+                    
+                    # Set programming field if it exists
+                    if programming_field:
+                        update_data[programming_field] = True
+                    
+                    # Set programming_done_by field if it exists
+                    if programming_done_by_field:
+                        update_data[programming_done_by_field] = programming_done_by
+                    
+                    # Update the entry
+                    if update_data:
+                        for field_name, value in update_data.items():
+                            setattr(entry, field_name, value)
+                        entry.save()
+                        
+                        updated_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'entry_id': entry.id
+                        })
+                    else:
+                        # No fields to update - log warning
+                        import sys
+                        failed_entries.append({
+                            'serial_number': serial_number,
+                            'usid': usid,
+                            'error': 'Programming fields not found in completion model'
+                        })
+                        
+                except Exception as e:
+                    import sys
+                    failed_entries.append({
+                        'serial_number': serial_number,
+                        'usid': usid,
+                        'error': str(e)
+                    })
+            
+            # Prepare response
+            if len(updated_entries) == 0:
+                return Response(
+                    {
+                        'error': 'No entries were updated successfully',
+                        'failed_entries': failed_entries
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Programming data updated successfully for {len(updated_entries)} entry/entries',
+                'part_no': part_no,
+                'updated_count': len(updated_entries),
+                'updated_entries': updated_entries,
+                'programming': True,
+                'programming_done_by': programming_done_by
+            }
+            
+            if len(failed_entries) > 0:
+                response_data['failed_count'] = len(failed_entries)
+                response_data['failed_entries'] = failed_entries
+                response_data['warning'] = f'{len(failed_entries)} entry/entries failed to update'
+            
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            import sys
+            error_details = traceback.format_exc()
+            return Response(
+                {
+                    'error': str(e),
+                    'message': 'Failed to update Programming data',
+                    'details': error_details
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class SectionEntryCountView(APIView):
     """
     GET API endpoint for counting entries in process for each section.
@@ -8591,7 +10333,7 @@ class SectionEntryCountView(APIView):
             # Define section order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             
@@ -8711,7 +10453,7 @@ class SectionEntryCountView(APIView):
                     
                     # Determine which table to query based on section
                     # Pre-QC sections use in_process, post-QC sections use completion
-                    pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded_qc', 'prod_qc']
+                    pre_qc_sections = ['kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing', 'leaded', 'leaded_qc', 'prod_qc']
                     
                     if section in pre_qc_sections:
                         # Query in_process table

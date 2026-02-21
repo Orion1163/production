@@ -63,10 +63,17 @@ class Command(BaseCommand):
         
         with connection.cursor() as cursor:
             # Use raw SQL with proper escaping for table names
+            # Exclude part_procedure_detail (Django model table, not a dynamic table)
             cursor.execute("""
                 SELECT name FROM sqlite_master 
                 WHERE type='table' 
-                AND (name LIKE '%%eics%%' OR name LIKE 'part_%%')
+                AND name != 'part_procedure_detail'
+                AND (
+                    name LIKE '%%eics%%' 
+                    OR name LIKE 'part_%%' 
+                    OR name LIKE '%%_in_process' 
+                    OR name LIKE '%%_completion'
+                )
                 ORDER BY name
             """)
             tables = cursor.fetchall()
@@ -77,7 +84,7 @@ class Command(BaseCommand):
         
         self.stdout.write(f'\nFound {len(tables)} dynamic table(s):\n')
         
-        for table_name, in tables:
+        for (table_name,) in tables:
             # Check if there's a corresponding ModelPart
             part_name = table_name.replace('part_', '').replace('_part', '')
             model_part = ModelPart.objects.filter(part_no__icontains=part_name).first()
@@ -87,10 +94,11 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f'  ✗ {table_name} (No ModelPart found)')
             
-            # Check row count
+            # Check row count (use a new cursor - previous one may be closed after with block)
             try:
-                cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
-                count = cursor.fetchone()[0]
+                with connection.cursor() as c:
+                    c.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+                    count = c.fetchone()[0]
                 self.stdout.write(f'    Rows: {count}')
             except Exception as e:
                 self.stdout.write(f'    Error counting rows: {e}')
@@ -209,7 +217,13 @@ class Command(BaseCommand):
             cursor.execute("""
                 SELECT name FROM sqlite_master 
                 WHERE type='table' 
-                AND (name LIKE '%%eics%%' OR name LIKE 'part_%%')
+                AND name != 'part_procedure_detail'
+                AND (
+                    name LIKE '%%eics%%' 
+                    OR name LIKE 'part_%%' 
+                    OR name LIKE '%%_in_process' 
+                    OR name LIKE '%%_completion'
+                )
                 ORDER BY name
             """)
             tables = [row[0] for row in cursor.fetchall()]

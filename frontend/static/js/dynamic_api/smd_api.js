@@ -1,12 +1,15 @@
 /**
  * SMD API Integration
- * Handles fetching SMD data when Kit No is entered and populates form fields
+ * Fetches SMD procedure config (custom_fields, custom_checkboxes), renders dynamic checkboxes,
+ * fetches SMD data by Kit No, and submits SMD update including custom data.
  */
 
 (() => {
   'use strict';
 
   const API_BASE_URL = '/api/v2/smd-data-fetch/';
+  const SMD_UPDATE_URL = '/api/v2/smd-update/';
+  const SMD_CONFIG_URL = '/api/v2/smd-procedure-config/';
 
   /**
    * Get CSRF token from cookies
@@ -79,19 +82,91 @@
    * Get part number from window variable or URL
    */
   function getPartNo() {
-    // Try to get from window variable (set in base_section.html)
-    if (window.PART_NO) {
-      return window.PART_NO;
-    }
-
-    // Fallback: try to extract from URL
+    if (window.PART_NO) return window.PART_NO;
     const pathParts = window.location.pathname.split('/');
     const partIndex = pathParts.indexOf('part');
     if (partIndex !== -1 && partIndex + 1 < pathParts.length) {
       return pathParts[partIndex + 1];
     }
-
     return null;
+  }
+
+  async function fetchSMDConfig() {
+    const partNo = getPartNo();
+    if (!partNo) return null;
+    try {
+      const response = await fetch(`${SMD_CONFIG_URL}${partNo}/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching SMD config:', error);
+      return null;
+    }
+  }
+
+  function createCheckboxField(checkboxConfig, index) {
+    const checkboxName = checkboxConfig.name || `custom_checkbox_${index}`;
+    const checkboxLabel = checkboxConfig.label || checkboxName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (checkboxName.toLowerCase() === 'smd') return null;
+
+    const checkboxGroup = document.createElement('div');
+    checkboxGroup.className = 'checkbox-group';
+    const checkboxWrapper = document.createElement('div');
+    checkboxWrapper.className = 'checkbox-wrapper';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = checkboxName;
+    checkbox.name = checkboxName;
+    checkbox.className = 'custom-checkbox';
+    checkbox.value = 'true';
+    const checkboxIndicator = document.createElement('span');
+    checkboxIndicator.className = 'custom-checkbox-indicator';
+    const label = document.createElement('label');
+    label.className = 'checkbox-label';
+    label.setAttribute('for', checkboxName);
+    label.appendChild(document.createTextNode(checkboxLabel));
+    checkboxWrapper.appendChild(checkbox);
+    checkboxWrapper.appendChild(checkboxIndicator);
+    checkboxWrapper.appendChild(label);
+    checkboxGroup.appendChild(checkboxWrapper);
+
+    checkboxWrapper.addEventListener('click', function (e) {
+      if (e.target === checkboxWrapper || e.target === checkboxIndicator) {
+        e.preventDefault();
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    checkbox.addEventListener('change', function () {
+      checkboxWrapper.classList.toggle('checked', this.checked);
+    });
+    return checkboxGroup;
+  }
+
+  function renderDynamicCheckboxes(config) {
+    const checkboxesSection = document.getElementById('smdCheckboxesSection');
+    const checkboxesGrid = document.getElementById('smdCheckboxesGrid');
+    if (!checkboxesSection || !checkboxesGrid) return;
+    checkboxesGrid.innerHTML = '';
+    if (!config || !config.enabled) {
+      checkboxesSection.style.display = 'none';
+      return;
+    }
+    const customCheckboxes = config.custom_checkboxes || [];
+    const filtered = customCheckboxes.filter(cb => (cb.name || '').toLowerCase() !== 'smd');
+    if (filtered.length > 0) {
+      checkboxesSection.style.display = 'block';
+      filtered.forEach((cb, i) => {
+        const el = createCheckboxField(cb, i);
+        if (el) checkboxesGrid.appendChild(el);
+      });
+    } else {
+      checkboxesSection.style.display = 'none';
+    }
   }
 
   /**
@@ -315,6 +390,16 @@
       return;
     }
 
+    const smdCheckboxesSection = document.getElementById('smdCheckboxesSection');
+    const smdCheckboxes = document.querySelectorAll('#smdCheckboxesGrid .custom-checkbox');
+    if (smdCheckboxesSection && smdCheckboxesSection.style.display !== 'none' && smdCheckboxes.length > 0) {
+      const allChecked = Array.prototype.every.call(smdCheckboxes, function (cb) { return cb.checked; });
+      if (!allChecked) {
+        showToast('Please check all required checkboxes before submitting.', 'error');
+        return;
+      }
+    }
+
     const submitButton = form.querySelector('button[type="submit"]');
     const originalButtonText = submitButton ? submitButton.querySelector('span').textContent : 'Submit';
 
@@ -362,18 +447,33 @@
       // Get CSRF token
       const csrfToken = getCookie('csrftoken');
 
-      // Prepare payload
+      const customFields = {};
+      const customCheckboxes = {};
+      const form = document.getElementById('smdForm');
+      if (form) {
+        form.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (input) {
+          const name = input.name || input.id;
+          if (name && !['kitNo', 'soNo', 'smdAvailableQuantity', 'forwardingQuantity'].includes(name)) {
+            const val = input.value != null ? input.value.trim() : '';
+            if (name) customFields[name] = val;
+          }
+        });
+        form.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+          const name = checkbox.name || checkbox.id;
+          if (name) customCheckboxes[name] = checkbox.checked;
+        });
+      }
+
       const payload = {
         part_no: partNo,
         kit_no: kitNo,
         forwarding_quantity: forwardingQuantity,
-        smd_done_by: empId.toString(), // Convert to string
+        smd_done_by: empId.toString(),
+        custom_fields: customFields,
+        custom_checkboxes: customCheckboxes,
       };
 
-      // API endpoint
-      const API_ENDPOINT = '/api/v2/smd-update/';
-
-      const response = await fetch(API_ENDPOINT, {
+      const response = await fetch(SMD_UPDATE_URL, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -392,16 +492,14 @@
       const result = await response.json();
       showToast(result.message || 'SMD data updated successfully!', 'success');
 
-      // Reset form after successful submission
       form.reset();
-
-      // Clear all readonly fields as well
-      if (soNoInput) {
-        soNoInput.value = '';
-      }
-      if (smdAvailableQuantityInput) {
-        smdAvailableQuantityInput.value = '';
-      }
+      if (soNoInput) soNoInput.value = '';
+      if (smdAvailableQuantityInput) smdAvailableQuantityInput.value = '';
+      document.querySelectorAll('#smdCheckboxesGrid .custom-checkbox').forEach(function (cb) {
+        cb.checked = false;
+        const wrapper = cb.closest('.checkbox-wrapper');
+        if (wrapper) wrapper.classList.remove('checked');
+      });
 
       // Optional: Show info about next section update
       if (result.next_section) {
@@ -424,7 +522,6 @@
    * Initialize SMD form handler
    */
   function init() {
-    // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);
       return;
@@ -432,18 +529,16 @@
 
     const kitNoInput = document.getElementById('kitNo');
     const searchBtn = document.getElementById('searchSMDBtn');
-    
-    if (!kitNoInput) {
-      console.warn('Kit No input field not found');
-      return;
+    if (!kitNoInput) return;
+    if (!searchBtn) return;
+
+    const partNo = getPartNo();
+    if (partNo) {
+      fetchSMDConfig().then(function (config) {
+        if (config) renderDynamicCheckboxes(config);
+      });
     }
 
-    if (!searchBtn) {
-      console.warn('Search button not found');
-      return;
-    }
-
-    // Attach click event listener to search button
     searchBtn.addEventListener('click', handleSearchClick);
 
     // Attach Enter key press listener to Kit No input

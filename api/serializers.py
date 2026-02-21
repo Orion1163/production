@@ -9,9 +9,20 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class AdminSerializer(serializers.ModelSerializer):
+    role_name = serializers.SerializerMethodField()
+    role_display_name = serializers.SerializerMethodField()
+    
     class Meta:
         model = Admin
         fields = '__all__'
+    
+    def get_role_name(self, obj):
+        """Get the role name (superadmin or admin)."""
+        return obj.get_role_name()
+    
+    def get_role_display_name(self, obj):
+        """Get the display name for the role."""
+        return obj.get_role_display_name()
 
 
 class AdminLoginSerializer(serializers.Serializer):
@@ -192,6 +203,222 @@ class ProductionProcedureSerializer(serializers.Serializer):
             'message': f'Successfully created procedure for {len(created_parts)} part(s)'
         }
 
+    def update(self, model_no, validated_data):
+        """
+        Update ModelPart and PartProcedureDetail records for each part.
+        Also updates existing entries in dynamic tables when new fields/sections are added.
+        """
+        form_image = validated_data.get('form_image')
+        qc_video = validated_data.get('qc_video')
+        testing_video = validated_data.get('testing_video')
+        parts_data = validated_data['parts']
+        
+        updated_parts = []
+        
+        for part_data in parts_data:
+            part_no = part_data.get('part_no')
+            if not part_no:
+                continue
+            
+            # Get existing ModelPart
+            try:
+                model_part = ModelPart.objects.get(
+                    model_no=model_no,
+                    part_no=part_no
+                )
+            except ModelPart.DoesNotExist:
+                # If part doesn't exist, create it (shouldn't happen in edit mode, but handle gracefully)
+                model_part = ModelPart.objects.create(
+                    model_no=model_no,
+                    part_no=part_no
+                )
+            
+            # Update files if provided
+            part_image = part_data.get('part_image')
+            if part_image:
+                model_part.part_image = part_image
+            
+            # Update form-level files if provided
+            if form_image:
+                model_part.form_image = form_image
+            if qc_video:
+                model_part.qc_video = qc_video
+            if testing_video:
+                model_part.testing_video = testing_video
+            
+            model_part.save()
+            
+            # Get existing procedure detail to compare configs
+            old_procedure_detail = None
+            old_procedure_config = {}
+            try:
+                old_procedure_detail = model_part.procedure_detail
+                old_procedure_config = old_procedure_detail.procedure_config.copy()
+            except PartProcedureDetail.DoesNotExist:
+                pass
+            
+            # Update or create PartProcedureDetail
+            new_procedure_config = part_data.get('procedure_config', {})
+            procedure_detail, created = PartProcedureDetail.objects.update_or_create(
+                model_part=model_part,
+                defaults={
+                    'procedure_config': new_procedure_config
+                }
+            )
+            
+            # If this is an update (not creation), check for new fields/sections and removed sections
+            if not created and old_procedure_detail:
+                # Update existing entries with defaults for new fields
+                self._update_existing_entries_with_new_fields(
+                    part_no, old_procedure_config, new_procedure_config
+                )
+                # Note: Column removal is handled automatically by create_dynamic_table_in_db
+                # which compares model fields to database columns and removes extra ones
+            
+            # Dynamic model will be created/updated automatically via signal
+            updated_parts.append({
+                'model_part_id': model_part.id,
+                'part_no': part_no,
+                'procedure_detail_id': procedure_detail.id
+            })
+        
+        return {
+            'model_no': model_no,
+            'updated_parts': updated_parts,
+            'message': f'Successfully updated procedure for {len(updated_parts)} part(s)'
+        }
+    
+    def _update_existing_entries_with_new_fields(self, part_no, old_config, new_config):
+        """
+        Update existing entries in dynamic tables when new fields/sections are added.
+        Sets default values: True for checkboxes, empty string for text fields.
+        """
+        from api.dynamic_models import DynamicModelRegistry
+        
+        try:
+            # Get both in_process and completion models from registry
+            models_dict = DynamicModelRegistry.get_both(part_no)
+            if not models_dict:
+                return
+            
+            in_process_model = models_dict.get('in_process')
+            completion_model = models_dict.get('completion')
+            
+            models_to_update = []
+            if in_process_model:
+                models_to_update.append(('in_process', in_process_model))
+            if completion_model:
+                models_to_update.append(('completion', completion_model))
+            
+            for table_type, model_class in models_to_update:
+                # Find new sections that were enabled
+                new_sections = []
+                for section_key, section_data in new_config.items():
+                    if section_data.get('enabled', False):
+                        old_section_data = old_config.get(section_key, {})
+                        if not old_section_data.get('enabled', False):
+                            new_sections.append(section_key)
+                
+                # Find new custom fields and checkboxes in existing sections
+                new_fields = {}  # {field_name: 'checkbox' or 'text'}
+                
+                for section_key, section_data in new_config.items():
+                    if not section_data.get('enabled', False):
+                        continue
+                    
+                    old_section_data = old_config.get(section_key, {})
+                    
+                    # Check for new custom input fields
+                    new_custom_fields = section_data.get('custom_fields', [])
+                    old_custom_fields = old_section_data.get('custom_fields', [])
+                    
+                    old_field_names = set()
+                    for field in old_custom_fields:
+                        if isinstance(field, dict):
+                            old_field_names.add(field.get('name', ''))
+                        else:
+                            old_field_names.add(str(field))
+                    
+                    for field in new_custom_fields:
+                        field_name = field.get('name', '') if isinstance(field, dict) else str(field)
+                        if field_name and field_name not in old_field_names:
+                            # Generate the full field name with section prefix
+                            full_field_name = f"{section_key}_{field_name}".lower().replace(' ', '_')
+                            new_fields[full_field_name] = 'text'
+                    
+                    # Check for new custom checkboxes
+                    new_custom_checkboxes = section_data.get('custom_checkboxes', [])
+                    old_custom_checkboxes = old_section_data.get('custom_checkboxes', [])
+                    
+                    old_checkbox_names = set()
+                    for checkbox in old_custom_checkboxes:
+                        if isinstance(checkbox, dict):
+                            old_checkbox_names.add(checkbox.get('name', ''))
+                        else:
+                            old_checkbox_names.add(str(checkbox))
+                    
+                    for checkbox in new_custom_checkboxes:
+                        checkbox_name = checkbox.get('name', '') if isinstance(checkbox, dict) else str(checkbox)
+                        if checkbox_name and checkbox_name not in old_checkbox_names:
+                            # Generate the full field name with section prefix
+                            full_field_name = f"{section_key}_{checkbox_name}".lower().replace(' ', '_')
+                            new_fields[full_field_name] = 'checkbox'
+                
+                # Update existing entries with default values for new fields
+                # Note: We need to wait for the signal to update the model first
+                # So we'll do this after a short delay or in a separate task
+                # For now, we'll update after the model is recreated by the signal
+                if new_fields or new_sections:
+                    # The signal will recreate the models with new fields
+                    # We'll update entries after the models are updated
+                    # This is handled by checking field existence in the model
+                    try:
+                        # Wait a moment for signal to process
+                        import time
+                        time.sleep(0.5)
+                        
+                        # Refresh models from registry (they may have been recreated)
+                        models_dict = DynamicModelRegistry.get_both(part_no)
+                        if models_dict:
+                            model_class = models_dict.get(table_type)
+                            if model_class:
+                                # Get all existing entries
+                                all_entries = model_class.objects.all()
+                                
+                                # Build update dictionary by checking actual model fields
+                                update_dict = {}
+                                
+                                # Check each potential new field
+                                for potential_field_name, field_type in new_fields.items():
+                                    # Try to find the field in the model
+                                    # Field names might have been sanitized
+                                    for field in model_class._meta.get_fields():
+                                        if field.name == potential_field_name or \
+                                           field.name.endswith('_' + potential_field_name.split('_')[-1]):
+                                            if field_type == 'checkbox':
+                                                update_dict[field.name] = True
+                                            else:  # text field
+                                                update_dict[field.name] = ''
+                                            break
+                                
+                                # For new sections, set all section fields to defaults
+                                # This is handled by the field addition above
+                                
+                                # Bulk update if we have fields to update
+                                if update_dict:
+                                    all_entries.update(**update_dict)
+                    except Exception as e:
+                        # Log error but don't fail the update
+                        import sys
+                        import traceback
+                        traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+        
+        except Exception as e:
+            # Log error but don't fail the update
+            import sys
+            import traceback
+            traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+
 
 class DashboardStatsSerializer(serializers.Serializer):
     """Serializer for dashboard statistics"""
@@ -266,6 +493,8 @@ class KitVerificationSerializer(serializers.Serializer):
     kit_quantity = serializers.IntegerField(required=True, help_text='Kit quantity')
     kit_verification = serializers.BooleanField(required=True, help_text='Kit verification status')
     so_no = serializers.CharField(required=True, help_text='Sales Order Number')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom field values from procedure config')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox values from procedure config')
 
 
 class SMDDataFetchSerializer(serializers.Serializer):
@@ -280,6 +509,8 @@ class SMDUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class SMDQCDataFetchSerializer(serializers.Serializer):
@@ -294,6 +525,8 @@ class SMDQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     smd_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the SMD QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class PreFormingQCDataFetchSerializer(serializers.Serializer):
@@ -308,6 +541,8 @@ class PreFormingQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     pre_forming_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Pre-Forming QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class LeadedQCDataFetchSerializer(serializers.Serializer):
@@ -322,6 +557,24 @@ class LeadedQCUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     leaded_qc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded QC')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
+
+
+class LeadedDataFetchSerializer(serializers.Serializer):
+    """Serializer for fetching Leaded data by Kit No"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
+
+
+class LeadedUpdateSerializer(serializers.Serializer):
+    """Serializer for updating Leaded data with forwarding quantity"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    kit_no = serializers.CharField(required=True, help_text='Kit Number')
+    forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
+    leaded_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Leaded processing')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class ProdQCDataFetchSerializer(serializers.Serializer):
@@ -337,6 +590,8 @@ class ProdQCUpdateSerializer(serializers.Serializer):
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     prodqc_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Prod QC')
     production_qc = serializers.BooleanField(required=False, default=True, help_text='Alternative field name for Prod QC boolean')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class AccessoriesPackingDataFetchSerializer(serializers.Serializer):
@@ -351,6 +606,8 @@ class AccessoriesPackingUpdateSerializer(serializers.Serializer):
     kit_no = serializers.CharField(required=True, help_text='Kit Number')
     forwarding_quantity = serializers.IntegerField(required=True, min_value=0, help_text='Quantity to forward to next section')
     accessories_packing_done_by = serializers.CharField(required=True, help_text='Name/ID of person who did the Accessories Packing')
+    custom_fields = serializers.DictField(required=False, allow_null=True, help_text='Custom text/input field values')
+    custom_checkboxes = serializers.DictField(required=False, allow_null=True, help_text='Custom checkbox name -> checked')
 
 
 class QCProcedureConfigSerializer(serializers.Serializer):
@@ -504,6 +761,19 @@ class SprayingSubmitSerializer(serializers.Serializer):
     part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
     entries = SprayingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
     spraying = serializers.BooleanField(required=True, help_text='Spraying checkbox value')
+
+
+class ProgrammingEntrySerializer(serializers.Serializer):
+    """Serializer for a single Programming entry"""
+    serial_number = serializers.CharField(required=True, help_text='Serial Number (Tag No.)')
+    usid = serializers.CharField(required=True, help_text='Unique Serial ID')
+
+
+class ProgrammingSubmitSerializer(serializers.Serializer):
+    """Serializer for submitting Programming data to completion table (multiple entries)"""
+    part_no = serializers.CharField(required=True, help_text='Part number (e.g., EICS145)')
+    entries = ProgrammingEntrySerializer(many=True, required=True, help_text='List of entries with serial_number and usid')
+    programming = serializers.BooleanField(required=True, help_text='Programming checkbox value')
 
 
 class DispatchEntrySerializer(serializers.Serializer):

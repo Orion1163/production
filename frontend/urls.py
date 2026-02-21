@@ -14,6 +14,11 @@ urlpatterns = [
         name='design_procedure_create',
     ),
     path(
+        'production-procedure/edit/<str:model_no>/',
+        views.design_procedure_edit,
+        name='design_procedure_edit',
+    ),
+    path(
         'add-user/',
         views.add_user,
         name='add_user',
@@ -29,6 +34,7 @@ urlpatterns = [
         name='home',
     ),
     path('create-new-user/', views.create_new_user, name='create_new_user'),
+    path('admin-management/', views.admin_management, name='admin_management'),
     path('logout/', views.logout, name='logout'),
     path('user/home/', views.user_home, name='user_home'),
     path('user/models/<str:model_no>/parts/', views.user_model_parts, name='user_model_parts'),

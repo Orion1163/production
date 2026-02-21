@@ -30,6 +30,8 @@
 html {
   font-family: Poppins, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.5rem;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -39,6 +41,7 @@ body {
   color: var(--text-clr);
   transition: padding-left 300ms ease-in-out;
   overflow-x: hidden;
+  position: relative;
 }
 
 
@@ -245,11 +248,13 @@ body {
 
 main {
   width: calc(100% - var(--sidebar-width));
+  min-width: 0;
   box-sizing: border-box;
   padding-inline: clamp(1rem, 4vw, 3rem);
   padding-block: clamp(0.5rem, 2vw, 1.5rem);
   margin-left: var(--sidebar-width);
   transition: margin-left 300ms ease-in-out, width 300ms ease-in-out;
+  overflow-x: hidden;
 }
 
 body.sidebar-collapsed main {
@@ -259,7 +264,8 @@ body.sidebar-collapsed main {
 
 .main-content {
   width: 100%;
-  /* padding-bottom: clamp(2rem, 5vw, 3rem); */
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
@@ -267,6 +273,12 @@ main p {
   color: var(--secondary-text-clr);
   margin-top: 5px;
   margin-bottom: 15px;
+}
+
+#partTitle {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .container {
@@ -303,17 +315,21 @@ main p {
     margin-left: 0;
     order: 1;
     flex: 1 1 auto;
-    width: 100%;
-    padding: 1.25rem clamp(1rem, 4vw, 1.5rem) calc(160px + clamp(1rem, 4vw, 1.5rem)) clamp(1rem, 4vw, 1.5rem);
+    min-width: 0;
+    padding: 1.25rem clamp(1rem, 5vw, 1.5rem) calc(80px + clamp(1rem, 4vw, 1.5rem)) clamp(1rem, 5vw, 1.5rem);
+    overflow-x: hidden;
     overflow-y: auto;
     position: relative;
     z-index: 0;
+    -webkit-overflow-scrolling: touch;
   }
 
   .main-content {
-    /* padding-bottom: calc(170px + clamp(1rem, 4vw, 1.5rem)); */
     position: relative;
     z-index: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .container {
@@ -443,5 +459,12 @@ main p {
         justify-content: center;
       }
     }
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding-left: clamp(14px, 4vw, 1rem);
+    padding-right: clamp(14px, 4vw, 1rem);
   }
 }

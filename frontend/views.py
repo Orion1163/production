@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from functools import wraps
-from .decorators import admin_role_required
+from .decorators import admin_role_required, superadmin_required
 from .role_constants import get_accessible_sections, has_role_access
 
 
@@ -44,9 +44,22 @@ def design_procedure(request):
 @admin_role_required
 def design_procedure_create(request):
     """
-    Render the standalone form for creating/editing a procedure.
+    Render the standalone form for creating a procedure.
     """
     return render(request, 'admin/designProcedure_form.html')
+
+
+@admin_login_required
+@admin_role_required
+def design_procedure_edit(request, model_no):
+    """
+    Render the standalone form for editing a procedure.
+    """
+    context = {
+        'model_no': model_no,
+        'is_edit_mode': True
+    }
+    return render(request, 'admin/designProcedure_form.html', context)
 
 @admin_login_required
 @admin_role_required
@@ -83,6 +96,15 @@ def create_new_user(request):
     Render the create new user page.
     """
     return render(request, 'admin/add_user_form.html')
+
+@admin_login_required
+@superadmin_required
+def admin_management(request):
+    """
+    Render the admin management page.
+    Only accessible to superadmins.
+    """
+    return render(request, 'admin/admin_management.html')
 
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -169,9 +191,12 @@ def user_section_page(request, part_no, section):
         'smd_qc': 'user/pages/smd_qc.html',
         'pre_forming_qc': 'user/pages/pre_forming_qc.html',
         'accessories_packing': 'user/pages/accessories_packing.html',
+        'leaded': 'user/pages/leaded.html',
         'leaded_qc': 'user/pages/leaded_qc.html',
         'prod_qc': 'user/pages/prod_qc.html',
         'qc': 'user/pages/qc.html',
+        'qc_images': 'user/pages/qc.html',  # QC Images uses same template as QC
+        'programming': 'user/pages/programming.html',
         'testing': 'user/pages/testing.html',
         'heat_run': 'user/pages/heat_run.html',
         'glueing': 'user/pages/glueing.html',
@@ -200,6 +225,8 @@ def logout(request):
         del request.session['admin_emp_id']
     if 'admin_logged_in' in request.session:
         del request.session['admin_logged_in']
+    if 'admin_role' in request.session:
+        del request.session['admin_role']
     if 'user_roles' in request.session:
         del request.session['user_roles']
     

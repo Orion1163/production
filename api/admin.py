@@ -10,7 +10,17 @@ from .models import User, Admin, ModelPart, PartProcedureDetail, USIDCounter
 from .dynamic_models import DynamicModelRegistry
 
 
-admin.site.register(Admin)
+@admin.register(Admin)
+class AdminAdmin(admin.ModelAdmin):
+    list_display = ('emp_id', 'role', 'get_role_display_name')
+    list_filter = ('role',)
+    search_fields = ('emp_id',)
+    fields = ('emp_id', 'pin', 'role')
+    
+    def get_role_display_name(self, obj):
+        """Display the role name in admin list."""
+        return obj.get_role_display_name()
+    get_role_display_name.short_description = 'Role'
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -158,8 +168,9 @@ def register_dynamic_model_in_admin(model_class, part_name):
                 'smd_qc',                 # 3. SMD QC (QC after SMD)
                 'pre_forming_qc',         # 4. Pre-Forming QC
                 'accessories_packing',    # 5. Accessories Packing
-                'leaded_qc',              # 6. Leaded QC
-                'prod_qc',                # 7. Production QC
+                'leaded',                 # 6. Leaded
+                'leaded_qc',              # 7. Leaded QC
+                'prod_qc',                # 8. Production QC
                 'qc',                     # 8. QC (general QC)
                 'testing',                # 9. Testing
                 'heat_run',               # 10. Heat Run
@@ -201,7 +212,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
             # Use production workflow order
             section_order = [
                 'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-                'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+                'leaded', 'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'programming', 'testing',
                 'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
             ]
             # Process longer section names first to avoid conflicts
@@ -218,7 +229,7 @@ def register_dynamic_model_in_admin(model_class, part_name):
         # Use production workflow order
         section_order = [
             'kit', 'smd', 'smd_qc', 'pre_forming_qc', 'accessories_packing',
-            'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
+            'leaded', 'leaded_qc', 'prod_qc', 'qc', 'qc_images', 'testing',
             'heat_run', 'glueing', 'cleaning', 'spraying', 'dispatch'
         ]
         sorted_sections = sorted(section_order, key=len, reverse=True)
@@ -230,8 +241,8 @@ def register_dynamic_model_in_admin(model_class, part_name):
                     section_map[section].append(field_name)
                     break
     
-    # Build list_display - include common fields first, then some dynamic fields
-    list_display = ['id'] + common_fields + dynamic_fields[:5] + ['created_at']
+    # Build list_display - include common fields first, then dynamic fields (so custom kit/prod_qc fields show)
+    list_display = ['id'] + common_fields + dynamic_fields[:20] + ['created_at']
     
     # Build search fields - include common fields and dynamic text fields
     search_fields = common_fields + [f for f in dynamic_fields if not f.startswith('_')][:7]
@@ -256,10 +267,12 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'smd_qc': 'SMD QC',
         'pre_forming_qc': 'Pre-Forming QC',
         'accessories_packing': 'Accessories Packing',
+        'leaded': 'Leaded',
         'leaded_qc': 'Leaded QC',
         'prod_qc': 'Production QC',
         'qc': 'QC',
         'qc_images': 'QC Images',
+        'programming': 'Programming',
         'testing': 'Testing',
         'heat_run': 'Heat Run',
         'cleaning': 'Cleaning',
@@ -276,16 +289,18 @@ def register_dynamic_model_in_admin(model_class, part_name):
         'smd_qc',                 # 3. SMD QC
         'pre_forming_qc',         # 4. Pre-Forming QC
         'accessories_packing',    # 5. Accessories Packing
-        'leaded_qc',              # 6. Leaded QC
-        'prod_qc',                # 7. Production QC
+        'leaded',                 # 6. Leaded
+        'leaded_qc',              # 7. Leaded QC
+        'prod_qc',                # 8. Production QC
         'qc',                     # 8. QC
-        'qc_images',              # 8. QC Images
-        'testing',                # 9. Testing
-        'heat_run',               # 10. Heat Run
-         'cleaning',               # 11. Cleaning
-        'glueing',                # 12. Glueing   
-        'spraying',               # 13. Spraying
-        'dispatch'                # 14. Dispatch
+        'qc_images',              # 9. QC Images
+        'programming',            # 10. Programming
+        'testing',                # 11. Testing
+        'heat_run',               # 12. Heat Run
+         'cleaning',               # 13. Cleaning
+        'glueing',                # 14. Glueing   
+        'spraying',               # 15. Spraying
+        'dispatch'                # 16. Dispatch
     ]
     
     # For field matching, we need to process longer section names first to avoid conflicts
@@ -591,45 +606,47 @@ def register_dynamic_model_in_admin(model_class, part_name):
         except:
             pass
         
-        # Ensure model has correct app_label and is properly configured
-        if not hasattr(model_class._meta, 'app_label') or model_class._meta.app_label != 'api':
-            model_class._meta.app_label = 'api'
-        
-        # Set model_name if not set (needed for admin URLs)
-        # Django admin uses the lowercase class name for URLs, not the table name
-        # So we need to ensure model_name matches the lowercase class name
-        if not hasattr(model_class._meta, 'model_name'):
-            # Use the lowercase class name for model_name (this is what Django admin uses for URLs)
-            class_name_lower = model_class.__name__.lower()
-            model_class._meta.model_name = class_name_lower
-        
-        # Ensure verbose_name is set (this is what shows in admin index)
-        if not hasattr(model_class._meta, 'verbose_name') or not model_class._meta.verbose_name:
-            model_class._meta.verbose_name = part_name
-        if not hasattr(model_class._meta, 'verbose_name_plural') or not model_class._meta.verbose_name_plural:
-            model_class._meta.verbose_name_plural = f'{part_name} Entries'
-        
         # Note: Model should already be in Django's app registry from create_dynamic_part_model
         # We don't add it here to avoid duplicates - the model registration in 
         # django_apps.all_models and api.models happens in dynamic_models.py
         # We only register it in Django admin here
         
         # Register the model - handle AlreadyRegistered gracefully
+        # Always unregister first if it exists, then register fresh
         try:
+            # Check if model is already registered and unregister it first
+            if model_class in admin.site._registry:
+                try:
+                    admin.site.unregister(model_class)
+                    import sys
+                    print(f"Unregistered existing {model_class.__name__} before re-registering", file=sys.stderr)
+                except Exception as e:
+                    import sys
+                    print(f"Warning: Could not unregister {model_class.__name__}: {e}", file=sys.stderr)
+            
+            # Register the model
             admin.site.register(model_class, DynamicModelAdmin)
+            import sys
+            print(f"Registered {model_class.__name__} in admin", file=sys.stderr)
         except AlreadyRegistered:
             # Model already registered, unregister and re-register to ensure it's up to date
             try:
                 admin.site.unregister(model_class)
                 admin.site.register(model_class, DynamicModelAdmin)
+                import sys
+                print(f"Re-registered {model_class.__name__} in admin", file=sys.stderr)
             except Exception as e:
-                pass
+                import sys
+                print(f"Error re-registering {model_class.__name__}: {e}", file=sys.stderr)
         except Exception as reg_error:
-            pass
             # Try to register directly in registry as fallback
             try:
                 admin.site._registry[model_class] = DynamicModelAdmin(model_class, admin.site)
-            except:
+                import sys
+                print(f"Registered {model_class.__name__} directly in registry", file=sys.stderr)
+            except Exception as e:
+                import sys
+                print(f"Error registering {model_class.__name__} in registry: {e}", file=sys.stderr)
                 pass
         
         # Force admin to recognize the model by updating its internal structures
@@ -638,31 +655,16 @@ def register_dynamic_model_in_admin(model_class, part_name):
             if model_class not in admin.site._registry:
                 admin.site._registry[model_class] = DynamicModelAdmin(model_class, admin.site)
             
-            # Clear admin's app_dict cache to force rebuild on next request
-            # This ensures the model appears in admin index immediately
-            if hasattr(admin.site, '_app_dict'):
-                delattr(admin.site, '_app_dict')
-            
-            # Also clear any per-request caches
-            if hasattr(admin.site, '_registry'):
-                # Force admin to rebuild its app list on next request
+            try:
+                if hasattr(admin.site, '_app_dict'):
+                    delattr(admin.site, '_app_dict')
+            except (AttributeError, TypeError):
                 pass
-            
-            # Ensure model_name is set correctly (Django admin uses this for URLs)
-            if not hasattr(model_class._meta, 'model_name') or not model_class._meta.model_name:
-                model_class._meta.model_name = model_class.__name__.lower()
-            
-            # Verify the model is in Django's app registry with the correct key
-            from django.apps import apps as django_apps
-            model_key = model_class.__name__.lower()
-            if 'api' in django_apps.all_models and model_key in django_apps.all_models['api']:
-                # Model is registered correctly
+            try:
+                if hasattr(admin.site, '_urls'):
+                    delattr(admin.site, '_urls')
+            except (AttributeError, TypeError):
                 pass
-            else:
-                # Re-register in app registry
-                if 'api' not in django_apps.all_models:
-                    django_apps.all_models['api'] = {}
-                django_apps.all_models['api'][model_key] = model_class
         except Exception as e:
             pass
         
@@ -682,7 +684,7 @@ def register_all_dynamic_models_in_admin():
     Register all existing dynamic models in Django admin.
     This should be called when Django admin loads.
     """
-    from .models import ModelPart
+    from .models import ModelPart, PartProcedureDetail
     
     registered_count = 0
     

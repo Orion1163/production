@@ -108,6 +108,25 @@
     tdAction.setAttribute('data-label', 'Action');
     const actionCell = document.createElement('div');
     actionCell.className = 'action-cell';
+    
+    // Edit button
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'icon-btn edit-btn';
+    editBtn.setAttribute('aria-label', `Edit ${procedure.model_no}`);
+    editBtn.addEventListener('click', () => {
+      window.location.href = `/production-procedure/edit/${procedure.model_no}/`;
+    });
+    
+    // Edit icon SVG
+    editBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    `;
+    
+    // View button
     const viewBtn = document.createElement('button');
     viewBtn.type = 'button';
     viewBtn.className = 'icon-btn view-btn';
@@ -124,6 +143,7 @@
       </svg>
     `;
     
+    actionCell.appendChild(editBtn);
     actionCell.appendChild(viewBtn);
     tdAction.appendChild(actionCell);
 
@@ -292,6 +312,7 @@
         'prod_qc': 'Production QC',
         'qc': 'QC',
         'qc_images': 'QC Images',
+        'programming': 'Programming',
         'testing': 'Testing',
         'glueing': 'Glueing',
         'cleaning': 'Cleaning',
@@ -326,24 +347,34 @@
           html += `</div></div>`;
         }
 
-        // Custom checkboxes
+        // Custom checkboxes (filter out section titles that are automatically added)
         if (section.custom_checkboxes && section.custom_checkboxes.length > 0) {
-          html += `
-            <div class="field-group">
-              <label class="field-label">Custom Checkboxes:</label>
-              <div class="checkbox-list">
-          `;
-          section.custom_checkboxes.forEach(checkbox => {
-            html += `
-              <div class="checkbox-item">
-                <svg class="checkbox-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-                <span>${checkbox.label || checkbox.name}</span>
-              </div>
-            `;
+          // Filter out checkboxes that match the section key (these are automatically added section titles)
+          const filteredCheckboxes = section.custom_checkboxes.filter(checkbox => {
+            const checkboxName = (checkbox.name || checkbox.label || '').toLowerCase().replace(/\s+/g, '_');
+            const sectionKeyLower = sectionKey.toLowerCase();
+            // Exclude if checkbox name matches section key exactly
+            return checkboxName !== sectionKeyLower;
           });
-          html += `</div></div>`;
+          
+          if (filteredCheckboxes.length > 0) {
+            html += `
+              <div class="field-group">
+                <label class="field-label">Custom Checkboxes:</label>
+                <div class="checkbox-list">
+            `;
+            filteredCheckboxes.forEach(checkbox => {
+              html += `
+                <div class="checkbox-item">
+                  <svg class="checkbox-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <span>${checkbox.label || checkbox.name}</span>
+                </div>
+              `;
+            });
+            html += `</div></div>`;
+          }
         }
 
         // Testing mode

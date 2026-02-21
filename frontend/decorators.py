@@ -41,11 +41,13 @@ def role_required(*allowed_roles):
 def admin_role_required(view_func):
     """
     Decorator to check if user is an administrator (role 1).
+    Allows any logged-in admin (admin_logged_in); otherwise checks user_roles for role 1.
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        if request.session.get('admin_logged_in', False):
+            return view_func(request, *args, **kwargs)
         user_roles = request.session.get('user_roles', [])
-        
         if not is_admin(user_roles):
             # If it's an AJAX request, return JSON error
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -57,6 +59,32 @@ def admin_role_required(view_func):
             # Otherwise redirect with error message
             request.session['access_denied_message'] = 'Administrator access required.'
             return redirect('user_home')
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def superadmin_required(view_func):
+    """
+    Decorator to check if user is a superadmin (admin_role = 1).
+    Only superadmins can access admin management functionality.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        admin_role = request.session.get('admin_role')
+        
+        # Check if user is logged in as admin and is superadmin (role = 1)
+        if not request.session.get('admin_logged_in', False) or admin_role != 1:
+            # If it's an AJAX request, return JSON error
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'error': 'Access denied',
+                    'message': 'Super Admin access required.'
+                }, status=403)
+            
+            # Otherwise redirect with error message
+            request.session['access_denied_message'] = 'Super Admin access required.'
+            return redirect('home')
         
         return view_func(request, *args, **kwargs)
     return wrapper

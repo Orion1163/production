@@ -24,11 +24,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-d)^j-hlncgm!l6d6$v=+56-lbx9q5=2g!@r_52^a_-%18=)l(k'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
 
+#USE_X_FORWARDED_HOST = True
+#SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://two.sunshineiotronics.com",
+    "http://www.two.sunshineiotronics.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# CSRF settings
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'  # Django converts X-CSRFToken to HTTP_X_CSRFTOKEN
+CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read the cookie
+CSRF_USE_SESSIONS = False
 # Application definition
 
 INSTALLED_APPS = [
@@ -65,7 +81,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-            ],
+                'frontend.context_processors.admin_role',
+             ],
         },
     },
 ]

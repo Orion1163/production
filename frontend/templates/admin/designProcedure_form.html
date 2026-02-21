@@ -17,7 +17,7 @@
       <p class="page-eyebrow">
         Production · Procedure Designer
       </p>
-      <h2 style="margin: 0">Add Production Procedure</h2>
+      <h2 style="margin: 0">{% if is_edit_mode %}Edit{% else %}Add{% endif %} Production Procedure</h2>
     </div>
     <a class="btn" href="{% url 'design_procedure' %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -102,7 +102,7 @@
       </div>
 
       <div class="submit-row">
-        <button class="btn" type="submit">Save Procedure</button>
+        <button class="btn" type="submit">{% if is_edit_mode %}Update{% else %}Save{% endif %} Procedure</button>
       </div>
     </form>
   </section>
@@ -164,6 +164,24 @@
                 <span class="token">Kit No.</span>
                 <span class="token">Kit Quantity</span>
               </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -176,6 +194,24 @@
               <div class="panel-title">Default SMD Fields</div>
               <div class="token-list">
                 <span class="token">Available Quantity</span>
+              </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -190,6 +226,24 @@
               <div class="token-list">
                 <span class="token">Available Quantity</span>
               </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -202,6 +256,24 @@
               <div class="panel-title">Default Pre-Forming QC Fields</div>
               <div class="token-list">
                 <span class="token">Available Quantity</span>
+              </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -217,19 +289,86 @@
               <div class="token-list">
                 <span class="token">Available Quantity</span>
               </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="workflow-item">
-          <label class="checkbox-pill workflow-toggle">
-            <input type="checkbox" data-panel-target="leaded_qc" onchange="togglePanel(this)" />
-            Leaded QC
-          </label>
-          <div class="detail-panel" data-panel="leaded_qc">
-            <div class="panel-title">Default Leaded QC Fields</div>
-            <div class="token-list">
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input type="checkbox" data-panel-target="leaded" onchange="togglePanel(this)" />
+              Leaded
+            </label>
+            <div class="detail-panel" data-panel="leaded">
+              <div class="panel-title">Default Leaded Fields</div>
+             <div class="token-list">
               <span class="token">Available Quantity</span>
+              </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-item">
+            <label class="checkbox-pill workflow-toggle">
+              <input type="checkbox" data-panel-target="leaded_qc" onchange="togglePanel(this)" />
+              Leaded QC
+            </label>
+            <div class="detail-panel" data-panel="leaded_qc">
+              <div class="panel-title">Default Leaded QC Fields</div>
+              <div class="token-list">
+                <span class="token">Available Quantity</span>
+              </div>
+              <div class="dual-panel" style="margin-top: 20px">
+                <div class="panel-card">
+                  <h4>Input Fields</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                    <span>Add text field</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+                <div class="panel-card accent">
+                  <h4>Checkboxes</h4>
+                  <div class="pill-input-row">
+                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                    <span>Add checkbox</span>
+                  </div>
+                  <div class="input-list"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -244,6 +383,24 @@
             <div class="token-list">
               <span class="token">Available Quantity</span>
               <span class="token">Ready for Production</span>
+            </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -293,6 +450,60 @@
           <div class="detail-panel" data-panel="qc_images">
             <div class="panel-title">QC Images</div>
             <div class="token-list" style="display: none;"></div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="workflow-item">
+          <label class="checkbox-pill workflow-toggle">
+            <input type="checkbox" data-panel-target="programming" onchange="togglePanel(this)" />
+            Programming
+          </label>
+          <div class="detail-panel" data-panel="programming">
+            <div class="panel-title">Programming Defaults</div>
+            <div class="token-list">
+              <span class="token">Serial Number</span>
+              <span class="token">USID</span>
+            </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">
+                    +
+                  </button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
+                    +
+                  </button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -356,28 +567,24 @@
               <span class="token">Serial Number</span>
               <span class="token">USID</span>
             </div>
-            <!-- <div class="dual-panel" style="margin-top: 20px">
-                <div class="panel-card">
-                  <h4>Additional Inputs</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addInputField(this)">
-                      +
-                    </button>
-                    <span>Add text field</span>
-                  </div>
-                  <div class="input-list"></div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
                 </div>
-                <div class="panel-card accent">
-                  <h4>Checklist</h4>
-                  <div class="pill-input-row">
-                    <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">
-                      +
-                    </button>
-                    <span>Add checkbox</span>
-                  </div>
-                  <div class="input-list"></div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
                 </div>
-              </div> -->
+                <div class="input-list"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -394,6 +601,24 @@
               <span class="token">Serial Number</span>
               <span class="token">USID</span>
             </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -407,6 +632,24 @@
             <div class="token-list">
               <span class="token">Serial Number</span>
               <span class="token">USID</span>
+            </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -422,6 +665,24 @@
             <div class="token-list">
               <span class="token">Serial Number</span>
               <span class="token">USID</span>
+            </div>
+            <div class="dual-panel" style="margin-top: 20px">
+              <div class="panel-card">
+                <h4>Input Fields</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addInputField(this)">+</button>
+                  <span>Add text field</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
+              <div class="panel-card accent">
+                <h4>Checkboxes</h4>
+                <div class="pill-input-row">
+                  <button class="tiny-btn" type="button" onclick="addCheckboxField(this)">+</button>
+                  <span>Add checkbox</span>
+                </div>
+                <div class="input-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -624,5 +885,12 @@
 {% block extra_scripts %}
 <script src="{% static 'js/bom_api.js' %}" defer></script>
 <script src="{% static 'js/design.js' %}" defer></script>
+{% if is_edit_mode %}
+<script>
+  window.EDIT_MODE = true;
+  window.EDIT_MODEL_NO = '{{ model_no }}';
+</script>
+<script src="{% static 'js/design_form_edit.js' %}" defer></script>
+{% endif %}
 <script src="{% static 'js/design_form_submit.js' %}" defer></script>
 {% endblock %}
